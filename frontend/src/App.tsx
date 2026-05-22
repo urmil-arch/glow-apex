@@ -29,6 +29,7 @@ import DashboardLayout from './pages/dashboard/DashboardLayout'
 import OrderPage from './pages/dashboard/orders/OrderPage'
 import PaymentsPage from './pages/dashboard/payments/PaymentsPage'
 import AnalyticsPage from './pages/dashboard/analytics/AnalyticsPage'
+import ProfilePage from './pages/dashboard/profile/ProfilePage'
 
 const PublicLayout = () => (
   <>
@@ -78,7 +79,9 @@ const App: React.FC = () => {
               <Route path="orders" element={<OrderPage />} />
               <Route path="payments" element={<PaymentsPage />} />
               <Route path="analytics" element={<AnalyticsPage />} />
+              <Route path="profile" element={<ProfilePage />} />
             </Route>
+            
           </Routes>
         </ServicesProvider>
       </AuthProvider>

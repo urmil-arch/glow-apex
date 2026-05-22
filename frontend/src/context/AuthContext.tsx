@@ -1,21 +1,29 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import { api } from "@/lib/api";
+import { API_ENDPOINTS } from "@/config";
 
 export interface User {
   id: string;
-  name: string;
+  full_name: string;
+  username: string;
   email: string;
-  avatar?: string;
-  role: string;
+  role?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
+  login: (identifier: string, password: string) => Promise<void>;
+  register: (full_name: string, username: string, email: string, password: string) => Promise<void>;
+  verifyOtp: (email: string, otp: string) => Promise<void>;
+  resendOtp: (email: string) => Promise<void>;
   logout: () => void;
   updateUser: (userData: Partial<User>) => void;
+  updateProfile: (full_name: string, username: string) => Promise<void>;
+  changePassword: (current_password: string, new_password: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -23,8 +31,13 @@ const AuthContext = createContext<AuthContextType>({
   isLoading: true,
   isAuthenticated: false,
   login: async () => {},
+  register: async () => {},
+  verifyOtp: async () => {},
+  resendOtp: async () => {},
   logout: () => {},
   updateUser: () => {},
+  updateProfile: async () => {},
+  changePassword: async () => {},
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -33,48 +46,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const navigate = useNavigate();
 
   useEffect(() => {
-    const initializeAuth = () => {
-      try {
-        const token = localStorage.getItem("auth_token");
-        const userData = localStorage.getItem("user");
-        if (token && userData) {
-          setUser(JSON.parse(userData));
-        }
-      } catch (error) {
-        console.error("Failed to initialize auth:", error);
-        localStorage.removeItem("auth_token");
-        localStorage.removeItem("user");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    initializeAuth();
-  }, []);
-
-  const login = async (email: string, password: string, rememberMe = false): Promise<void> => {
-    setIsLoading(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      const dummyToken = `token_${Math.random().toString(36).substring(2, 15)}_${Date.now()}`;
-      const dummyUser: User = {
-        id: "user_123",
-        name: "John Doe",
-        email,
-        avatar: "/assets/avatar.png",
-        role: "user",
-      };
-      localStorage.setItem("auth_token", dummyToken);
-      localStorage.setItem("user", JSON.stringify(dummyUser));
-      if (!rememberMe) {
-        // session-only: remove on tab close (can't do with localStorage, acceptable for demo)
+      const token = localStorage.getItem("auth_token");
+      const stored = localStorage.getItem("user");
+      if (token && stored) {
+        setUser(JSON.parse(stored));
       }
-      setUser(dummyUser);
-    } catch (error) {
-      console.error("Login error:", error);
-      throw error;
+    } catch {
+      localStorage.removeItem("auth_token");
+      localStorage.removeItem("user");
     } finally {
       setIsLoading(false);
     }
+  }, []);
+
+  const login = async (identifier: string, password: string): Promise<void> => {
+    const { data } = await axios.post(API_ENDPOINTS.AUTH_LOGIN, { identifier, password });
+    localStorage.setItem("auth_token", data.access_token);
+    localStorage.setItem("user", JSON.stringify(data.user));
+    setUser(data.user);
+  };
+
+  const register = async (
+    full_name: string,
+    username: string,
+    email: string,
+    password: string,
+  ): Promise<void> => {
+    await axios.post(API_ENDPOINTS.AUTH_REGISTER, { full_name, username, email, password });
+  };
+
+  const verifyOtp = async (email: string, otp: string): Promise<void> => {
+    const { data } = await axios.post(API_ENDPOINTS.AUTH_VERIFY_OTP, { email, otp });
+    localStorage.setItem("auth_token", data.access_token);
+    localStorage.setItem("user", JSON.stringify(data.user));
+    setUser(data.user);
+  };
+
+  const resendOtp = async (email: string): Promise<void> => {
+    await axios.post(API_ENDPOINTS.AUTH_RESEND_OTP, { email });
+  };
+
+  const updateProfile = async (full_name: string, username: string): Promise<void> => {
+    const { data } = await api.patch(API_ENDPOINTS.AUTH_ME, { full_name, username });
+    const updated = { ...user!, full_name: data.full_name, username: data.username };
+    setUser(updated);
+    localStorage.setItem("user", JSON.stringify(updated));
+  };
+
+  const changePassword = async (current_password: string, new_password: string): Promise<void> => {
+    await api.post(API_ENDPOINTS.AUTH_CHANGE_PASSWORD, { current_password, new_password });
   };
 
   const logout = (): void => {
@@ -86,13 +107,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateUser = (userData: Partial<User>): void => {
     if (!user) return;
-    const updatedUser = { ...user, ...userData };
-    setUser(updatedUser);
-    localStorage.setItem("user", JSON.stringify(updatedUser));
+    const updated = { ...user, ...userData };
+    setUser(updated);
+    localStorage.setItem("user", JSON.stringify(updated));
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, logout, updateUser }}>
+    <AuthContext.Provider
+      value={{ user, isLoading, isAuthenticated: !!user, login, register, verifyOtp, resendOtp, logout, updateUser, updateProfile, changePassword }}
+    >
       {children}
     </AuthContext.Provider>
   );

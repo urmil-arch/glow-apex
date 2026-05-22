@@ -1,96 +1,123 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Link } from "react-router-dom";
-import { Eye, EyeOff, LogIn, CheckCircle } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Eye, EyeOff, LogIn, CheckCircle, Mail, RotateCcw } from "lucide-react";
+import axios from "axios";
+import { useAuth } from "@/context/AuthContext";
+
+interface SignInForm {
+  identifier: string;
+  password: string;
+}
+
+type Step = "login" | "verify";
 
 const SignInPage = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-    rememberMe: false,
-  });
+  const { login, verifyOtp, resendOtp } = useAuth();
+
+  const [step, setStep] = useState<Step>("login");
+  const [unverifiedEmail, setUnverifiedEmail] = useState("");
+
+  const [form, setForm] = useState<SignInForm>({ identifier: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>(
-    {}
-  );
+  const [errors, setErrors] = useState<Partial<SignInForm>>({});
+  const [serverError, setServerError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    const { name, value, type, checked } = e.target;
-    setFormData({
-      ...formData,
-      [name]: type === "checkbox" ? checked : value,
-    });
+  const [otp, setOtp] = useState("");
+  const [otpError, setOtpError] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState("");
 
-    // Clear error when user types
-    if (errors[name as keyof typeof errors]) {
-      setErrors({
-        ...errors,
-        [name]: undefined,
-      });
-    }
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+    setErrors((prev) => ({ ...prev, [name]: undefined }));
+    setServerError("");
   };
 
-  const validateForm = (): boolean => {
-    const newErrors: { email?: string; password?: string } = {};
-
-    if (!formData.email) {
-      newErrors.email = "Email is required";
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = "Please enter a valid email address";
-    }
-
-    if (!formData.password) {
-      newErrors.password = "Password is required";
-    } else if (formData.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+  const validate = (): boolean => {
+    const next: Partial<SignInForm> = {};
+    if (!form.identifier.trim()) next.identifier = "Email or username is required";
+    if (!form.password) next.password = "Password is required";
+    setErrors(next);
+    return Object.keys(next).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
+    if (!validate()) return;
 
-    if (!validateForm()) {
+    setIsSubmitting(true);
+    setServerError("");
+    try {
+      await login(form.identifier.trim(), form.password);
+      setIsSuccess(true);
+      setTimeout(() => navigate("/"), 1000);
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        if (err.response?.status === 403) {
+          const detail = err.response.data?.detail;
+          const email = typeof detail === "object" ? detail?.email : null;
+          if (email) {
+            setUnverifiedEmail(email);
+            setStep("verify");
+          } else {
+            const msg = typeof detail === "string" ? detail : "Sign in failed. Please try again.";
+            setServerError(msg);
+          }
+        } else {
+          setServerError(err.response?.data?.detail ?? "Invalid credentials. Please try again.");
+        }
+      } else {
+        setServerError("Sign in failed. Please try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleVerifySubmit = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault();
+    if (!otp.trim()) {
+      setOtpError("Please enter the OTP");
+      return;
+    }
+    if (!/^\d{6}$/.test(otp)) {
+      setOtpError("OTP must be a 6-digit number");
       return;
     }
 
-    setIsSubmitting(true);
-
+    setIsVerifying(true);
+    setOtpError("");
     try {
-      // Simulate API call with delay
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      // Mock successful authentication
-      const dummyToken = `token_${Math.random()
-        .toString(36)
-        .substring(2, 15)}_${Date.now()}`;
-      const dummyUser = {
-        id: "user_123",
-        name: "John Doe",
-        email: formData.email,
-        avatar: "/assets/avatar.png",
-        role: "user",
-      };
-
-      // Store in cookies
-      localStorage.setItem("auth_token", dummyToken);
-      localStorage.setItem("user", JSON.stringify(dummyUser));
-
+      await verifyOtp(unverifiedEmail, otp);
       setIsSuccess(true);
-
-      // Redirect after showing success message
-      setTimeout(() => {
-        navigate("/");
-      }, 1000);
-    } catch (error) {
-      console.error("Authentication error:", error);
+      setTimeout(() => navigate("/"), 1500);
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        setOtpError(err.response?.data?.detail ?? "Invalid OTP. Please try again.");
+      } else {
+        setOtpError("Verification failed. Please try again.");
+      }
     } finally {
-      setIsSubmitting(false);
+      setIsVerifying(false);
+    }
+  };
+
+  const handleResend = async (): Promise<void> => {
+    setIsResending(true);
+    setResendMessage("");
+    setOtpError("");
+    try {
+      await resendOtp(unverifiedEmail);
+      setResendMessage("A new OTP has been sent to your email.");
+    } catch {
+      setResendMessage("Failed to resend OTP. Please try again.");
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -101,9 +128,16 @@ const SignInPage = () => {
           <div className="bg-white rounded-3xl shadow-xl overflow-hidden">
             <div className="p-8">
               <div className="text-center mb-8">
-                <h1 className="text-3xl font-bold">Welcome Back</h1>
+                <Link to="/">
+                  <h1 className="text-2xl font-bold text-gray-900">GLOW APEX</h1>
+                </Link>
+                <h2 className="mt-4 text-2xl font-bold">
+                  {step === "login" ? "Welcome Back" : "Verify your email"}
+                </h2>
                 <p className="text-gray-600 mt-2">
-                  Sign in to continue to your dashboard
+                  {step === "login"
+                    ? "Sign in to continue to your dashboard"
+                    : `We sent a 6-digit code to ${unverifiedEmail}`}
                 </p>
               </div>
 
@@ -111,57 +145,41 @@ const SignInPage = () => {
                 <div className="bg-emerald-50 p-6 rounded-xl text-center">
                   <CheckCircle className="h-12 w-12 text-emerald-500 mx-auto mb-4" />
                   <h3 className="text-xl font-medium text-gray-800">
-                    Successfully Signed In!
+                    {step === "verify" ? "Email Verified!" : "Successfully Signed In!"}
                   </h3>
-                  <p className="text-gray-600 mt-2">
-                    Redirecting you to the dashboard...
-                  </p>
+                  <p className="text-gray-600 mt-2">Redirecting you…</p>
                 </div>
-              ) : (
+              ) : step === "login" ? (
                 <form onSubmit={handleSubmit} className="space-y-6">
+                  {serverError && (
+                    <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                      {serverError}
+                    </div>
+                  )}
+
                   <div className="space-y-2">
-                    <label
-                      htmlFor="email"
-                      className="block text-sm font-medium text-gray-700"
-                    >
-                      Email Address
+                    <label htmlFor="identifier" className="block text-sm font-medium text-gray-700">
+                      Email or Username
                     </label>
                     <input
-                      id="email"
-                      name="email"
-                      type="email"
-                      autoComplete="email"
-                      required
+                      id="identifier"
+                      name="identifier"
+                      type="text"
+                      autoComplete="username"
                       className={`w-full px-4 py-3 bg-gray-50 border ${
-                        errors.email ? "border-red-500" : "border-gray-200"
+                        errors.identifier ? "border-red-500" : "border-gray-200"
                       } rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all`}
-                      value={formData.email}
+                      value={form.identifier}
                       onChange={handleChange}
+                      placeholder="you@example.com or username"
                     />
-                    {errors.email && (
-                      <div className="text-red-500 text-sm mt-1 flex items-center">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                          className="w-4 h-4 mr-1"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        {errors.email}
-                      </div>
+                    {errors.identifier && (
+                      <p className="text-red-500 text-sm mt-1">{errors.identifier}</p>
                     )}
                   </div>
 
                   <div className="space-y-2">
-                    <label
-                      htmlFor="password"
-                      className="block text-sm font-medium text-gray-700"
-                    >
+                    <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                       Password
                     </label>
                     <div className="relative">
@@ -170,78 +188,31 @@ const SignInPage = () => {
                         name="password"
                         type={showPassword ? "text" : "password"}
                         autoComplete="current-password"
-                        required
                         className={`w-full px-4 py-3 bg-gray-50 border ${
                           errors.password ? "border-red-500" : "border-gray-200"
                         } rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all`}
-                        value={formData.password}
+                        value={form.password}
                         onChange={handleChange}
+                        placeholder="Your password"
                       />
                       <button
                         type="button"
                         className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
                         onClick={() => setShowPassword(!showPassword)}
                       >
-                        {showPassword ? (
-                          <EyeOff className="h-5 w-5" />
-                        ) : (
-                          <Eye className="h-5 w-5" />
-                        )}
+                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                       </button>
                     </div>
                     {errors.password && (
-                      <div className="text-red-500 text-sm mt-1 flex items-center">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                          className="w-4 h-4 mr-1"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        {errors.password}
-                      </div>
+                      <p className="text-red-500 text-sm mt-1">{errors.password}</p>
                     )}
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <input
-                        id="rememberMe"
-                        name="rememberMe"
-                        type="checkbox"
-                        className="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded"
-                        checked={formData.rememberMe}
-                        onChange={handleChange}
-                      />
-                      <label
-                        htmlFor="rememberMe"
-                        className="ml-2 block text-sm text-gray-700"
-                      >
-                        Remember me
-                      </label>
-                    </div>
-                    <div className="text-sm">
-                      <Link
-                        to="/forgot-password"
-                        className="font-medium text-emerald-600 hover:text-emerald-500"
-                      >
-                        Forgot your password?
-                      </Link>
-                    </div>
                   </div>
 
                   <button
                     type="submit"
                     disabled={isSubmitting}
                     className={`w-full flex items-center justify-center py-3 px-6 rounded-xl text-white font-medium transition-all ${
-                      isSubmitting
-                        ? "bg-emerald-400 cursor-not-allowed"
-                        : "bg-emerald-600 hover:bg-emerald-700"
+                      isSubmitting ? "bg-emerald-400 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700"
                     }`}
                   >
                     {isSubmitting ? (
@@ -252,21 +223,14 @@ const SignInPage = () => {
                           fill="none"
                           viewBox="0 0 24 24"
                         >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          ></circle>
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path
                             className="opacity-75"
                             fill="currentColor"
                             d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          ></path>
+                          />
                         </svg>
-                        Signing in...
+                        Signing in…
                       </>
                     ) : (
                       <>
@@ -279,13 +243,88 @@ const SignInPage = () => {
                   <div className="mt-4 text-center">
                     <p className="text-sm text-gray-600">
                       Don&apos;t have an account?{" "}
-                      <Link
-                        to="/sign-up"
-                        className="font-medium text-emerald-600 hover:text-emerald-500"
-                      >
+                      <Link to="/sign-up" className="font-medium text-emerald-600 hover:text-emerald-500">
                         Sign up
                       </Link>
                     </p>
+                  </div>
+                </form>
+              ) : (
+                <form onSubmit={handleVerifySubmit} className="space-y-5">
+                  <div className="flex justify-center mb-2">
+                    <div className="bg-emerald-50 rounded-full p-4">
+                      <Mail className="h-8 w-8 text-emerald-600" />
+                    </div>
+                  </div>
+
+                  {resendMessage && (
+                    <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
+                      {resendMessage}
+                    </div>
+                  )}
+
+                  <div>
+                    <label htmlFor="otp" className="block text-sm font-medium text-gray-700 mb-1">
+                      Verification Code
+                    </label>
+                    <input
+                      id="otp"
+                      name="otp"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={otp}
+                      onChange={(e) => {
+                        setOtp(e.target.value.replace(/\D/g, ""));
+                        setOtpError("");
+                      }}
+                      placeholder="Enter 6-digit code"
+                      className={`w-full px-4 py-3 border rounded-xl text-center text-2xl tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors ${
+                        otpError ? "border-red-500" : "border-gray-200"
+                      }`}
+                    />
+                    {otpError && <p className="mt-1 text-xs text-red-600">{otpError}</p>}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isVerifying}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-medium py-3 px-4 rounded-xl transition-colors flex items-center justify-center"
+                  >
+                    {isVerifying ? (
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                    ) : (
+                      <CheckCircle className="h-5 w-5 mr-2" />
+                    )}
+                    {isVerifying ? "Verifying…" : "Verify Email"}
+                  </button>
+
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={handleResend}
+                      disabled={isResending}
+                      className="inline-flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 disabled:opacity-50"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      {isResending ? "Sending…" : "Resend code"}
+                    </button>
+                  </div>
+
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStep("login");
+                        setOtp("");
+                        setOtpError("");
+                        setResendMessage("");
+                        setUnverifiedEmail("");
+                      }}
+                      className="text-sm text-gray-500 hover:text-gray-700"
+                    >
+                      ← Back to sign in
+                    </button>
                   </div>
                 </form>
               )}

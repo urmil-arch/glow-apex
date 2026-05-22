@@ -6,9 +6,13 @@ from app.payments.stripe.router import router as stripe_router
 from app.payments.cryptomus.router import router as cryptomus_router
 from app.payments.payeer.router import router as payeer_router
 from app.payments.router import router as payments_router
+from app.user_management.routers.auth_router import router as auth_router
+from app.user_management.routers.profile_router import router as profile_router
 
 
 def include_routers(app: FastAPI) -> None:
+    app.include_router(auth_router, prefix="/auth", tags=["Auth"])
+    app.include_router(profile_router, prefix="/auth", tags=["Profile"])
     app.include_router(smm_router, prefix="/smm", tags=["SMM"])
     app.include_router(cashfree_router, prefix="/payments/cashfree", tags=["Cashfree"])
     app.include_router(stripe_router, prefix="/payments/stripe", tags=["Stripe"])
