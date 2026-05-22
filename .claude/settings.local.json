@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm -rf components/cards components/common components/magicui components/payment components/sections components/ui)",
+      "Bash(mv components/components/* components/)",
+      "Bash(rm -rf components/components)",
+      "Bash(mv types/types/* types/)",
+      "Bash(rm -rf types/types)",
+      "Bash(python3)"
+    ]
+  }
+}
