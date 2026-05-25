@@ -1,4 +1,3 @@
-'use client'
 import {
   AlertCircle,
   CheckCircle,
@@ -6,7 +5,7 @@ import {
   Download,
   Search,
 } from "lucide-react";
-import React, { useState } from "react";
+import { useState } from "react";
 
 // Payment interface
 interface Payment {

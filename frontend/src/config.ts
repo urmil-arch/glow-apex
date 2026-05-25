@@ -1,6 +1,14 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
 export const API_ENDPOINTS = {
+  // Auth
+  AUTH_REGISTER: `${API_BASE_URL}/auth/register`,
+  AUTH_VERIFY_OTP: `${API_BASE_URL}/auth/verify-otp`,
+  AUTH_RESEND_OTP: `${API_BASE_URL}/auth/resend-otp`,
+  AUTH_LOGIN: `${API_BASE_URL}/auth/login`,
+  AUTH_ME: `${API_BASE_URL}/auth/me`,
+  AUTH_CHANGE_PASSWORD: `${API_BASE_URL}/auth/change-password`,
+
   // SMM Panel
   GET_SERVICES: `${API_BASE_URL}/smm/services`,
   ADD_ORDER: `${API_BASE_URL}/smm/add-order`,
@@ -23,4 +31,7 @@ export const API_ENDPOINTS = {
 
   // Unified verify router
   PAYMENT_VERIFY: `${API_BASE_URL}/payments/verify`,
+
+  // Contact
+  CONTACT_SEND: `${API_BASE_URL}/contact/send`,
 }

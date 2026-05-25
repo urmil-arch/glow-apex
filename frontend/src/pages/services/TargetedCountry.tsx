@@ -21,7 +21,7 @@ const CountryTargetedYoutubeSubscribers = () => {
         <section className="container p-16">
           <SectionHeader
             tabHeading="why"
-            title="Why Buy Country-Targeted YouTube Subscribers from buyrealviews.com?"
+            title="Why Buy Country-Targeted YouTube Subscribers from glowapex.com?"
           />
           <div className="mt-22 grid grid-rows-3 gap-4 relative">
             <div className="bg-white rounded-3xl p-5 flex items-center justify-start gap-4 md:w-fit w-full md:mx-0 mx-auto">

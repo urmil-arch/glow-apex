@@ -213,7 +213,7 @@ const YoutubeShortsLikesHeroSection: React.FC = () => {
             Give wings to your YouTube shorts with high quality YouTube likes
             that no YouTube algorithm can suspect. Because, they are from real
             people! Experience the doping effect of the right audience with a
-            reasonable price with BuyRealViews. Read what is written about us in
+            reasonable price with Glow-Apex. Read what is written about us in
             the press.
           </motion.p>
 

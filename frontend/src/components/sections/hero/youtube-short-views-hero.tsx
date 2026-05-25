@@ -212,7 +212,7 @@ const YoutubeShortsViewsHeroSection: React.FC = () => {
             Give wings to your YouTube Shorts videos with high quality YouTube
             Shorts Views that no YouTube algorithm can suspect. Because, they
             are from real people! Experience the doping effect of the right
-            audience with a reasonable price with BuyRealViews. Read what is
+            audience with a reasonable price with Glow-Apex. Read what is
             written about us in the press.
           </motion.p>
 

@@ -628,7 +628,7 @@ const CheckoutPage = () => {
                               orderId: `order_${v4()}`,
                               amount: totalAmount,
                               currency: "USD",
-                              description: `BuyRealViews - ${currentService.name}`,
+                              description: `Glow-Apex - ${currentService.name}`,
                             }}
                             customerDetails={userDetails}
                             onPaymentInitiated={handlePaymentInitiated}
@@ -719,7 +719,7 @@ const CheckoutPage = () => {
                               orderId: `order_${v4()}`,
                               amount: totalAmount,
                               currency: "USD",
-                              description: `BuyRealViews - ${currentService.name}`,
+                              description: `Glow-Apex - ${currentService.name}`,
                             }}
                             customerDetails={userDetails}
                             onPaymentInitiated={handlePaymentInitiated}
@@ -809,7 +809,7 @@ const CheckoutPage = () => {
                               orderId: `order_${v4()}`,
                               amount: totalAmount,
                               currency: "USD",
-                              description: `BuyRealViews - ${currentService.name}`,
+                              description: `Glow-Apex - ${currentService.name}`,
                             }}
                             customerDetails={userDetails}
                             onPaymentInitiated={handlePaymentInitiated}
