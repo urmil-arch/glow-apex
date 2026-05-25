@@ -39,7 +39,7 @@ export const MobileMenu = () => {
       </SheetTrigger>
       <SheetContent className="p-7">
         <SheetTitle className="text-2xl font-bold uppercase">
-          Glow-Apex
+          Glow Apex
         </SheetTitle>
         <ul className="grid gap-4 py-4">
           {menuitems.map((item) => {

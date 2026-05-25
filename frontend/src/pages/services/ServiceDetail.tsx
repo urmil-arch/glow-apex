@@ -773,7 +773,7 @@ const ServicePage = () => {
                     </div>
 
                     <p className="text-xl font-medium text-gray-800 mb-6">
-                      &quot;Thank you Glow-Apex! I recovered all the lost
+                      &quot;Thank you BuyRealViews! I recovered all the lost
                       subscribers from another provider, and the{" "}
                       {currentService.unit.toLowerCase()} I purchased boosted my
                       engagement rates tremendously. My videos are now performing
@@ -810,7 +810,7 @@ const ServicePage = () => {
                 {/* Benefits */}
                 <div className="mt-8 pt-8 border-t border-gray-200">
                   <h3 className="font-semibold text-lg my-4">
-                    Why choose Glow-Apex?
+                    Why choose BuyRealViews?
                   </h3>
                   <div className="space-y-4">
                     <div className="flex">

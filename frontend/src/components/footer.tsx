@@ -64,14 +64,14 @@ const Footer = () => {
             <p className="font-semibold text-white mb-2">Contact Information</p>
             <p>Tel: +91 72004 85444</p>
             <p>E-mail: support@glowapex.com</p>
-            <p>Company: Glow-Apex</p>
+            <p>Company: GlowApex</p>
           </div>
         </div>
       </div>
       <hr />
       <div className="container py-5">
         <p className="text-muted-foreground text-sm text-center">
-          © 2025 Glow-Apex. All Rights Reserved.
+          © 2025 GlowApex. All Rights Reserved.
         </p>
       </div>
     </footer>

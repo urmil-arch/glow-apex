@@ -203,7 +203,7 @@ const WhyChooseSection: React.FC = () => {
         <div className="container p-8 md:p-16 py-12 md:py-22 flex flex-col items-center justify-center gap-2">
           <SectionHeader
             className="text-white"
-            title="Why Choose Glow-Apex?"
+            title="Why Choose Buyrealviews?"
             subheading="When it comes to buying YouTube views, not all services are equal. At Glow-Apex, we deliver authentic engagement with transparent pricing and exceptional support."
             iconElements={
               <>
