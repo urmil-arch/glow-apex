@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     client.close()
 
 
-app = FastAPI(title="Glow-Apex API", lifespan=lifespan)
+app = FastAPI(title="BuyRealViews API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

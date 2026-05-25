@@ -39,7 +39,7 @@ const BenefitsSection: React.FC<{ benefitsData: Benefit[] }> = ({
 
       <SectionHeader
         title="The Benefits of Buying YouTube Views from us"
-        subheading='Many ask, "Is it safe to buy YouTube views?" Yes, if you use a trusted service like glowapex.com.'
+        subheading='Many ask, "Is it safe to buy YouTube views?" Yes, if you use a trusted service like buyrealviews.com.'
         tabHeading="benefits"
       />
 

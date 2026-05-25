@@ -75,7 +75,7 @@ const CryptomusPayment: React.FC<CryptomusPaymentProps> = ({
           customer_email: customerDetails.email.trim(),
           customer_phone: customerDetails.phone.trim(),
         },
-        order_description: orderData.description || 'Glow-Apex Order',
+        order_description: orderData.description || 'BuyRealViews Order',
         return_url: `${window.location.origin}/checkout/check-status/${orderData.orderId}`,
         ...(selectedCrypto && { crypto_currency: selectedCrypto })
       };

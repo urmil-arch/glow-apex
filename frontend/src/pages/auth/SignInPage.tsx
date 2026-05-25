@@ -129,7 +129,7 @@ const SignInPage = () => {
             <div className="p-8">
               <div className="text-center mb-8">
                 <Link to="/">
-                  <h1 className="text-2xl font-bold text-gray-900">Glow-Apex</h1>
+                  <h1 className="text-2xl font-bold text-gray-900">GLOW APEX</h1>
                 </Link>
                 <h2 className="mt-4 text-2xl font-bold">
                   {step === "login" ? "Welcome Back" : "Verify your email"}

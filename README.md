@@ -1,4 +1,4 @@
-# Glow-Apex — YouTube Growth Service Platform
+# BuyRealViews — YouTube Growth Service Platform
 
 A full-stack platform where users purchase YouTube engagement: Likes, Views, Subscribers, Comments, and Shorts. Built with a separated React frontend and Python FastAPI backend.
 

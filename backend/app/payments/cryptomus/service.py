@@ -84,7 +84,7 @@ async def create_invoice(
         "network": result.get("network"),
         "expired_at": result["expired_at"],
         "created_at": result["created_at"],
-        "description": order_description or "Glow-Apex Order",
+        "description": order_description or "BuyRealViews Order",
     }
 
 
@@ -125,7 +125,7 @@ async def verify_invoice(
         "network": info.get("network"),
         "address": info.get("address"),
         "txid": info.get("txid"),
-        "description": "Glow-Apex Order",
+        "description": "BuyRealViews Order",
         "payment_status_raw": info["payment_status"],
         "is_final": info.get("is_final"),
         "expired_at": info.get("expired_at"),

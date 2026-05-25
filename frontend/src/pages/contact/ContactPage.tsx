@@ -116,7 +116,7 @@ const ContactPage = () => {
               We respond to emails within 24 hours
             </p>
             <Link
-              to="mailto:support@glowapex.com"
+              to="mailto:support@buyrealviews.com"
               className="text-emerald-600 font-semibold hover:text-emerald-700"
             >
               support@glowapex.com

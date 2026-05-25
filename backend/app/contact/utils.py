@@ -25,7 +25,7 @@ def _build_owner_notification(
     safe_message = html_lib.escape(message)
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"[Glow-Apex] {type_label} from {safe_name}: {safe_subject}"
+    msg["Subject"] = f"[BuyRealViews] {type_label} from {safe_name}: {safe_subject}"
     msg["From"] = settings.SMTP_FROM
     msg["To"] = owner_to
     msg["Reply-To"] = email
@@ -84,7 +84,7 @@ def _build_user_confirmation(name: str, subject: str, to_email: str) -> MIMEMult
     safe_subject = html_lib.escape(subject)
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = "We received your message — Glow-Apex"
+    msg["Subject"] = "We received your message — BuyRealViews"
     msg["From"] = settings.SMTP_FROM
     msg["To"] = to_email
 
