@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = ""
+    CONTACT_OWNER_EMAIL: str = ""  # Receives contact form submissions; falls back to SMTP_FROM
+
+    # Redis
+    REDIS_URL: str = "redis://localhost:6379"
 
     # App
     BACKEND_BASE_URL: str = "http://localhost:8000"

@@ -20,7 +20,7 @@ def create_payment_form(
     """Build Payeer payment form fields, signature, and redirect URL."""
     m_amount = format_payeer_amount(float(order_amount))
     m_curr = order_currency
-    m_desc = base64.b64encode((order_description or "BuyRealViews Order").encode()).decode()
+    m_desc = base64.b64encode((order_description or "Glow-Apex Order").encode()).decode()
 
     additional_params = {
         "success_url": return_url or f"{settings.BACKEND_BASE_URL}/checkout/check-status/{order_id}",
@@ -73,5 +73,5 @@ def create_payment_form(
         "merchant_order_id": order_id,
         "amount": m_amount,
         "currency": m_curr,
-        "description": order_description or "BuyRealViews Order",
+        "description": order_description or "Glow-Apex Order",
     }

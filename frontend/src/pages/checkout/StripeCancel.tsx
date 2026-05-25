@@ -109,7 +109,7 @@ const StripeCancel: React.FC = () => {
 
           <div className="mt-4 text-center text-xs text-gray-500 border-t pt-4">
             <p>Still having issues?</p>
-            <p className="font-medium">Contact Support: support@buyrealviews.com</p>
+            <p className="font-medium">Contact Support: support@glowapex.com</p>
             {sessionId && <p className="mt-1">Reference: {sessionId}</p>}
           </div>
         </div>

@@ -210,7 +210,7 @@ const YoutubeSubscribersHeroSection: React.FC = () => {
             Building a successful YouTube channel is no small feat. You invest
             countless hours into crafting quality videos, but your hard work
             might go unnoticed if you don&apos;t have enough subscribers. With
-            BuyRealViews, enhance your subscriber count with 100% real and
+            Glow-Apex, enhance your subscriber count with 100% real and
             active users that comply with YouTube&apos;s policies.
           </motion.p>
 

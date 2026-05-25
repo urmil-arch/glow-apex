@@ -9,8 +9,12 @@ import {
   ChevronRight,
   Headphones,
   ArrowRight,
+  Loader2,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import axios from "axios";
+import { api } from "@/lib/api";
+import { API_ENDPOINTS } from "@/config";
 
 
 const ContactPage = () => {
@@ -22,58 +26,42 @@ const ContactPage = () => {
     message: "",
   });
   const [formSubmitted, setFormSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value,
-    });
+    setFormData({ ...formData, [name]: value });
+    setSubmitError("");
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
-    
+    setIsSubmitting(true);
+    setSubmitError("");
+
     try {
-      // Create mailto URL with form data
-      const recipient = 'support@glowapex.com';
-      const subject = encodeURIComponent(formData.subject || `${activeTab === 'support' ? 'Support Request' : 'Business Inquiry'} from ${formData.name}`);
-      const body = encodeURIComponent(
-        `Name: ${formData.name}\n` +
-        `Email: ${formData.email}\n` +
-        `Type: ${activeTab === 'support' ? 'Customer Support' : 'Business Inquiries'}\n\n` +
-        `Message:\n${formData.message}\n\n` +
-        `---\n` +
-        `This email was sent from the Glow Apex contact form.`
-      );
-      
-      const mailtoUrl = `mailto:${recipient}?subject=${subject}&body=${body}`;
-      
-      console.log("Opening email client with form data:", formData);
-      console.log("Mailto URL:", mailtoUrl);
-      
-      // Try to open user's email client
-      window.location.href = mailtoUrl;
-      
-      // Show success message
+      await api.post(API_ENDPOINTS.CONTACT_SEND, {
+        name: formData.name,
+        email: formData.email,
+        subject: formData.subject,
+        message: formData.message,
+        type: activeTab,
+      });
       setFormSubmitted(true);
-      
-      // Reset form after 5 seconds to give user more time to see the message
-      setTimeout(() => {
-        setFormSubmitted(false);
-        setFormData({
-          name: "",
-          email: "",
-          subject: "",
-          message: "",
-        });
-      }, 5000);
-    } catch (error) {
-      console.error("Error opening email client:", error);
-      // Fallback: copy email details to clipboard or show an alert
-      alert(`Please send an email to support@glowapex.com with the following details:\n\nName: ${formData.name}\nEmail: ${formData.email}\nSubject: ${formData.subject}\nMessage: ${formData.message}`);
+      setFormData({ name: "", email: "", subject: "", message: "" });
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        setSubmitError(
+          err.response?.data?.detail ?? "Failed to send your message. Please try again."
+        );
+      } else {
+        setSubmitError("Failed to send your message. Please try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -128,7 +116,7 @@ const ContactPage = () => {
               We respond to emails within 24 hours
             </p>
             <Link
-              to="mailto:support@buyrealviews.com"
+              to="mailto:support@glowapex.com"
               className="text-emerald-600 font-semibold hover:text-emerald-700"
             >
               support@glowapex.com
@@ -185,21 +173,12 @@ const ContactPage = () => {
                     <Check className="h-8 w-8 text-emerald-600" />
                   </div>
                   <h3 className="text-2xl font-bold text-gray-800 mb-2">
-                    Message Sended!
+                    Message Sent!
                   </h3>
-                  <p className="text-gray-600 mb-4">
-                    Your email client has been opened with your message. Please send the email to complete your inquiry.
+                  <p className="text-gray-600">
+                    We've received your message and will get back to you within 24 hours.
+                    Check your inbox for a confirmation email.
                   </p>
-                  <p className="text-sm text-gray-500 mb-4">
-                    If your email client didn't open automatically, you can manually send an email to:
-                  </p>
-                  <a 
-                    href="mailto:support@glowapex.com" 
-                    className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium"
-                  >
-                    <Mail className="mr-2 h-4 w-4" />
-                    support@glowapex.com
-                  </a>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -299,12 +278,28 @@ const ContactPage = () => {
                     </label>
                   </div>
 
+                  {submitError && (
+                    <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                      {submitError}
+                    </div>
+                  )}
+
                   <button
                     type="submit"
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center"
+                    disabled={isSubmitting}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-bold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center gap-2"
                   >
-                    <Mail className="mr-2 h-5 w-5" />
-                    Send Message
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        Sending…
+                      </>
+                    ) : (
+                      <>
+                        <Mail className="h-5 w-5" />
+                        Send Message
+                      </>
+                    )}
                   </button>
                 </form>
               )}

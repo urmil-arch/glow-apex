@@ -59,7 +59,7 @@ def create_checkout_session(
                 "price_data": {
                     "currency": currency,
                     "product_data": {
-                        "name": order_description or "BuyRealViews Order",
+                        "name": order_description or "Glow-Apex Order",
                     },
                     "unit_amount": _to_stripe_amount(amount, currency),
                 },
@@ -84,7 +84,7 @@ def create_checkout_session(
         "payment_status": session.status or "open",
         "expires_at": session.expires_at or 0,
         "created_at": session.created,
-        "description": order_description or "BuyRealViews Order",
+        "description": order_description or "Glow-Apex Order",
     }
 
 
@@ -127,7 +127,7 @@ def verify_session(
         "payment_intent_id": payment_intent_id,
         "checkout_url": session.url,
         "receipt_url": receipt_url,
-        "description": "BuyRealViews Order",
+        "description": "Glow-Apex Order",
         "expires_at": session.expires_at,
         "created_at": session.created,
         "payment_status_raw": session.status,

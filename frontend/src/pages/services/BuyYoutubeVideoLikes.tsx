@@ -85,7 +85,7 @@ const YoutubeVideoLikes = () => {
         <section className="container p-16">
           <SectionHeader
             tabHeading="why"
-            title="Why Buy YouTube Likes from buyrealviews.com?"
+            title="Why Buy YouTube Likes from glowapex.com?"
           />
           <div className="mt-22 grid grid-rows-3 gap-4 relative">
             <div className="bg-white rounded-3xl p-5 flex items-center justify-start gap-4 md:w-fit w-full md:mx-0 mx-auto">
@@ -133,7 +133,7 @@ const YoutubeVideoLikes = () => {
         </section>
       </div>
       <section className="container pb-32">
-        <SectionHeader tabHeading="Safety" title="Why Choose BuyRealViews" />
+        <SectionHeader tabHeading="Safety" title="Why Choose Glow-Apex" />
         <div className="grid lg:grid-cols-4 md:grid-cols-2 grid-cols-1 gap-6 mt-16">
           <div className="flex flex-col items-center justify-center">
             <div className="bg-[#0eca6d]/10 p-4 rounded-full mb-4">

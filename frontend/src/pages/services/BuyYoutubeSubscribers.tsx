@@ -165,7 +165,7 @@ const YouTubeSubscribers = () => {
       <FeatureSection data={subscribersFeatureData} />
 
       <section className="container pb-32">
-        <SectionHeader tabHeading="Safety" title="Why Choose BuyRealViews" />
+        <SectionHeader tabHeading="Safety" title="Why Choose Glow-Apex" />
         <div className="grid lg:grid-cols-4 md:grid-cols-2 grid-cols-1 gap-6 mt-16">
           <div className="flex flex-col items-center justify-center">
             <div className="bg-[#0eca6d]/10 p-4 rounded-full mb-4">

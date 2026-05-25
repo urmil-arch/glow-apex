@@ -31,4 +31,7 @@ export const API_ENDPOINTS = {
 
   // Unified verify router
   PAYMENT_VERIFY: `${API_BASE_URL}/payments/verify`,
+
+  // Contact
+  CONTACT_SEND: `${API_BASE_URL}/contact/send`,
 }

@@ -64,7 +64,7 @@ export const WhyPromoteSection: React.FC = () => {
       <section className="container">
         <SectionHeader
           title="Why Should You Promote Your YouTube Videos?"
-          subheading="When it comes to buying YouTube views, not all services are equal. At buyrealviews, we help you stand out and reach more people."
+          subheading="When it comes to buying YouTube views, not all services are equal. At Glow-Apex, we help you stand out and reach more people."
           tabHeading="why"
         />
 

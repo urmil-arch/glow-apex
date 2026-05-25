@@ -40,7 +40,7 @@ const HowWeDeliverSection: React.FC<{ features: Feature[] }> = ({
 
       <SectionHeader
         title="How We Deliver Views - Is It Safe?"
-        subheading='Many ask, "Is it safe to buy YouTube views?" Yes, if you use a trusted service like buyrealviews.com.'
+        subheading='Many ask, "Is it safe to buy YouTube views?" Yes, if you use a trusted service like glowapex.com.'
         tabHeading="how"
       />
 

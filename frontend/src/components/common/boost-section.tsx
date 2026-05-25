@@ -115,7 +115,7 @@ const BoostSection = () => {
 
         <SectionHeader
           title="Boost Your YouTube with Real Views!"
-          subheading="When it comes to buying YouTube views, not all services are equal. At buyrealviews, we deliver authentic engagement that helps your channel grow."
+          subheading="When it comes to buying YouTube views, not all services are equal. At Glow-Apex, we deliver authentic engagement that helps your channel grow."
           iconElements={
             <>
               <motion.div

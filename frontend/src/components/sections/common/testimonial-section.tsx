@@ -5,7 +5,7 @@ import React from "react";
 const TestimonialSection = () => {
   return (
     <section className="pb-32 relative overflow-y-clip">
-      <SectionHeader title="Buyrealviews is already loved by 30,000+ customers, and you'll love it,too!" />
+      <SectionHeader title="Glow-Apex is already loved by 30,000+ customers, and you'll love it,too!" />
       <div
         className={
           "flex [mask-image:linear-gradient(to_top,transparent,black,black,transparent)] mt-16 items-center justify-center"
@@ -14,7 +14,7 @@ const TestimonialSection = () => {
         <div className="grid lg:grid-cols-4 sm:grid-cols-2 grid-cols-1 relative overflow-y-scroll justify-center w-full max-w-6xl gap-2 sm:px-0 px-4">
           <div className="flex flex-col items-center gap-2 mt-[20px]">
             <TestimonialCard
-              text="Buyrealviews transformed my online presence completely! <highlight>The quality of followers I received was outstanding.</highlight> Real engagement that boosted my credibility instantly."
+              text="Glow-Apex transformed my online presence completely! <highlight>The quality of followers I received was outstanding.</highlight> Real engagement that boosted my credibility instantly."
               name="Emma Thompson"
               role="Fashion Influencer"
               rating={5}
@@ -38,7 +38,7 @@ const TestimonialSection = () => {
               accentColor="#15c39a"
             />
             <TestimonialCard
-              text="My YouTube channel grew exponentially after using Buyrealviews. <highlight>The views were high-quality and led to genuine subscriber growth.</highlight>"
+              text="My YouTube channel grew exponentially after using Glow-Apex. <highlight>The views were high-quality and led to genuine subscriber growth.</highlight>"
               name="David Kim"
               role="Content Creator"
               rating={5}
@@ -48,7 +48,7 @@ const TestimonialSection = () => {
           </div>
           <div className="sm:flex hidden flex-col items-center gap-2 mt-[80px]">
             <TestimonialCard
-              text="As a small business owner, I needed to establish social proof quickly. <highlight>Buyrealviews delivered authentic engagement</highlight>  that helped me build trust with new customers."
+              text="As a small business owner, I needed to establish social proof quickly. <highlight>Glow-Apex delivered authentic engagement</highlight>  that helped me build trust with new customers."
               name="Jessica Martinez"
               role="Boutique Owner"
               rating={5}
@@ -56,7 +56,7 @@ const TestimonialSection = () => {
               accentColor="#15c39a"
             />
             <TestimonialCard
-              text="The organic growth I've experienced after the initial boost from Buyrealviews has been amazing. <highlight>It kickstarted my account perfectly!</highlight>"
+              text="The organic growth I've experienced after the initial boost from Glow-Apex has been amazing. <highlight>It kickstarted my account perfectly!</highlight>"
               name="Robert Chen"
               role="Travel Blogger"
               rating={4}
@@ -64,7 +64,7 @@ const TestimonialSection = () => {
               accentColor="#0eca6d"
             />
             <TestimonialCard
-              text="<highlight>I've tried other services before, but none delivered the quality that Buyrealviews provides.</highlight> Real engagement from real people - exactly what I needed."
+              text="<highlight>I've tried other services before, but none delivered the quality that Glow-Apex provides.</highlight> Real engagement from real people - exactly what I needed."
               name="Amanda Wilson"
               role="Photographer"
               rating={5}
@@ -90,7 +90,7 @@ const TestimonialSection = () => {
               accentColor="#0eca6d"
             />
             <TestimonialCard
-              text="<highlight>My brand partnerships increased significantly</highlight> after growing my following with Buyrealviews. The ROI has been incredible!"
+              text="<highlight>My brand partnerships increased significantly</highlight> after growing my following with Glow-Apex. The ROI has been incredible!"
               name="Ryan Patel"
               role="Influencer"
               rating={4}
@@ -106,7 +106,7 @@ const TestimonialSection = () => {
               accentColor="#12b76a"
             />
             <TestimonialCard
-              text="I appreciate how transparent Buyrealviews was about their process. <highlight>No gimmicks, just solid results</highlight> that helped my business grow."
+              text="I appreciate how transparent Glow-Apex was about their process. <highlight>No gimmicks, just solid results</highlight> that helped my business grow."
               name="Marcus Johnson"
               role="Marketing Director"
               rating={5}
@@ -116,7 +116,7 @@ const TestimonialSection = () => {
           </div>
           <div className="lg:flex hidden flex-col items-center gap-2 mt-[80px]">
             <TestimonialCard
-              text="Since using Buyrealviews, I've noticed a significant increase in organic engagement. <highlight>The initial boost really helped the algorithm</highlight> favor my content."
+              text="Since using Glow-Apex, I've noticed a significant increase in organic engagement. <highlight>The initial boost really helped the algorithm</highlight> favor my content."
               name="Elena Vasquez"
               role="Artist"
               rating={5}
@@ -132,7 +132,7 @@ const TestimonialSection = () => {
               accentColor="#0eca6d"
             />
             <TestimonialCard
-              text="As someone who was starting from zero, <highlight>Buyrealviews gave me the foundation I needed</highlight> to build a credible online presence. Highly recommended!"
+              text="As someone who was starting from zero, <highlight>Glow-Apex gave me the foundation I needed</highlight> to build a credible online presence. Highly recommended!"
               name="Aisha Patel"
               role="Startup Founder"
               rating={5}
@@ -140,7 +140,7 @@ const TestimonialSection = () => {
               accentColor="#15c39a"
             />
             <TestimonialCard
-              text="The competitive edge I gained from Buyrealviews' services <highlight>helped me secure brand deals I wouldn't have qualified for otherwise.</highlight> Game-changer!"
+              text="The competitive edge I gained from Glow-Apex' services <highlight>helped me secure brand deals I wouldn't have qualified for otherwise.</highlight> Game-changer!"
               name="Kyle Sanders"
               role="Sports Influencer"
               rating={5}
