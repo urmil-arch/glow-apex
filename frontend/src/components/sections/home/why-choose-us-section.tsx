@@ -204,7 +204,7 @@ const WhyChooseSection: React.FC = () => {
           <SectionHeader
             className="text-white"
             title="Why Choose Buyrealviews?"
-            subheading="When it comes to buying YouTube views, not all services are equal. At Glow-Apex, we deliver authentic engagement with transparent pricing and exceptional support."
+            subheading="When it comes to buying YouTube views, not all services are equal. At buyrealviews, we deliver authentic engagement with transparent pricing and exceptional support."
             iconElements={
               <>
                 <motion.div
