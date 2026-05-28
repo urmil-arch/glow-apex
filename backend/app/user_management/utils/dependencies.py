@@ -24,3 +24,10 @@ async def get_current_user(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found")
 
     return user
+
+
+async def get_current_admin(user: dict = Depends(get_current_user)) -> dict:
+    """Require the authenticated user to be an admin. Raises 403 otherwise."""
+    if not user.get("is_admin"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin access required")
+    return user

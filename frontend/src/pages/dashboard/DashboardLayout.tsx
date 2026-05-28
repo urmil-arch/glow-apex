@@ -1,7 +1,9 @@
 import { useAuth } from "@/context/AuthContext";
-import { CreditCard, Home, LogOut, Menu, Package, User, X } from "lucide-react";
+import { CreditCard, Home, LogOut, Menu, Package, Ticket, User, X } from "lucide-react";
 import { Link, useLocation, useNavigate, Outlet } from "react-router-dom";
 import React, { useEffect, useState } from "react";
+import { api } from "@/lib/api";
+import { API_ENDPOINTS } from "@/config";
 
 interface NavItemConfig {
   label: string;
@@ -12,11 +14,13 @@ interface NavItemConfig {
 const NAV_ITEMS: NavItemConfig[] = [
   { label: "My Orders", icon: <Package className="w-5 h-5" />, to: "/dashboard/orders" },
   { label: "Payments", icon: <CreditCard className="w-5 h-5" />, to: "/dashboard/payments" },
+  { label: "Support", icon: <Ticket className="w-5 h-5" />, to: "/dashboard/tickets" },
   { label: "Profile", icon: <User className="w-5 h-5" />, to: "/dashboard/profile" },
 ];
 
 const getPageTitle = (pathname: string): string => {
   if (pathname.includes("payments")) return "Payments";
+  if (pathname.includes("tickets")) return "Support Tickets";
   if (pathname.includes("profile")) return "Profile Settings";
   return "My Orders";
 };
@@ -27,6 +31,7 @@ const DashboardLayout: React.FC = () => {
   const { user, logout, isLoading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLarge, setIsLarge] = useState(false);
+  const [hasUnreadTicket, setHasUnreadTicket] = useState(false);
 
   useEffect(() => {
     const check = () => {
@@ -39,11 +44,24 @@ const DashboardLayout: React.FC = () => {
     return () => window.removeEventListener("resize", check);
   }, []);
 
+  useEffect(() => {
+    if (!user) return;
+    api.get(API_ENDPOINTS.TICKETS, { params: { page_size: 50 } })
+      .then((res) => {
+        const tickets: { user_has_unread: boolean }[] = res.data.tickets ?? [];
+        setHasUnreadTicket(tickets.some((t) => t.user_has_unread));
+      })
+      .catch(() => {/* non-critical, silent */});
+  }, [user, location.pathname]);
+
   const pathname = location.pathname;
 
   const isActive = (to: string): boolean => {
     if (to === "/dashboard/orders") {
       return pathname === "/dashboard" || pathname.startsWith("/dashboard/orders");
+    }
+    if (to === "/dashboard/tickets") {
+      return pathname.startsWith("/dashboard/tickets");
     }
     return pathname.startsWith(to);
   };
@@ -125,21 +143,30 @@ const DashboardLayout: React.FC = () => {
 
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              onClick={closeSidebarOnMobile}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                isActive(item.to)
-                  ? "bg-teal-50 text-teal-700 border-l-2 border-teal-500"
-                  : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
-              }`}
-            >
-              {item.icon}
-              {item.label}
-            </Link>
-          ))}
+          {NAV_ITEMS.map((item) => {
+            const showDot = item.to === "/dashboard/tickets" && hasUnreadTicket && !isActive(item.to);
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                onClick={() => {
+                  if (item.to === "/dashboard/tickets") setHasUnreadTicket(false);
+                  closeSidebarOnMobile();
+                }}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  isActive(item.to)
+                    ? "bg-teal-50 text-teal-700 border-l-2 border-teal-500"
+                    : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
+                }`}
+              >
+                {item.icon}
+                {item.label}
+                {showDot && (
+                  <span className="ml-auto w-2 h-2 rounded-full bg-teal-500" />
+                )}
+              </Link>
+            );
+          })}
 
           <div className="pt-3 mt-3 border-t border-gray-100 space-y-1">
             <Link
@@ -188,23 +215,34 @@ const DashboardLayout: React.FC = () => {
 
         {/* Page content */}
         <main className="flex-1 p-4 md:p-6">
-          <Outlet />
+          <Outlet context={{ clearUnreadDot: () => setHasUnreadTicket(false) }} />
         </main>
 
         {/* Mobile bottom nav */}
         <nav className="lg:hidden sticky bottom-0 bg-white border-t border-gray-100 flex z-10">
-          {NAV_ITEMS.map((item) => (
-            <button
-              key={item.to}
-              onClick={() => navigate(item.to)}
-              className={`flex-1 flex flex-col items-center py-3 gap-1 text-xs font-medium transition-colors ${
-                isActive(item.to) ? "text-teal-600" : "text-gray-400 hover:text-gray-600"
-              }`}
-            >
-              {item.icon}
-              {item.label}
-            </button>
-          ))}
+          {NAV_ITEMS.map((item) => {
+            const showDot = item.to === "/dashboard/tickets" && hasUnreadTicket && !isActive(item.to);
+            return (
+              <button
+                key={item.to}
+                onClick={() => {
+                  if (item.to === "/dashboard/tickets") setHasUnreadTicket(false);
+                  navigate(item.to);
+                }}
+                className={`flex-1 flex flex-col items-center py-3 gap-1 text-xs font-medium transition-colors ${
+                  isActive(item.to) ? "text-teal-600" : "text-gray-400 hover:text-gray-600"
+                }`}
+              >
+                <span className="relative">
+                  {item.icon}
+                  {showDot && (
+                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-teal-500 border border-white" />
+                  )}
+                </span>
+                {item.label}
+              </button>
+            );
+          })}
         </nav>
       </div>
     </div>

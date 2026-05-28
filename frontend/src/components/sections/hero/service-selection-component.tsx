@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import currency from "currency.js";
 import { useOrderStore } from "@/store/useOrderStore";
+import { useServices } from "@/context/ServicesContext";
 import { currencyFormats, servicesPackages } from "@/config/data";
 
 // Define exchange rates (in a real app, you'd fetch these from an API)
@@ -40,35 +41,15 @@ interface ServiceSelectionComponentProps {
   serviceType: string;
 }
 
-// Service configuration to map service types to IDs
-const serviceConfig = {
-  likes: { id: "2342" },
-  views: { id: "5648" },
-  comments: { id: "5649" },
-  subscribers: { id: "376" },
-};
-
-// Interface for temporary package selection cookie
-interface SelectedPackageData {
-  serviceType: string;
-  serviceId: string;
-  packageType: string;
-  quantity: number;
-  price: string;
-  discount: number;
-}
-
 const ServiceSelectionComponent: React.FC<ServiceSelectionComponentProps> = ({
   serviceType,
 }) => {
   const navigate = useNavigate();
-  const { setSelectedPackage: storeSelectedPackage } = useOrderStore();
+  const { setCategoryOrder } = useOrderStore();
+  const { services } = useServices();
   const [selectedPackage, setSelectedPackage] =
     useState<string>("high-quality");
   const [selectedQuantity, setSelectedQuantity] = useState<number>(100);
-  const [totalPrice, setTotalPrice] = useState<string>("3.99");
-  const [convertedPrice, setConvertedPrice] = useState<string>("3.99");
-  const [discount, setDiscount] = useState<number>(0);
   const [selectedCurrency, setSelectedCurrency] = useState<Currency>({
     code: "USD",
     symbol: "$",
@@ -81,6 +62,8 @@ const ServiceSelectionComponent: React.FC<ServiceSelectionComponentProps> = ({
     views: "YouTube Views",
     comments: "YouTube Comments",
     subscribers: "YouTube Subscribers",
+    "shorts-likes": "YouTube Shorts Likes",
+    "shorts-views": "YouTube Shorts Views",
   };
 
   // Load saved currency from localStorage
@@ -113,91 +96,42 @@ const ServiceSelectionComponent: React.FC<ServiceSelectionComponentProps> = ({
     }
   }, [serviceType]);
 
-  // Update price when selection changes
-  useEffect(() => {
-    updatePrice();
-  }, [serviceType, selectedPackage, selectedQuantity, selectedCurrency]);
-
-  // Convert price based on selected currency (for total price - 2 decimal places)
   const convertPrice = (priceInUsd: string, currencyCode: string): string => {
-    // Get the exchange rate for the selected currency
     const rate = exchangeRates[currencyCode as keyof typeof exchangeRates] || 1;
-
-    // Get formatting options for the currency
     const format =
       currencyFormats[currencyCode as keyof typeof currencyFormats] ||
       currencyFormats.USD;
-
-    // Convert the price
     const convertedValue = parseFloat(priceInUsd) * rate;
-
-    // Format the price using currency.js with 2 decimal places for total price
     const formattedPrice = currency(convertedValue, {
       symbol: format.symbol,
-      precision: 2, // Fixed to 2 decimal places for total price
+      precision: 2,
     });
-
-    // Return the formatted price based on pattern
     if (format.pattern === "#!") {
-      return `${formattedPrice.value.toFixed(2)}${
-        format.symbol
-      }`;
+      return `${formattedPrice.value.toFixed(2)}${format.symbol}`;
     } else {
       return formattedPrice.format();
     }
   };
 
-  const updatePrice = (): void => {
-    const servicePackages = servicesPackages[serviceType];
-    if (!servicePackages) return;
+  const categoryName = serviceTitles[serviceType as keyof typeof serviceTitles];
+  const serviceRate = services.find(s => s.default_for_category === categoryName)?.rate ?? 0;
+  const totalPriceUsd = (serviceRate * selectedQuantity) / 1000;
+  const convertedPrice = convertPrice(totalPriceUsd.toString(), selectedCurrency.code);
 
-    const packageData = servicePackages[selectedPackage];
-    if (!packageData) return;
-
-    const selectedOption = packageData.quantities.find(
-      (option: QuantityOption) => option.amount === selectedQuantity
-    );
-
-    if (selectedOption) {
-      setTotalPrice(selectedOption.price);
-      setDiscount(selectedOption.discount);
-
-      // Update the converted price based on selected currency
-      const priceInSelectedCurrency = convertPrice(
-        selectedOption.price,
-        selectedCurrency.code
-      );
-      setConvertedPrice(priceInSelectedCurrency);
-    }
-  };
-
-  // Calculate unit price in selected currency (3 decimal places)
   const getUnitPrice = (): string => {
-    if (selectedQuantity === 0) return "0";
-    const priceInUsd = parseFloat(totalPrice) / selectedQuantity;
-    
-    // Get the exchange rate for the selected currency
+    if (serviceRate === 0) return "0";
+    const unitPriceUsd = serviceRate / 1000;
     const rate = exchangeRates[selectedCurrency.code as keyof typeof exchangeRates] || 1;
-
-    // Get formatting options for the currency
     const format =
       currencyFormats[selectedCurrency.code as keyof typeof currencyFormats] ||
       currencyFormats.USD;
-
-    // Convert the unit price
-    const convertedValue = priceInUsd * rate;
-
-    // Format the unit price using currency.js with 3 decimal places
+    const convertedValue = unitPriceUsd * rate;
     const formattedPrice = currency(convertedValue, {
       symbol: format.symbol,
-      precision: 3, // Fixed to 3 decimal places for unit price
+      precision: 3,
     });
-
-    // Return the formatted price based on pattern
     if (format.pattern === "#!") {
-      return `${formattedPrice.value.toFixed(3)}${
-        format.symbol
-      }`;
+      return `${formattedPrice.value.toFixed(3)}${format.symbol}`;
     } else {
       return formattedPrice.format();
     }
@@ -215,28 +149,12 @@ const ServiceSelectionComponent: React.FC<ServiceSelectionComponentProps> = ({
       opacity: 1,
       scale: 1,
       transition: {
-        type: "spring",
+        type: "spring" as const,
         stiffness: 100,
         damping: 15,
       },
     },
   };
-
-  // Get placeholders for URL field
-  // const getUrlPlaceholder = () => {
-  //     switch (serviceType) {
-  //         case 'likes':
-  //             return "Enter your YouTube video URL";
-  //         case 'views':
-  //             return "Enter your YouTube video URL";
-  //         case 'comments':
-  //             return "Enter your YouTube video URL";
-  //         case 'subscribers':
-  //             return "Enter your YouTube channel URL";
-  //         default:
-  //             return "Enter your YouTube URL";
-  //     }
-  // };
 
   return (
     <motion.div
@@ -338,32 +256,11 @@ const ServiceSelectionComponent: React.FC<ServiceSelectionComponentProps> = ({
                 <p className="text-2xl font-bold text-gray-800">
                   {option.amount}
                 </p>
-                {option.discount > 0 && (
-                  <p className="text-sm text-emerald-600">
-                    Save {option.discount}%
-                  </p>
-                )}
               </motion.div>
             )
           )}
         </div>
       </motion.div>
-
-      {/* URL Input */}
-      {/* <motion.div
-                className="w-full max-w-md z-10 mt-4"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.6 }}
-            >
-                <div className="relative">
-                    <input
-                        type="text"
-                        placeholder={getUrlPlaceholder()}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
-                    />
-                </div>
-            </motion.div> */}
 
       {/* Price and Checkout */}
       <motion.div
@@ -387,16 +284,6 @@ const ServiceSelectionComponent: React.FC<ServiceSelectionComponentProps> = ({
             </span>
             {convertedPrice.replace(selectedCurrency.symbol, "")}
           </motion.p>
-          {discount > 0 && (
-            <motion.span
-              className="bg-red-100 text-red-700 text-sm font-medium px-3 py-1 rounded"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.9 }}
-            >
-              {discount}% OFF
-            </motion.span>
-          )}
         </div>
         <div className="text-center text-gray-500 text-sm mb-6">
           {selectedQuantity}{" "}
@@ -406,19 +293,8 @@ const ServiceSelectionComponent: React.FC<ServiceSelectionComponentProps> = ({
 
         <motion.button
           onClick={() => {
-            const serviceId =
-              serviceConfig[serviceType as keyof typeof serviceConfig]?.id;
-            if (serviceId) {
-              storeSelectedPackage({
-                serviceType,
-                serviceId,
-                packageType: selectedPackage,
-                quantity: selectedQuantity,
-                price: totalPrice,
-                discount,
-              });
-              navigate(`/service/${serviceId}`);
-            }
+            setCategoryOrder({ categoryName: categoryName || serviceType, quantity: selectedQuantity });
+            navigate("/checkout");
           }}
           className="cursor-pointer text-xl bg-gradient-to-r from-teal-400 to-emerald-500 text-white font-bold py-3 px-8 rounded-lg shadow-lg hover:shadow-xl transition duration-300 ease-in-out w-full max-w-xs"
           whileHover={{

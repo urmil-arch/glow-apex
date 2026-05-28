@@ -1,14 +1,22 @@
+import asyncio
 import logging
+from datetime import datetime, timezone
 from typing import AsyncGenerator
 
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.common.config import settings
+from app.contact.repository import ContactMessageRepository
 from app.contact.schemas import ContactRequest
 from app.contact.utils import send_contact_emails
 
 logger = logging.getLogger(__name__)
+
+
+def _get_db(request: Request) -> AsyncIOMotorDatabase:
+    return request.app.state.db
 
 router = APIRouter()
 
@@ -37,6 +45,7 @@ async def send_contact_message(
     payload: ContactRequest,
     request: Request,
     redis: aioredis.Redis = Depends(get_redis),
+    db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> dict:
     """
     Accept a contact form submission.
@@ -80,5 +89,17 @@ async def send_contact_message(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to send your message. Please try again later.",
         )
+
+    asyncio.ensure_future(
+        ContactMessageRepository(db).insert({
+            "name": payload.name,
+            "email": payload.email,
+            "subject": payload.subject,
+            "message": payload.message,
+            "type": payload.type,
+            "is_read": False,
+            "created_at": datetime.now(timezone.utc),
+        })
+    )
 
     return {"message": "Your message has been sent. We'll get back to you within 24 hours."}

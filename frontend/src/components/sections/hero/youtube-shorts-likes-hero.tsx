@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useParams, useNavigate } from "react-router-dom";
 import currency from "currency.js";
 import { currencyFormats, servicesPackages } from "@/config/data";
+import { useOrderStore } from "@/store/useOrderStore";
 
 // Define exchange rates (in a real app, you'd fetch these from an API)
 const exchangeRates = {
@@ -38,6 +39,7 @@ interface PackagesData {
 const YoutubeShortsLikesHeroSection: React.FC = () => {
   const { service_id } = useParams();
   const navigate = useNavigate();
+  const { setCategoryOrder } = useOrderStore();
   const [isVisible, setIsVisible] = useState<boolean>(false);
   const [selectedPackage, setSelectedPackage] =
     useState<string>("high-quality");
@@ -53,7 +55,7 @@ const YoutubeShortsLikesHeroSection: React.FC = () => {
 
   // Sample packages data - replace with actual data
   // Prices are in USD
-  const packages: PackagesData = servicesPackages.likes;
+  const packages: PackagesData = servicesPackages["shorts-likes"];
 
   // Load saved currency from cookies
   useEffect(() => {
@@ -164,7 +166,7 @@ const YoutubeShortsLikesHeroSection: React.FC = () => {
 
   useEffect(() => {
     const firstQuantity =
-      servicesPackages["likes"][selectedPackage].quantities[0].amount;
+      servicesPackages["shorts-likes"][selectedPackage].quantities[0].amount;
     setSelectedQuantity(firstQuantity);
   }, [selectedPackage]);
 
@@ -319,7 +321,7 @@ const YoutubeShortsLikesHeroSection: React.FC = () => {
 
           <motion.div className="text-center relative z-10" variants={fadeIn}>
             <h2 className="text-3xl font-bold bg-gradient-to-r from-teal-400 to-emerald-500 bg-clip-text text-transparent">
-              Buy Youtube Likes
+              Buy YouTube Shorts Likes
             </h2>
             <p className="text-lg mt-2 text-gray-600">
               Select a package that you like and submit Order Now button
@@ -332,7 +334,7 @@ const YoutubeShortsLikesHeroSection: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
           >
-            {Object.keys(servicesPackages["likes"]).map((packageType) => {
+            {Object.keys(servicesPackages["shorts-likes"]).map((packageType) => {
               return (
                 <motion.button
                   key={packageType}
@@ -345,7 +347,7 @@ const YoutubeShortsLikesHeroSection: React.FC = () => {
                   whileHover={{ y: -2 }}
                   whileTap={{ y: 0 }}
                 >
-                  {servicesPackages["likes"][packageType].name}
+                  {servicesPackages["shorts-likes"][packageType].name}
                 </motion.button>
               );
             })}
@@ -430,7 +432,10 @@ const YoutubeShortsLikesHeroSection: React.FC = () => {
             </div>
 
             <motion.button
-              onClick={() => navigate(`/service/${service_id}`)}
+              onClick={() => {
+                setCategoryOrder({ categoryName: "YouTube Shorts Likes", quantity: selectedQuantity });
+                navigate("/checkout");
+              }}
               className="cursor-pointer text-xl bg-gradient-to-r from-teal-400 to-emerald-500 text-white font-bold py-3 px-8 rounded-lg shadow-lg hover:shadow-xl transition duration-300 ease-in-out w-full max-w-xs"
               whileHover={{
                 y: -5,

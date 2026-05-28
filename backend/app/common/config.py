@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     SMTP_FROM: str = ""
     CONTACT_OWNER_EMAIL: str = ""  # Receives contact form submissions; falls back to SMTP_FROM
 
+    # Provider API key encryption — 64 hex chars (32 bytes). Generate with:
+    # python -c "import secrets; print(secrets.token_hex(32))"
+    API_KEY_ENCRYPTION_SECRET: str = ""
+
     # Redis
     REDIS_URL: str = "redis://localhost:6379"
 

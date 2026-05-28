@@ -44,22 +44,22 @@ const HomeHeroSection = () => {
   const services = [
     {
       name: "Buy Youtube Likes",
-      link: "/2342/buy-youtube-video-likes",
+      link: "/services",
       icon: <Heart />,
     },
     {
       name: "Buy Youtube Views",
-      link: "/5648/buy-youtube-views",
+      link: "/services",
       icon: <Eye />,
     },
     {
       name: "Buy Youtube Comments",
-      link: "/5649/buy-youtube-comments",
+      link: "/services",
       icon: <MessageCircle />,
     },
     {
       name: "Buy Youtube Subscribers",
-      link: "/376/buy-youtube-subscribers",
+      link: "/services",
       icon: <User />,
     },
   ];

@@ -156,7 +156,7 @@ const AllBlogsPage = () => {
               <input
                 type="email"
                 placeholder="Your email address"
-                className="flex-1 px-4 py-3 rounded-xl focus:outline-none"
+                className="flex-1 px-4 py-3 rounded-xl bg-gray-100 focus:outline-none"
               />
               <button className="bg-black text-white px-6 py-3 rounded-xl font-medium hover:bg-gray-900 transition-colors">
                 Subscribe

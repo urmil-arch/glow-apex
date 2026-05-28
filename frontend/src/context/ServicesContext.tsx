@@ -1,32 +1,28 @@
 import React, { createContext, useState, useContext, useEffect, ReactNode } from "react";
-import { Service } from "@/types";
-import { api } from "@/lib/api";
+import axios from "axios";
+import { AdminService } from "@/types";
 import { API_ENDPOINTS } from "@/config";
 
 interface ServicesContextType {
-  services: Service[];
+  services: AdminService[];
   loading: boolean;
   error: string | null;
-  fetchServices: (apiKey?: string | null) => Promise<void>;
+  fetchServices: () => Promise<void>;
 }
 
 const ServicesContext = createContext<ServicesContextType | undefined>(undefined);
 
 export function ServicesProvider({ children }: { children: ReactNode }) {
-  const [services, setServices] = useState<Service[]>([]);
+  const [services, setServices] = useState<AdminService[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function fetchServices(apiKey?: string | null) {
+  async function fetchServices() {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.post<Service[]>(API_ENDPOINTS.GET_SERVICES, { apiKey: apiKey ?? null });
-      const data = response.data;
-      const filteredServices = data.filter((service) =>
-        ["5209", "2342", "5648", "376"].includes(service.service)
-      );
-      setServices(filteredServices);
+      const response = await axios.get<AdminService[]>(API_ENDPOINTS.PUBLIC_SERVICES);
+      setServices(response.data);
     } catch (err) {
       setError("Failed to fetch services");
       console.error("Error fetching services:", err);
