@@ -1536,6 +1536,48 @@ export const servicesPackages: ServicesPackages = {
       ],
     },
   },
+  "shorts-likes": {
+    "high-quality": {
+      name: "High Quality Likes",
+      quantities: [
+        { amount: 100, price: "0.59", discount: 5 },
+        { amount: 250, price: "1.29", discount: 10 },
+        { amount: 500, price: "2.49", discount: 15 },
+        { amount: 1000, price: "4.49", discount: 20 },
+        { amount: 2500, price: "9.99", discount: 20 },
+      ],
+    },
+    "bulk-packages": {
+      name: "Bulk Packages",
+      quantities: [
+        { amount: 5000, price: "18.99", discount: 5 },
+        { amount: 10000, price: "34.99", discount: 10 },
+        { amount: 25000, price: "79.99", discount: 15 },
+        { amount: 50000, price: "149.99", discount: 15 },
+      ],
+    },
+  },
+  "shorts-views": {
+    "high-quality": {
+      name: "High Quality Views",
+      quantities: [
+        { amount: 1000, price: "1.49", discount: 5 },
+        { amount: 2500, price: "3.49", discount: 10 },
+        { amount: 5000, price: "6.49", discount: 15 },
+        { amount: 10000, price: "11.99", discount: 20 },
+        { amount: 25000, price: "27.99", discount: 20 },
+      ],
+    },
+    "bulk-packages": {
+      name: "Bulk Packages",
+      quantities: [
+        { amount: 50000, price: "49.99", discount: 5 },
+        { amount: 100000, price: "89.99", discount: 10 },
+        { amount: 250000, price: "199.99", discount: 15 },
+        { amount: 500000, price: "369.99", discount: 15 },
+      ],
+    },
+  },
 };
 
 export const currencyFormats = {

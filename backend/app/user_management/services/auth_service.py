@@ -50,6 +50,7 @@ class AuthService:
             "email": data.email.lower(),
             "hashed_password": hash_password(data.password),
             "is_verified": False,
+            "is_admin": False,
             "otp": hash_otp(otp),
             "otp_expires_at": expires_at,
             "created_at": datetime.now(timezone.utc),
@@ -96,6 +97,7 @@ class AuthService:
                 full_name=user["full_name"],
                 username=user["username"],
                 email=user["email"],
+                is_admin=user.get("is_admin", False),
             ),
         )
 
@@ -136,6 +138,7 @@ class AuthService:
                 full_name=user["full_name"],
                 username=user["username"],
                 email=user["email"],
+                is_admin=user.get("is_admin", False),
             ),
         )
 

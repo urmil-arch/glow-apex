@@ -15,6 +15,7 @@ import BuyYoutubeComments from './pages/services/BuyYoutubeComments'
 import BuyYoutubeShortsViews from './pages/services/BuyYoutubeShortsViews'
 import BuyYoutubeShortsLikes from './pages/services/BuyYoutubeShortsLikes'
 import ServiceDetail from './pages/services/ServiceDetail'
+import ServicesListPage from './pages/services/ServicesListPage'
 import TargetedCountry from './pages/services/TargetedCountry'
 import CheckoutPage from './pages/checkout/CheckoutPage'
 import CheckStatus from './pages/checkout/CheckStatus'
@@ -29,6 +30,17 @@ import DashboardLayout from './pages/dashboard/DashboardLayout'
 import OrderPage from './pages/dashboard/orders/OrderPage'
 import PaymentsPage from './pages/dashboard/payments/PaymentsPage'
 import ProfilePage from './pages/dashboard/profile/ProfilePage'
+import AdminGuard from './components/admin/AdminGuard'
+import AdminLayout from './pages/admin/AdminLayout'
+import AdminDashboard from './pages/admin/AdminDashboard'
+import UsersPage from './pages/admin/users/UsersPage'
+import ServicesPage from './pages/admin/services/ServicesPage'
+import SettingsPage from './pages/admin/settings/SettingsPage'
+import ProviderConfigPage from './pages/admin/routing/ProviderConfigPage'
+import AdminOrdersPage from './pages/admin/orders/OrdersPage'
+import AdminSupportPage from './pages/admin/support/SupportPage'
+import TicketsPage from './pages/dashboard/tickets/TicketsPage'
+import TicketThreadPage from './pages/dashboard/tickets/TicketThreadPage'
 
 const PublicLayout = () => (
   <>
@@ -58,6 +70,7 @@ const App: React.FC = () => {
               <Route path="/blogs" element={<AllBlogsPage />} />
               <Route path="/blogs/:slug" element={<BlogSlugPage />} />
               <Route path="/contact-us" element={<ContactPage />} />
+              <Route path="/services" element={<ServicesListPage />} />
             </Route>
 
             {/* Checkout routes (no sidebar, but keep Navbar) */}
@@ -78,8 +91,22 @@ const App: React.FC = () => {
               <Route path="orders" element={<OrderPage />} />
               <Route path="payments" element={<PaymentsPage />} />
               <Route path="profile" element={<ProfilePage />} />
+              <Route path="tickets" element={<TicketsPage />} />
+              <Route path="tickets/:ticketId" element={<TicketThreadPage />} />
             </Route>
-            
+
+            {/* Admin routes — requires is_admin */}
+            <Route element={<AdminGuard />}>
+              <Route path="/admin" element={<AdminLayout />}>
+                <Route index element={<AdminDashboard />} />
+                <Route path="users" element={<UsersPage />} />
+                <Route path="orders" element={<AdminOrdersPage />} />
+                <Route path="services" element={<ServicesPage />} />
+                <Route path="settings" element={<SettingsPage />} />
+                <Route path="routing" element={<ProviderConfigPage />} />
+                <Route path="support" element={<AdminSupportPage />} />
+              </Route>
+            </Route>
           </Routes>
         </ServicesProvider>
       </AuthProvider>

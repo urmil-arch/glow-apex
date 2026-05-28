@@ -82,7 +82,7 @@ const YouTubeShortsViews = () => {
           </div>
           
           {/* Service Selection Component */}
-          <ServiceSelectionComponent serviceType="views" />
+          <ServiceSelectionComponent serviceType="shorts-views" />
         </div>
       </section>
       {/* Why Buy Section */}

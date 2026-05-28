@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useParams, useNavigate } from "react-router-dom";
 import currency from "currency.js";
 import { currencyFormats, servicesPackages } from "@/config/data";
+import { useOrderStore } from "@/store/useOrderStore";
 
 // Define exchange rates (in a real app, you'd fetch these from an API)
 const exchangeRates = {
@@ -37,6 +38,7 @@ interface PackagesData {
 const YoutubeShortsViewsHeroSection: React.FC = () => {
   const { service_id } = useParams();
   const navigate = useNavigate();
+  const { setCategoryOrder } = useOrderStore();
   const [isVisible, setIsVisible] = useState<boolean>(false);
   const [selectedPackage, setSelectedPackage] =
     useState<string>("high-quality");
@@ -52,7 +54,7 @@ const YoutubeShortsViewsHeroSection: React.FC = () => {
 
   // Sample packages data - replace with actual data
   // Prices are in USD
-  const packages: PackagesData = servicesPackages.views;
+  const packages: PackagesData = servicesPackages["shorts-views"];
 
   // Load saved currency from cookies
   useEffect(() => {
@@ -163,7 +165,7 @@ const YoutubeShortsViewsHeroSection: React.FC = () => {
 
     useEffect(() => {
       const firstQuantity =
-        servicesPackages["views"][selectedPackage].quantities[0].amount;
+        servicesPackages["shorts-views"][selectedPackage].quantities[0].amount;
       setSelectedQuantity(firstQuantity);
     }, [selectedPackage]);
 
@@ -331,7 +333,7 @@ const YoutubeShortsViewsHeroSection: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
           >
-            {Object.keys(servicesPackages["views"]).map((packageType) => {
+            {Object.keys(servicesPackages["shorts-views"]).map((packageType) => {
               return (
                 <motion.button
                   key={packageType}
@@ -344,7 +346,7 @@ const YoutubeShortsViewsHeroSection: React.FC = () => {
                   whileHover={{ y: -2 }}
                   whileTap={{ y: 0 }}
                 >
-                  {servicesPackages["views"][packageType].name}
+                  {servicesPackages["shorts-views"][packageType].name}
                 </motion.button>
               );
             })}
@@ -429,7 +431,10 @@ const YoutubeShortsViewsHeroSection: React.FC = () => {
             </div>
 
             <motion.button
-              onClick={() => navigate(`/service/${service_id}`)}
+              onClick={() => {
+                setCategoryOrder({ categoryName: "YouTube Shorts Views", quantity: selectedQuantity });
+                navigate("/checkout");
+              }}
               className="cursor-pointer text-xl bg-gradient-to-r from-teal-400 to-emerald-500 text-white font-bold py-3 px-8 rounded-lg shadow-lg hover:shadow-xl transition duration-300 ease-in-out w-full max-w-xs"
               whileHover={{
                 y: -5,

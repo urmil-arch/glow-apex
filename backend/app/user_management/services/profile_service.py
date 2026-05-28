@@ -20,6 +20,7 @@ class ProfileService:
             full_name=user["full_name"],
             username=user["username"],
             email=user["email"],
+            is_admin=user.get("is_admin", False),
         )
 
     async def update_profile(self, user: dict, data: UpdateProfileRequest) -> ProfileResponse:
@@ -48,6 +49,7 @@ class ProfileService:
             full_name=refreshed["full_name"],
             username=refreshed["username"],
             email=refreshed["email"],
+            is_admin=refreshed.get("is_admin", False),
         )
 
     async def change_password(self, user: dict, data: ChangePasswordRequest) -> dict:

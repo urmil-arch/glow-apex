@@ -79,7 +79,7 @@ const YoutubeShortsLikes = () => {
           </div>
           
           {/* Service Selection Component */}
-          <ServiceSelectionComponent serviceType="likes" />
+          <ServiceSelectionComponent serviceType="shorts-likes" />
         </div>
       </section>
 

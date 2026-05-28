@@ -56,6 +56,7 @@ const Navbar = () => {
 
   const menuitems = [
     { id: 1, title: "Home", href: "/", type: "link" },
+    { id: 8, title: "Services", href: "/services", type: "link" },
     { id: 5209, title: "YouTube Views", href: "/5648/buy-youtube-views", type: "link" },
     {
       id: 3,

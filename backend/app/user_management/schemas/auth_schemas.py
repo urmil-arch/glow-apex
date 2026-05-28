@@ -53,6 +53,7 @@ class UserPublic(BaseModel):
     full_name: str
     username: str
     email: str
+    is_admin: bool = False
 
 
 class AuthResponse(BaseModel):
@@ -66,6 +67,7 @@ class ProfileResponse(BaseModel):
     full_name: str
     username: str
     email: str
+    is_admin: bool = False
 
 
 class UpdateProfileRequest(BaseModel):

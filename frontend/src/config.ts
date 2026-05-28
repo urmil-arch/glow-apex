@@ -34,4 +34,39 @@ export const API_ENDPOINTS = {
 
   // Contact
   CONTACT_SEND: `${API_BASE_URL}/contact/send`,
+
+  // Admin — Users
+  ADMIN_USERS: `${API_BASE_URL}/admin/users`,
+  ADMIN_USERS_STATS: `${API_BASE_URL}/admin/users/stats`,
+  ADMIN_USERS_EXPORT: `${API_BASE_URL}/admin/users/export`,
+
+  // Admin — Providers
+  ADMIN_PROVIDERS: `${API_BASE_URL}/admin/providers`,
+
+  // Admin — Services & Categories
+  ADMIN_SERVICES: `${API_BASE_URL}/admin/services`,
+  ADMIN_CATEGORIES: `${API_BASE_URL}/admin/services/categories`,
+
+  // Admin — Settings
+  ADMIN_SETTINGS: `${API_BASE_URL}/admin/settings`,
+
+  // Admin — Orders
+  ADMIN_ORDERS: `${API_BASE_URL}/admin/orders`,
+
+  // Admin — Routing Config
+  ADMIN_ROUTING_CONFIG: `${API_BASE_URL}/admin/routing`,
+
+  // Admin — Support
+  ADMIN_SUPPORT_TICKETS: `${API_BASE_URL}/admin/support/tickets`,
+  ADMIN_SUPPORT_MESSAGES: `${API_BASE_URL}/admin/support/messages`,
+
+  // Public services (no auth)
+  PUBLIC_SERVICES: `${API_BASE_URL}/services`,
+
+  // User orders
+  ORDERS: `${API_BASE_URL}/orders`,
+  ORDERS_BY_CATEGORY: `${API_BASE_URL}/orders/by-category`,
+
+  // User tickets
+  TICKETS: `${API_BASE_URL}/tickets`,
 }

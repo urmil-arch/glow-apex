@@ -9,16 +9,16 @@ export interface User {
   full_name: string;
   username: string;
   email: string;
-  role?: string;
+  is_admin?: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (identifier: string, password: string) => Promise<void>;
+  login: (identifier: string, password: string) => Promise<User>;
   register: (full_name: string, username: string, email: string, password: string) => Promise<void>;
-  verifyOtp: (email: string, otp: string) => Promise<void>;
+  verifyOtp: (email: string, otp: string) => Promise<User>;
   resendOtp: (email: string) => Promise<void>;
   logout: () => void;
   updateUser: (userData: Partial<User>) => void;
@@ -30,9 +30,9 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   isLoading: true,
   isAuthenticated: false,
-  login: async () => {},
+  login: async () => ({} as User),
   register: async () => {},
-  verifyOtp: async () => {},
+  verifyOtp: async () => ({} as User),
   resendOtp: async () => {},
   logout: () => {},
   updateUser: () => {},
@@ -60,11 +60,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const login = async (identifier: string, password: string): Promise<void> => {
+  const login = async (identifier: string, password: string): Promise<User> => {
     const { data } = await axios.post(API_ENDPOINTS.AUTH_LOGIN, { identifier, password });
     localStorage.setItem("auth_token", data.access_token);
     localStorage.setItem("user", JSON.stringify(data.user));
     setUser(data.user);
+    return data.user as User;
   };
 
   const register = async (
@@ -76,11 +77,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await axios.post(API_ENDPOINTS.AUTH_REGISTER, { full_name, username, email, password });
   };
 
-  const verifyOtp = async (email: string, otp: string): Promise<void> => {
+  const verifyOtp = async (email: string, otp: string): Promise<User> => {
     const { data } = await axios.post(API_ENDPOINTS.AUTH_VERIFY_OTP, { email, otp });
     localStorage.setItem("auth_token", data.access_token);
     localStorage.setItem("user", JSON.stringify(data.user));
     setUser(data.user);
+    return data.user as User;
   };
 
   const resendOtp = async (email: string): Promise<void> => {

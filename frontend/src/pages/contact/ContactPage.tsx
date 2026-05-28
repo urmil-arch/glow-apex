@@ -10,15 +10,19 @@ import {
   Headphones,
   ArrowRight,
   Loader2,
+  Ticket,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { api } from "@/lib/api";
 import { API_ENDPOINTS } from "@/config";
+import { useAuth } from "@/context/AuthContext";
 
 
 const ContactPage = () => {
-  const [activeTab, setActiveTab] = useState<"support" | "business">("support");
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<"support" | "business" | "ticket">("support");
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -29,12 +33,42 @@ const ContactPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
+  // Ticket form state
+  const [ticketForm, setTicketForm] = useState({
+    type: "order_related" as "order_related" | "payment_related" | "other",
+    subject: "",
+    message: "",
+    order_id: "",
+  });
+  const [ticketSubmitting, setTicketSubmitting] = useState(false);
+  const [ticketError, setTicketError] = useState("");
+  const [ticketSubmitted, setTicketSubmitted] = useState(false);
+
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
     setSubmitError("");
+  };
+
+  const handleTicketSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    e.preventDefault();
+    setTicketSubmitting(true);
+    setTicketError("");
+    try {
+      await api.post(API_ENDPOINTS.TICKETS, ticketForm);
+      setTicketSubmitted(true);
+      setTicketForm({ type: "order_related", subject: "", message: "", order_id: "" });
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        setTicketError(err.response?.data?.detail ?? "Failed to submit ticket.");
+      } else {
+        setTicketError("Failed to submit ticket.");
+      }
+    } finally {
+      setTicketSubmitting(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
@@ -143,7 +177,7 @@ const ContactPage = () => {
           <div className="lg:col-span-3 bg-white rounded-2xl shadow-lg overflow-hidden">
             <div className="p-6 bg-white">
               {/* Tab navigation */}
-              <div className="flex mb-6 border-b">
+              <div className="flex mb-6 border-b flex-wrap">
                 <button
                   className={`pb-3 px-4 text-lg font-medium ${
                     activeTab === "support"
@@ -164,10 +198,124 @@ const ContactPage = () => {
                 >
                   Business Inquiries
                 </button>
+                {user && (
+                  <button
+                    className={`pb-3 px-4 text-lg font-medium flex items-center gap-1.5 ${
+                      activeTab === "ticket"
+                        ? "text-emerald-600 border-b-2 border-emerald-600"
+                        : "text-gray-500 hover:text-gray-700"
+                    }`}
+                    onClick={() => setActiveTab("ticket")}
+                  >
+                    <Ticket className="h-4 w-4" />
+                    Submit Ticket
+                  </button>
+                )}
               </div>
 
-              {/* Form */}
-              {formSubmitted ? (
+              {/* Ticket form */}
+              {activeTab === "ticket" && (
+                ticketSubmitted ? (
+                  <div className="py-12 text-center">
+                    <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Check className="h-8 w-8 text-emerald-600" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-gray-800 mb-2">Ticket Submitted!</h3>
+                    <p className="text-gray-600 mb-4">
+                      We&apos;ve received your ticket and will respond shortly.
+                    </p>
+                    <button
+                      onClick={() => navigate("/dashboard/tickets")}
+                      className="text-emerald-600 font-semibold hover:text-emerald-700 underline text-sm"
+                    >
+                      View your tickets in the dashboard
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleTicketSubmit} className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                      <select
+                        value={ticketForm.type}
+                        onChange={(e) =>
+                          setTicketForm({ ...ticketForm, type: e.target.value as typeof ticketForm.type })
+                        }
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      >
+                        <option value="order_related">Order Related</option>
+                        <option value="payment_related">Payment Related</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+
+                    {(ticketForm.type === "order_related" || ticketForm.type === "payment_related") && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Order ID <span className="text-gray-400 font-normal">(optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={ticketForm.order_id}
+                          onChange={(e) => setTicketForm({ ...ticketForm, order_id: e.target.value })}
+                          placeholder="Paste your order ID"
+                          className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                      <input
+                        type="text"
+                        required
+                        value={ticketForm.subject}
+                        onChange={(e) => setTicketForm({ ...ticketForm, subject: e.target.value })}
+                        placeholder="Brief summary of your issue"
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                      <textarea
+                        required
+                        rows={5}
+                        value={ticketForm.message}
+                        onChange={(e) => setTicketForm({ ...ticketForm, message: e.target.value })}
+                        placeholder="Describe your issue in detail"
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      />
+                    </div>
+
+                    {ticketError && (
+                      <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                        {ticketError}
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={ticketSubmitting}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-bold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center gap-2"
+                    >
+                      {ticketSubmitting ? (
+                        <>
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                          Submitting…
+                        </>
+                      ) : (
+                        <>
+                          <Ticket className="h-5 w-5" />
+                          Submit Ticket
+                        </>
+                      )}
+                    </button>
+                  </form>
+                )
+              )}
+
+              {/* Contact form */}
+              {activeTab !== "ticket" && (formSubmitted ? (
                 <div className="py-12 text-center">
                   <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Check className="h-8 w-8 text-emerald-600" />
@@ -302,7 +450,7 @@ const ContactPage = () => {
                     )}
                   </button>
                 </form>
-              )}
+              ))}
             </div>
           </div>
 

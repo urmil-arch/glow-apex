@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useParams, useNavigate } from "react-router-dom";
 import currency from "currency.js";
 import { currencyFormats, servicesPackages } from "@/config/data";
+import { useOrderStore } from "@/store/useOrderStore";
 
 // Define exchange rates (in a real app, you'd fetch these from an API)
 const exchangeRates = {
@@ -38,6 +39,7 @@ interface PackagesData {
 const YoutubeLikesHeroSection: React.FC = () => {
   const { service_id } = useParams();
   const navigate = useNavigate();
+  const { setCategoryOrder } = useOrderStore();
   const [isVisible, setIsVisible] = useState<boolean>(false);
   const [selectedPackage, setSelectedPackage] =
     useState<string>("high-quality");
@@ -430,7 +432,10 @@ const YoutubeLikesHeroSection: React.FC = () => {
             </div>
 
             <motion.button
-              onClick={() => navigate(`/service/${service_id}`)}
+              onClick={() => {
+                setCategoryOrder({ categoryName: "YouTube Likes", quantity: selectedQuantity });
+                navigate("/checkout");
+              }}
               className="cursor-pointer text-xl bg-gradient-to-r from-teal-400 to-emerald-500 text-white font-bold py-3 px-8 rounded-lg shadow-lg hover:shadow-xl transition duration-300 ease-in-out w-full max-w-xs"
               whileHover={{
                 y: -5,
