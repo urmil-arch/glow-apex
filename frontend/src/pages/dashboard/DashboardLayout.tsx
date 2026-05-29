@@ -112,11 +112,17 @@ const DashboardLayout: React.FC = () => {
       >
         {/* Brand */}
         <div className="flex items-center justify-between px-5 h-16 border-b border-gray-100 flex-shrink-0">
-          <Link
-            to="/"
-            className="text-lg font-bold bg-gradient-to-r from-teal-500 to-emerald-500 bg-clip-text text-transparent"
-          >
-            Glow-Apex
+          <Link to="/" className="flex items-center gap-2">
+            <img
+              src="/web-app-manifest-192x192-removebg-preview.png"
+              alt="BuyRealViews"
+              width={36}
+              height={36}
+              className="object-contain"
+            />
+            <span className="text-base font-bold bg-gradient-to-r from-teal-500 to-emerald-500 bg-clip-text text-transparent">
+              BuyRealViews
+            </span>
           </Link>
           <button
             className="lg:hidden p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
@@ -191,7 +197,7 @@ const DashboardLayout: React.FC = () => {
       {/* Main area */}
       <div className="flex-1 flex flex-col min-h-screen lg:ml-64">
         {/* Header */}
-        <header className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 md:px-6 h-16 flex items-center justify-between flex-shrink-0">
+        <header className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 md:px-6 h-16 flex items-center justify-between flex-shrink-0 relative">
           <div className="flex items-center gap-3">
             <button
               className="lg:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
@@ -199,8 +205,25 @@ const DashboardLayout: React.FC = () => {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <h1 className="text-base font-semibold text-gray-800">{getPageTitle(pathname)}</h1>
+            <h1 className="text-base font-semibold text-gray-800 hidden lg:block">{getPageTitle(pathname)}</h1>
           </div>
+
+          {/* Logo — center, mobile only */}
+          <Link
+            to="/"
+            className="lg:hidden absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5"
+          >
+            <img
+              src="/web-app-manifest-192x192-removebg-preview.png"
+              alt="BuyRealViews"
+              width={32}
+              height={32}
+              className="object-contain"
+            />
+            <span className="text-sm font-bold bg-gradient-to-r from-teal-500 to-emerald-500 bg-clip-text text-transparent">
+              BuyRealViews
+            </span>
+          </Link>
           <button
             onClick={() => navigate("/dashboard/profile")}
             className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${

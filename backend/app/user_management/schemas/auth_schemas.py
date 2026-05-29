@@ -54,6 +54,7 @@ class UserPublic(BaseModel):
     username: str
     email: str
     is_admin: bool = False
+    is_suspended: bool = False
 
 
 class AuthResponse(BaseModel):
@@ -68,6 +69,7 @@ class ProfileResponse(BaseModel):
     username: str
     email: str
     is_admin: bool = False
+    is_suspended: bool = False
 
 
 class UpdateProfileRequest(BaseModel):

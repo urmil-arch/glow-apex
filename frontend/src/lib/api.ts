@@ -20,9 +20,21 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status
+    const detail = error.response?.data?.detail
+    if (status === 401) {
       localStorage.removeItem('auth_token')
+      localStorage.removeItem('user')
       window.location.href = '/sign-in'
+    } else if (status === 403) {
+      const isSuspended =
+        (typeof detail === 'object' && detail?.reason === 'suspended') ||
+        (typeof detail === 'string' && detail.toLowerCase().includes('suspend'))
+      if (isSuspended) {
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('user')
+        window.location.href = '/suspended'
+      }
     }
     return Promise.reject(error)
   }

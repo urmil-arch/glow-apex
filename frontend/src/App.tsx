@@ -1,7 +1,7 @@
 import React from 'react'
-import { Routes, Route, Outlet } from 'react-router-dom'
+import { Routes, Route, Outlet, Navigate, useLocation } from 'react-router-dom'
 import { ThemeProvider } from 'next-themes'
-import { AuthProvider } from './context/AuthContext'
+import { AuthProvider, useAuth } from './context/AuthContext'
 import { ServicesProvider } from './context/ServicesContext'
 import Navbar from './components/navbar'
 import Footer from './components/footer'
@@ -38,9 +38,23 @@ import ServicesPage from './pages/admin/services/ServicesPage'
 import SettingsPage from './pages/admin/settings/SettingsPage'
 import ProviderConfigPage from './pages/admin/routing/ProviderConfigPage'
 import AdminOrdersPage from './pages/admin/orders/OrdersPage'
+import AdminTasksPage from './pages/admin/tasks/TasksPage'
+import AdminPaymentsPage from './pages/admin/payments/PaymentsPage'
+import AdminReportsPage from './pages/admin/reports/ReportsPage'
 import AdminSupportPage from './pages/admin/support/SupportPage'
 import TicketsPage from './pages/dashboard/tickets/TicketsPage'
 import TicketThreadPage from './pages/dashboard/tickets/TicketThreadPage'
+import RouteScrollReset from './components/common/route-scroll-reset'
+import SuspendedPage from './pages/auth/SuspendedPage'
+
+const SuspensionGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, isLoading } = useAuth()
+  const location = useLocation()
+  if (!isLoading && user?.is_suspended && location.pathname !== '/suspended') {
+    return <Navigate to="/suspended" replace />
+  }
+  return <>{children}</>
+}
 
 const PublicLayout = () => (
   <>
@@ -55,16 +69,18 @@ const App: React.FC = () => {
     <ThemeProvider attribute="class" defaultTheme="light">
       <AuthProvider>
         <ServicesProvider>
+          <RouteScrollReset />
+          <SuspensionGuard>
           <Routes>
             {/* Public routes with Navbar + Footer */}
             <Route element={<PublicLayout />}>
               <Route path="/" element={<HomePage />} />
-              <Route path="/:service_id/buy-youtube-views" element={<BuyYoutubeViews />} />
-              <Route path="/:service_id/buy-youtube-video-likes" element={<BuyYoutubeVideoLikes />} />
-              <Route path="/:service_id/buy-youtube-subscribers" element={<BuyYoutubeSubscribers />} />
-              <Route path="/:service_id/buy-youtube-comments" element={<BuyYoutubeComments />} />
-              <Route path="/:service_id/buy-youtube-shorts-views" element={<BuyYoutubeShortsViews />} />
-              <Route path="/:service_id/buy-youtube-shorts-likes" element={<BuyYoutubeShortsLikes />} />
+              <Route path="/buy-youtube-views" element={<BuyYoutubeViews />} />
+              <Route path="/buy-youtube-video-likes" element={<BuyYoutubeVideoLikes />} />
+              <Route path="/buy-youtube-subscribers" element={<BuyYoutubeSubscribers />} />
+              <Route path="/buy-youtube-comments" element={<BuyYoutubeComments />} />
+              <Route path="/buy-youtube-shorts-views" element={<BuyYoutubeShortsViews />} />
+              <Route path="/buy-youtube-shorts-likes" element={<BuyYoutubeShortsLikes />} />
               <Route path="/service/:id" element={<ServiceDetail />} />
               <Route path="/targeted-country" element={<TargetedCountry />} />
               <Route path="/blogs" element={<AllBlogsPage />} />
@@ -84,6 +100,7 @@ const App: React.FC = () => {
             {/* Auth routes (no Navbar/Footer) */}
             <Route path="/sign-in" element={<SignInPage />} />
             <Route path="/sign-up" element={<SignUpPage />} />
+            <Route path="/suspended" element={<SuspendedPage />} />
 
             {/* Dashboard routes */}
             <Route path="/dashboard" element={<DashboardLayout />}>
@@ -101,6 +118,9 @@ const App: React.FC = () => {
                 <Route index element={<AdminDashboard />} />
                 <Route path="users" element={<UsersPage />} />
                 <Route path="orders" element={<AdminOrdersPage />} />
+                <Route path="tasks" element={<AdminTasksPage />} />
+                <Route path="payments" element={<AdminPaymentsPage />} />
+                <Route path="reports" element={<AdminReportsPage />} />
                 <Route path="services" element={<ServicesPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="routing" element={<ProviderConfigPage />} />
@@ -108,6 +128,7 @@ const App: React.FC = () => {
               </Route>
             </Route>
           </Routes>
+          </SuspensionGuard>
         </ServicesProvider>
       </AuthProvider>
     </ThemeProvider>

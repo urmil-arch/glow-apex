@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { MobileMenu } from "./common/mobile-menu";
 import {
   Menubar,
@@ -10,8 +10,11 @@ import {
 } from "@/components/ui/menubar";
 import { useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ChevronDown, LayoutDashboard, LogOut } from "lucide-react";
+import { Bell, ChevronDown, LayoutDashboard, LogOut } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { api } from "@/lib/api";
+import { API_ENDPOINTS } from "@/config";
+import NotificationPanel, { type NotifItem } from "./common/notification-panel";
 
 interface Currency {
   code: string;
@@ -29,6 +32,95 @@ const Navbar = () => {
   const { user, logout } = useAuth();
   const [isScrolled, setIsScrolled] = useState(false);
   const [selectedCurrency, setSelectedCurrency] = useState<Currency>(currencies[0]);
+
+  // ── Notifications ──────────────────────────────────────────────────────────
+  const [notifications, setNotifications]       = useState<NotifItem[]>([]);
+  const [acknowledgedIds, setAcknowledgedIds]   = useState<Set<string>>(new Set());
+  const [panelOpen, setPanelOpen]               = useState(false);
+  const notifRef                                 = useRef<HTMLDivElement>(null);
+
+  const unreadCount = notifications.filter(n => !acknowledgedIds.has(n.id)).length;
+
+  const handleOpenPanel = () => {
+    setPanelOpen(prev => {
+      if (!prev) {
+        setAcknowledgedIds(ids => new Set([...ids, ...notifications.map(n => n.id)]));
+      }
+      return !prev;
+    });
+  };
+
+  const pollNotifications = useCallback(async () => {
+    if (!user) return;
+    try {
+      if (user.is_admin) {
+        const [ticketsRes, msgsRes] = await Promise.all([
+          api.get<{ tickets: { id: string; user_username: string; subject: string; updated_at: string; admin_has_unread: boolean }[] }>(
+            API_ENDPOINTS.ADMIN_SUPPORT_TICKETS, { params: { page_size: 50 } }
+          ),
+          api.get<{ messages: { id: string; name: string; subject: string; created_at: string; is_read: boolean }[] }>(
+            API_ENDPOINTS.ADMIN_SUPPORT_MESSAGES
+          ),
+        ]);
+
+        const ticketNotifs: NotifItem[] = (ticketsRes.data.tickets ?? [])
+          .filter(t => t.admin_has_unread)
+          .map(t => ({
+            id: t.id,
+            type: 'new_ticket' as const,
+            title: `New ticket from ${t.user_username}`,
+            body: t.subject,
+            href: '/admin/support',
+            created_at: t.updated_at,
+          }));
+
+        const msgNotifs: NotifItem[] = (msgsRes.data.messages ?? [])
+          .filter(m => !m.is_read)
+          .map(m => ({
+            id: `msg-${m.id}`,
+            type: 'new_message' as const,
+            title: `New message from ${m.name}`,
+            body: m.subject,
+            href: '/admin/support',
+            created_at: m.created_at,
+          }));
+
+        setNotifications([...ticketNotifs, ...msgNotifs]);
+      } else {
+        const res = await api.get<{ tickets: { id: string; subject: string; updated_at: string; user_has_unread: boolean }[] }>(
+          API_ENDPOINTS.TICKETS
+        );
+        const tickets = res.data.tickets ?? [];
+        const unread = tickets.filter(t => t.user_has_unread);
+        setNotifications(unread.map(t => ({
+          id: t.id,
+          type: 'ticket_reply' as const,
+          title: 'Admin replied to your ticket',
+          body: t.subject,
+          href: `/dashboard/tickets/${t.id}`,
+          created_at: t.updated_at,
+        })));
+      }
+    } catch { /* silent — non-critical */ }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) { setNotifications([]); return; }
+    pollNotifications();
+    const interval = setInterval(pollNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [user, pollNotifications]);
+
+  useEffect(() => {
+    if (!panelOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setPanelOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [panelOpen]);
 
   useEffect(() => {
     const savedCurrency = localStorage.getItem("currency");
@@ -56,18 +148,18 @@ const Navbar = () => {
 
   const menuitems = [
     { id: 1, title: "Home", href: "/", type: "link" },
-    { id: 8, title: "Services", href: "/services", type: "link" },
-    { id: 5209, title: "YouTube Views", href: "/5648/buy-youtube-views", type: "link" },
+    // { id: 2, title: "Services", href: "/services", type: "link" },
+    { id: 3, title: "YouTube Views", href: "/buy-youtube-views", type: "link" },
     {
-      id: 3,
+      id: 4,
       title: "Other YouTube Services",
       type: "menu",
       items: [
-        { id: 376, title: "YouTube Subscriber", href: "/376/buy-youtube-subscribers" },
-        { id: 2342, title: "YouTube Likes", href: "/2342/buy-youtube-video-likes" },
-        { id: 5649, title: "YouTube Comments", href: "/5649/buy-youtube-comments" },
-        { id: 242, title: "YouTube Shorts Likes", href: "/2342/buy-youtube-shorts-likes" },
-        { id: 232, title: "YouTube Shorts Views", href: "/5648/buy-youtube-shorts-views" },
+        { id: 41, title: "YouTube Subscriber", href: "/buy-youtube-subscribers" },
+        { id: 42, title: "YouTube Likes", href: "/buy-youtube-video-likes" },
+        { id: 43, title: "YouTube Comments", href: "/buy-youtube-comments" },
+        { id: 44, title: "YouTube Shorts Likes", href: "/buy-youtube-shorts-likes" },
+        { id: 45, title: "YouTube Shorts Views", href: "/buy-youtube-shorts-views" },
       ],
     },
     { id: 7, title: "Blogs", href: "/blogs", type: "link" },
@@ -122,7 +214,7 @@ const Navbar = () => {
             : "bg-transparent"
         }`}
       >
-        <div className="container flex items-center justify-between">
+        <div className="w-full px-4 sm:px-8 flex items-center justify-between">
           <Link className="py-7" to="/">
             <h1 className="text-xl font-bold">
               <img src="/web-app-manifest-192x192-removebg-preview.png" alt="Logo" width={50} height={50} />
@@ -164,6 +256,30 @@ const Navbar = () => {
                 </MenubarContent>
               </MenubarMenu>
             </Menubar>
+
+            {/* Notification bell */}
+            {user && (
+              <div className="relative" ref={notifRef}>
+                <button
+                  onClick={handleOpenPanel}
+                  className="relative w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 transition-colors"
+                  aria-label="Notifications"
+                >
+                  <Bell className="w-5 h-5 text-gray-700" />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
+                  )}
+                </button>
+                {panelOpen && (
+                  <NotificationPanel
+                    items={notifications}
+                    onClose={() => setPanelOpen(false)}
+                    onClearAll={() => { setNotifications([]); setPanelOpen(false); }}
+                    onRemove={id => setNotifications(prev => prev.filter(n => n.id !== id))}
+                  />
+                )}
+              </div>
+            )}
 
             <div>
               {user ? (

@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 const sections = [
   {
     id: 1,
-    href: "/5648/buy-youtube-views",
+    href: "/buy-youtube-views",
     title: "Get Noticed & Rank Higher!",
     points: [
       "More views improve your video's ranking in search results.",
@@ -21,7 +21,7 @@ const sections = [
   },
   {
     id: 2,
-    href: "/5648/buy-youtube-subscribers",
+    href: "/buy-youtube-subscribers",
     title: "Build Trust & Look Popular!",
     points: [
       "A higher view count makes your content more appealing.",
@@ -35,7 +35,7 @@ const sections = [
   },
   {
     id: 3,
-    href: "/2342/buy-youtube-video-likes",
+    href: "/buy-youtube-video-likes",
     title: "Accelerate Your Channel's Growth!",
     points: [
       "Kickstart your journey with instant views.",
@@ -49,7 +49,7 @@ const sections = [
   },
   {
     id: 4,
-    href: "/376/buy-youtube-comments",
+    href: "/buy-youtube-comments",
     title: "Unlock Your YouTube Success!",
     points: [
       "More views lead to better reach and engagement.",

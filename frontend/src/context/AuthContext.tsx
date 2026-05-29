@@ -10,6 +10,7 @@ export interface User {
   username: string;
   email: string;
   is_admin?: boolean;
+  is_suspended?: boolean;
 }
 
 interface AuthContextType {
@@ -46,18 +47,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const navigate = useNavigate();
 
   useEffect(() => {
-    try {
+    const validate = async () => {
       const token = localStorage.getItem("auth_token");
-      const stored = localStorage.getItem("user");
-      if (token && stored) {
-        setUser(JSON.parse(stored));
+      if (!token) {
+        setIsLoading(false);
+        return;
       }
-    } catch {
-      localStorage.removeItem("auth_token");
-      localStorage.removeItem("user");
-    } finally {
-      setIsLoading(false);
-    }
+      try {
+        const { data } = await api.get<User>(API_ENDPOINTS.AUTH_ME);
+        setUser(data);
+        localStorage.setItem("user", JSON.stringify(data));
+      } catch {
+        // 401 is handled by the api interceptor (redirects to /sign-in)
+        // For network errors, fall back to stored user so offline use still works
+        const stored = localStorage.getItem("user");
+        if (stored) {
+          try { setUser(JSON.parse(stored)); } catch { /* malformed — leave user null */ }
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    validate();
   }, []);
 
   const login = async (identifier: string, password: string): Promise<User> => {

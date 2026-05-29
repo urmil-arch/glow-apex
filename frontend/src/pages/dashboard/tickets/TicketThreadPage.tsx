@@ -150,18 +150,23 @@ const TicketThreadPage: React.FC = () => {
           });
           return (
             <div key={i} className={`flex gap-3 ${isAdmin ? '' : 'flex-row-reverse'}`}>
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  isAdmin
-                    ? 'bg-gradient-to-br from-teal-500 to-emerald-500'
-                    : 'bg-gray-200'
-                }`}
-              >
-                {isAdmin ? (
-                  <ShieldCheck className="w-4 h-4 text-white" />
-                ) : (
-                  <User className="w-4 h-4 text-gray-500" />
-                )}
+              <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                    isAdmin
+                      ? 'bg-gradient-to-br from-teal-500 to-emerald-500'
+                      : 'bg-gray-200'
+                  }`}
+                >
+                  {isAdmin ? (
+                    <ShieldCheck className="w-4 h-4 text-white" />
+                  ) : (
+                    <User className="w-4 h-4 text-gray-500" />
+                  )}
+                </div>
+                <span className="text-[10px] text-gray-400 leading-none whitespace-nowrap">
+                  {isAdmin ? 'Admin' : 'You'}
+                </span>
               </div>
               <div className={`max-w-[75%] ${isAdmin ? '' : 'items-end flex flex-col'}`}>
                 <div

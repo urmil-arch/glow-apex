@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import currency from "currency.js";
 import { useOrderStore } from "@/store/useOrderStore";
@@ -138,12 +138,12 @@ const ServiceSelectionComponent: React.FC<ServiceSelectionComponentProps> = ({
   };
 
   // Animation variants
-  const fadeIn = {
+  const fadeIn: Variants = {
     hidden: { opacity: 0, y: 20 },
     visible: { opacity: 1, y: 0 },
   };
 
-  const cardAnimation = {
+  const cardAnimation: Variants = {
     hidden: { opacity: 0, scale: 0.95 },
     visible: {
       opacity: 1,

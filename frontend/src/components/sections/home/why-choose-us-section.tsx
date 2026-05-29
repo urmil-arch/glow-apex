@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { Shield, Landmark, CircleGauge, Earth } from "lucide-react";
-import { motion, TargetAndTransition, useAnimation } from "framer-motion";
+import { motion, TargetAndTransition, useAnimation, type Variants } from "framer-motion";
 import { useInView } from "react-intersection-observer";
 import SectionHeader from "@/components/common/section-header";
 import { useNavigate } from "react-router-dom";
@@ -154,7 +154,7 @@ const WhyChooseSection: React.FC = () => {
     }
   }, [controls, inView]);
 
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: { opacity: 0, y: 30 },
     visible: {
       opacity: 1,
@@ -283,7 +283,7 @@ const WhyChooseSection: React.FC = () => {
 
           {/* Call-to-action button */}
           <motion.button
-            onClick={() => navigate("/5648/buy-youtube-views")}
+            onClick={() => navigate("/buy-youtube-views")}
             whileHover={{
               scale: 1.05,
               boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
