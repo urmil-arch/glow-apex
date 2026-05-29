@@ -213,7 +213,7 @@ const PurchaseFlow: React.FC<{ data: FlowCardProps[]; btnText?: string }> = ({
       >
         <motion.button
           onClick={() => {
-            navigate(`/service/${service_id}`);
+            navigate(`/`);
           }}
           className="bg-[#0eca6d] text-white font-bold px-8 py-3 rounded-full shadow-lg flex items-center gap-2"
           whileHover={{

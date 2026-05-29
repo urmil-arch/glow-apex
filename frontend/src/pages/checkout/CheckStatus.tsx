@@ -1,8 +1,9 @@
 import axios from "axios";
-import { useParams } from "react-router-dom";
+import { useParams, Navigate } from "react-router-dom";
 import React, { useEffect, useState } from "react";
 import { CheckCircle, XCircle, Clock } from "lucide-react";
 import { API_ENDPOINTS } from "@/config";
+import { useAuth } from "@/context/AuthContext";
 
 interface PaymentStatus {
   order_id: string;
@@ -14,7 +15,9 @@ interface PaymentStatus {
 }
 
 const CheckStatus: React.FC = () => {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { orderid } = useParams<{ orderid: string }>();
+  if (!authLoading && !isAuthenticated) return <Navigate to="/sign-in" replace />;
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);

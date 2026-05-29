@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { ThumbsUp, Eye, MessageSquare, UserPlus } from "lucide-react";
 import ServiceSelectionComponent from "./service-selection-component";
 
@@ -31,7 +31,7 @@ const HeroSectionWithTabs: React.FC = () => {
     setIsVisible(true);
   }, []);
 
-  const fadeIn = {
+  const fadeIn: Variants = {
     hidden: { opacity: 0, y: 20 },
     visible: { opacity: 1, y: 0 },
   };

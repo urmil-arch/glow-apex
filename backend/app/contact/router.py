@@ -20,7 +20,8 @@ def _get_db(request: Request) -> AsyncIOMotorDatabase:
 
 router = APIRouter()
 
-RATE_LIMIT_TTL = 3600  # 1 hour
+RATE_LIMIT_TTL = 3600  # 1 hour window
+RATE_LIMIT_MAX = 2    # messages allowed per window
 
 
 async def get_redis() -> AsyncGenerator[aioredis.Redis, None]:
@@ -59,17 +60,19 @@ async def send_contact_message(
     rate_key = f"contact_ratelimit:{client_ip}"
 
     try:
-        if await redis.exists(rate_key):
+        count = await redis.incr(rate_key)
+        if count == 1:
+            await redis.expire(rate_key, RATE_LIMIT_TTL)
+        if count > RATE_LIMIT_MAX:
             ttl = await redis.ttl(rate_key)
             minutes_left = max(1, (ttl + 59) // 60)
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=(
-                    f"You can send one message per hour. "
+                    f"You can send up to {RATE_LIMIT_MAX} messages per hour. "
                     f"Please try again in {minutes_left} minute(s)."
                 ),
             )
-        await redis.setex(rate_key, RATE_LIMIT_TTL, "1")
     except HTTPException:
         raise
     except Exception as exc:

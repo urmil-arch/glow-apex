@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
 import {
+  Bell,
   Check,
+  CreditCard,
   DollarSign,
   Edit2,
   EyeOff,
+  Globe,
+  Layers,
   Loader2,
   Mail,
   Plus,
@@ -24,6 +28,18 @@ interface PlatformSettings {
   support_email: string;
   currency: 'USD' | 'INR' | 'EUR';
   maintenance_mode: boolean;
+  min_order_quantity: number;
+  max_order_quantity: number;
+  payment_stripe_enabled: boolean;
+  payment_cashfree_enabled: boolean;
+  payment_cryptomus_enabled: boolean;
+  payment_payeer_enabled: boolean;
+  notify_new_order: boolean;
+  notify_new_ticket: boolean;
+  social_twitter: string;
+  social_instagram: string;
+  social_youtube: string;
+  social_facebook: string;
 }
 
 interface Provider {
@@ -42,6 +58,38 @@ const primaryCls =
   'flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
 const cancelCls =
   'px-4 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors';
+
+// ---- Toggle row ----
+
+interface ToggleRowProps {
+  label: string;
+  description?: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  accent?: 'teal' | 'amber';
+}
+
+const ToggleRow = ({ label, description, checked, onChange, accent = 'teal' }: ToggleRowProps) => (
+  <div className="flex items-center justify-between gap-4">
+    <div className="min-w-0">
+      <p className="text-sm font-medium text-gray-800">{label}</p>
+      {description && <p className="text-xs text-gray-400 mt-0.5">{description}</p>}
+    </div>
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+        checked ? (accent === 'amber' ? 'bg-amber-500' : 'bg-teal-500') : 'bg-gray-200'
+      }`}
+    >
+      <span
+        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${
+          checked ? 'translate-x-5' : 'translate-x-0'
+        }`}
+      />
+    </button>
+  </div>
+);
 
 // ---- Modal ----
 
@@ -215,7 +263,6 @@ const ProviderCard = ({ provider, onEdit, onDelete }: ProviderCardProps) => {
         </div>
       </div>
 
-      {/* Balance area */}
       <div className="flex items-center justify-between pt-3 border-t border-gray-100">
         {balance ? (
           <div className="flex items-center gap-2">
@@ -290,19 +337,29 @@ const DeleteConfirm = ({ label, onClose, onConfirm }: DeleteConfirmProps) => {
 const SettingsPage = () => {
   const [tab, setTab] = useState<'general' | 'providers'>('general');
 
-  // General settings
   const [settings, setSettings] = useState<PlatformSettings>({
     site_name: '',
     support_email: '',
     currency: 'USD',
     maintenance_mode: false,
+    min_order_quantity: 100,
+    max_order_quantity: 100000,
+    payment_stripe_enabled: true,
+    payment_cashfree_enabled: true,
+    payment_cryptomus_enabled: true,
+    payment_payeer_enabled: true,
+    notify_new_order: true,
+    notify_new_ticket: true,
+    social_twitter: '',
+    social_instagram: '',
+    social_youtube: '',
+    social_facebook: '',
   });
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [settingsError, setSettingsError] = useState('');
 
-  // Providers
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loadingProviders, setLoadingProviders] = useState(true);
   const [showAddProvider, setShowAddProvider] = useState(false);
@@ -313,7 +370,7 @@ const SettingsPage = () => {
     const fetchSettings = async () => {
       try {
         const res = await api.get<PlatformSettings>(API_ENDPOINTS.ADMIN_SETTINGS);
-        setSettings(res.data);
+        setSettings((prev) => ({ ...prev, ...res.data }));
       } finally {
         setLoadingSettings(false);
       }
@@ -337,7 +394,7 @@ const SettingsPage = () => {
     setSettingsSaved(false);
     try {
       const res = await api.patch<PlatformSettings>(API_ENDPOINTS.ADMIN_SETTINGS, settings);
-      setSettings(res.data);
+      setSettings((prev) => ({ ...prev, ...res.data }));
       setSettingsSaved(true);
       setTimeout(() => setSettingsSaved(false), 3000);
     } catch (err: unknown) {
@@ -363,6 +420,9 @@ const SettingsPage = () => {
     setProviders((prev) => prev.filter((p) => p.id !== deleteProvider.id));
     setDeleteProvider(null);
   };
+
+  const set = <K extends keyof PlatformSettings>(key: K, value: PlatformSettings[K]) =>
+    setSettings((s) => ({ ...s, [key]: value }));
 
   return (
     <div>
@@ -390,7 +450,7 @@ const SettingsPage = () => {
 
       {/* ---- General Tab ---- */}
       {tab === 'general' && (
-        <div className="max-w-2xl">
+        <div>
           {loadingSettings ? (
             <div className="flex items-center justify-center py-16 text-gray-400">
               <Loader2 className="h-6 w-6 animate-spin" />
@@ -401,107 +461,237 @@ const SettingsPage = () => {
                 <p className="text-sm text-red-600 bg-red-50 px-4 py-3 rounded-xl">{settingsError}</p>
               )}
 
-              {/* Site Name */}
-              <div className="bg-white border border-gray-200 rounded-xl p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <Type className="h-4 w-4 text-gray-500" />
-                  <h3 className="font-medium text-gray-800 text-sm">Branding</h3>
-                </div>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Site Name</label>
-                    <input
-                      className={inputCls}
-                      placeholder="Glow Apex"
-                      value={settings.site_name}
-                      onChange={(e) => setSettings((s) => ({ ...s, site_name: e.target.value }))}
-                      required
-                    />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+
+                {/* ---- Left column ---- */}
+                <div className="space-y-5">
+
+                  {/* Branding */}
+                  <div className="bg-white border border-gray-200 rounded-xl p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Type className="h-4 w-4 text-gray-500" />
+                      <h3 className="font-medium text-gray-800 text-sm">Branding</h3>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Site Name</label>
+                        <input
+                          className={inputCls}
+                          placeholder="Glow Apex"
+                          value={settings.site_name}
+                          onChange={(e) => set('site_name', e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Support Email</label>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                          <input
+                            type="email"
+                            className={`${inputCls} pl-9`}
+                            placeholder="support@glowapex.com"
+                            value={settings.support_email}
+                            onChange={(e) => set('support_email', e.target.value)}
+                            required
+                          />
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1">Shown to customers on the contact page and emails.</p>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Support Email</label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <input
-                        type="email"
-                        className={`${inputCls} pl-9`}
-                        placeholder="support@glowapex.com"
-                        value={settings.support_email}
-                        onChange={(e) => setSettings((s) => ({ ...s, support_email: e.target.value }))}
-                        required
+
+                  {/* Payment Methods */}
+                  <div className="bg-white border border-gray-200 rounded-xl p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <CreditCard className="h-4 w-4 text-gray-500" />
+                      <h3 className="font-medium text-gray-800 text-sm">Payment Methods</h3>
+                    </div>
+                    <div className="space-y-4">
+                      <ToggleRow
+                        label="Stripe"
+                        description="Credit / debit cards via Stripe Checkout"
+                        checked={settings.payment_stripe_enabled}
+                        onChange={(v) => set('payment_stripe_enabled', v)}
+                      />
+                      <ToggleRow
+                        label="Cashfree"
+                        description="UPI, net banking, cards (INR)"
+                        checked={settings.payment_cashfree_enabled}
+                        onChange={(v) => set('payment_cashfree_enabled', v)}
+                      />
+                      <ToggleRow
+                        label="Cryptomus"
+                        description="Cryptocurrency payments"
+                        checked={settings.payment_cryptomus_enabled}
+                        onChange={(v) => set('payment_cryptomus_enabled', v)}
+                      />
+                      <ToggleRow
+                        label="Payeer"
+                        description="Payeer wallet payments"
+                        checked={settings.payment_payeer_enabled}
+                        onChange={(v) => set('payment_payeer_enabled', v)}
                       />
                     </div>
-                    <p className="text-xs text-gray-400 mt-1">Shown to customers on the contact page and emails.</p>
                   </div>
-                </div>
-              </div>
 
-              {/* Currency */}
-              <div className="bg-white border border-gray-200 rounded-xl p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <DollarSign className="h-4 w-4 text-gray-500" />
-                  <h3 className="font-medium text-gray-800 text-sm">Currency</h3>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  {(['USD', 'INR', 'EUR'] as const).map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setSettings((s) => ({ ...s, currency: c }))}
-                      className={`py-2.5 rounded-lg border text-sm font-medium transition-colors ${
-                        settings.currency === c
-                          ? 'border-teal-500 bg-teal-50 text-teal-700'
-                          : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      {c === 'USD' && '$ USD'}
-                      {c === 'INR' && '₹ INR'}
-                      {c === 'EUR' && '€ EUR'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Maintenance Mode */}
-              <div className="bg-white border border-gray-200 rounded-xl p-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-start gap-3">
-                    <div className={`mt-0.5 flex items-center justify-center w-8 h-8 rounded-lg ${settings.maintenance_mode ? 'bg-amber-50' : 'bg-gray-100'}`}>
-                      <ShieldAlert className={`h-4 w-4 ${settings.maintenance_mode ? 'text-amber-500' : 'text-gray-400'}`} />
+                  {/* Social Links */}
+                  <div className="bg-white border border-gray-200 rounded-xl p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Globe className="h-4 w-4 text-gray-500" />
+                      <h3 className="font-medium text-gray-800 text-sm">Social Links</h3>
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-800 text-sm">Maintenance Mode</p>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        When enabled, customers will see a maintenance message instead of the site.
-                      </p>
+                    <div className="space-y-3">
+                      {(
+                        [
+                          { key: 'social_twitter', label: 'Twitter / X', placeholder: 'https://x.com/yourhandle' },
+                          { key: 'social_instagram', label: 'Instagram', placeholder: 'https://instagram.com/yourhandle' },
+                          { key: 'social_youtube', label: 'YouTube', placeholder: 'https://youtube.com/@yourchannel' },
+                          { key: 'social_facebook', label: 'Facebook', placeholder: 'https://facebook.com/yourpage' },
+                        ] as const
+                      ).map(({ key, label, placeholder }) => (
+                        <div key={key}>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+                          <input
+                            type="url"
+                            className={inputCls}
+                            placeholder={placeholder}
+                            value={settings[key]}
+                            onChange={(e) => set(key, e.target.value)}
+                          />
+                        </div>
+                      ))}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setSettings((s) => ({ ...s, maintenance_mode: !s.maintenance_mode }))}
-                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
-                      settings.maintenance_mode ? 'bg-amber-500' : 'bg-gray-200'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${
-                        settings.maintenance_mode ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
                 </div>
 
-                {settings.maintenance_mode && (
-                  <div className="mt-4 flex items-center gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-lg">
-                    <ShieldAlert className="h-4 w-4 text-amber-500 flex-shrink-0" />
-                    <p className="text-xs text-amber-700 font-medium">
-                      Maintenance mode is currently ON. Customers cannot access the site.
-                    </p>
+                {/* ---- Right column ---- */}
+                <div className="space-y-5">
+
+                  {/* Currency */}
+                  <div className="bg-white border border-gray-200 rounded-xl p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <DollarSign className="h-4 w-4 text-gray-500" />
+                      <h3 className="font-medium text-gray-800 text-sm">Currency</h3>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      {(['USD', 'INR', 'EUR'] as const).map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => set('currency', c)}
+                          className={`py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                            settings.currency === c
+                              ? 'border-teal-500 bg-teal-50 text-teal-700'
+                              : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          {c === 'USD' && '$ USD'}
+                          {c === 'INR' && '₹ INR'}
+                          {c === 'EUR' && '€ EUR'}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                )}
+
+                  {/* Order Limits */}
+                  <div className="bg-white border border-gray-200 rounded-xl p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Layers className="h-4 w-4 text-gray-500" />
+                      <h3 className="font-medium text-gray-800 text-sm">Order Limits</h3>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Minimum Quantity</label>
+                        <input
+                          type="number"
+                          min={1}
+                          className={inputCls}
+                          placeholder="100"
+                          value={settings.min_order_quantity}
+                          onChange={(e) => set('min_order_quantity', Number(e.target.value))}
+                        />
+                        <p className="text-xs text-gray-400 mt-1">Smallest order a customer can place.</p>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Maximum Quantity</label>
+                        <input
+                          type="number"
+                          min={1}
+                          className={inputCls}
+                          placeholder="100000"
+                          value={settings.max_order_quantity}
+                          onChange={(e) => set('max_order_quantity', Number(e.target.value))}
+                        />
+                        <p className="text-xs text-gray-400 mt-1">Largest order a customer can place.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Notifications */}
+                  <div className="bg-white border border-gray-200 rounded-xl p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Bell className="h-4 w-4 text-gray-500" />
+                      <h3 className="font-medium text-gray-800 text-sm">Email Notifications</h3>
+                    </div>
+                    <div className="space-y-4">
+                      <ToggleRow
+                        label="New Order"
+                        description="Send admin an email when a new order is placed"
+                        checked={settings.notify_new_order}
+                        onChange={(v) => set('notify_new_order', v)}
+                      />
+                      <ToggleRow
+                        label="New Support Ticket"
+                        description="Send admin an email when a ticket is opened"
+                        checked={settings.notify_new_ticket}
+                        onChange={(v) => set('notify_new_ticket', v)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Maintenance Mode */}
+                  <div className="bg-white border border-gray-200 rounded-xl p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-start gap-3">
+                        <div className={`mt-0.5 flex items-center justify-center w-8 h-8 rounded-lg ${settings.maintenance_mode ? 'bg-amber-50' : 'bg-gray-100'}`}>
+                          <ShieldAlert className={`h-4 w-4 ${settings.maintenance_mode ? 'text-amber-500' : 'text-gray-400'}`} />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-800 text-sm">Maintenance Mode</p>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            When enabled, customers see a maintenance message instead of the site.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => set('maintenance_mode', !settings.maintenance_mode)}
+                        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                          settings.maintenance_mode ? 'bg-amber-500' : 'bg-gray-200'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${
+                            settings.maintenance_mode ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                    {settings.maintenance_mode && (
+                      <div className="mt-4 flex items-center gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+                        <ShieldAlert className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                        <p className="text-xs text-amber-700 font-medium">
+                          Maintenance mode is ON. Customers cannot access the site.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              {/* Save */}
+              <div className="flex items-center gap-3 pt-1">
                 <button type="submit" className={primaryCls} disabled={savingSettings}>
                   {savingSettings ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -573,7 +763,6 @@ const SettingsPage = () => {
       {showAddProvider && (
         <ProviderModal onClose={() => setShowAddProvider(false)} onSaved={handleProviderSaved} />
       )}
-
       {editProvider && (
         <ProviderModal
           provider={editProvider}
@@ -581,7 +770,6 @@ const SettingsPage = () => {
           onSaved={handleProviderSaved}
         />
       )}
-
       {deleteProvider && (
         <DeleteConfirm
           label={deleteProvider.name}

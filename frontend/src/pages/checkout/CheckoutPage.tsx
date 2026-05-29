@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import { ExternalLink, Loader, PlayCircle } from "lucide-react";
 import { useOrderStore } from "@/store/useOrderStore";
+import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { API_ENDPOINTS } from "@/config";
 
 const CheckoutPage = () => {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { serviceOrder, clearServiceOrder, categoryOrder, clearCategoryOrder } = useOrderStore();
   const navigate = useNavigate();
 
@@ -23,6 +25,7 @@ const CheckoutPage = () => {
     }
   }, [serviceOrder, categoryOrder, navigate]);
 
+  if (!authLoading && !isAuthenticated) return <Navigate to="/sign-in" replace />;
   if (!serviceOrder && !categoryOrder) return null;
 
   function extractError(err: unknown): string {

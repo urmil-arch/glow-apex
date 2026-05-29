@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
 
 export interface OrderData {
   service_id: string
@@ -47,17 +48,29 @@ interface OrderStore {
   clearCategoryOrder: () => void
 }
 
-export const useOrderStore = create<OrderStore>((set) => ({
-  orderData: null,
-  selectedPackage: null,
-  serviceOrder: null,
-  categoryOrder: null,
-  setOrderData: (data) => set({ orderData: data }),
-  setSelectedPackage: (pkg) => set({ selectedPackage: pkg }),
-  clearSelectedPackage: () => set({ selectedPackage: null }),
-  clearOrder: () => set({ orderData: null, selectedPackage: null }),
-  setServiceOrder: (data) => set({ serviceOrder: data }),
-  clearServiceOrder: () => set({ serviceOrder: null }),
-  setCategoryOrder: (data) => set({ categoryOrder: data }),
-  clearCategoryOrder: () => set({ categoryOrder: null }),
-}))
+export const useOrderStore = create<OrderStore>()(
+  persist(
+    (set) => ({
+      orderData: null,
+      selectedPackage: null,
+      serviceOrder: null,
+      categoryOrder: null,
+      setOrderData: (data) => set({ orderData: data }),
+      setSelectedPackage: (pkg) => set({ selectedPackage: pkg }),
+      clearSelectedPackage: () => set({ selectedPackage: null }),
+      clearOrder: () => set({ orderData: null, selectedPackage: null }),
+      setServiceOrder: (data) => set({ serviceOrder: data }),
+      clearServiceOrder: () => set({ serviceOrder: null }),
+      setCategoryOrder: (data) => set({ categoryOrder: data }),
+      clearCategoryOrder: () => set({ categoryOrder: null }),
+    }),
+    {
+      name: 'order-store',
+      storage: createJSONStorage(() => sessionStorage),
+      partialize: (state) => ({
+        serviceOrder: state.serviceOrder,
+        categoryOrder: state.categoryOrder,
+      }),
+    }
+  )
+)

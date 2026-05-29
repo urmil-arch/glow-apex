@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   Users,
   Settings,
@@ -9,10 +9,12 @@ import {
   ExternalLink,
   Menu,
   X,
-  ShieldCheck,
   GitBranch,
   ClipboardList,
   HeadphonesIcon,
+  ListTodo,
+  CreditCard,
+  BarChart3,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
@@ -28,6 +30,9 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/admin', icon: <LayoutDashboard className="h-5 w-5" />, label: 'Dashboard' },
   { to: '/admin/users', icon: <Users className="h-5 w-5" />, label: 'Users' },
   { to: '/admin/orders', icon: <ClipboardList className="h-5 w-5" />, label: 'Orders' },
+  { to: '/admin/tasks', icon: <ListTodo className="h-5 w-5" />, label: 'Tasks' },
+  { to: '/admin/payments', icon: <CreditCard className="h-5 w-5" />, label: 'Payments' },
+  { to: '/admin/reports', icon: <BarChart3 className="h-5 w-5" />, label: 'Reports' },
   { to: '/admin/services', icon: <Package className="h-5 w-5" />, label: 'Services' },
   { to: '/admin/routing', icon: <GitBranch className="h-5 w-5" />, label: 'Routing' },
   { to: '/admin/support', icon: <HeadphonesIcon className="h-5 w-5" />, label: 'Support' },
@@ -42,12 +47,17 @@ const AdminLayout = () => {
   const [hasUnreadTicket, setHasUnreadTicket] = useState(false);
 
   useEffect(() => {
-    api.get(API_ENDPOINTS.ADMIN_SUPPORT_TICKETS, { params: { page_size: 50 } })
-      .then((res) => {
-        const tickets: { admin_has_unread: boolean }[] = res.data.tickets ?? [];
-        setHasUnreadTicket(tickets.some((t) => t.admin_has_unread));
-      })
-      .catch(() => {/* non-critical, silent */});
+    Promise.all([
+      api.get(API_ENDPOINTS.ADMIN_SUPPORT_TICKETS, { params: { page_size: 50 } }),
+      api.get(API_ENDPOINTS.ADMIN_SUPPORT_MESSAGES),
+    ]).then(([ticketsRes, msgsRes]) => {
+      const tickets: { admin_has_unread: boolean }[] = ticketsRes.data.tickets ?? [];
+      const messages: { is_read: boolean }[] = msgsRes.data.messages ?? [];
+      setHasUnreadTicket(
+        tickets.some((t) => t.admin_has_unread) ||
+        messages.some((m) => !m.is_read)
+      );
+    }).catch(() => {/* non-critical, silent */});
   }, [location.pathname]);
 
   const handleLogout = () => {
@@ -58,14 +68,20 @@ const AdminLayout = () => {
   const Sidebar = () => (
     <div className="flex flex-col h-full bg-white border-r border-gray-200">
       {/* Brand */}
-      <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-200">
-        <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-gradient-to-br from-teal-500 to-emerald-500">
-          <ShieldCheck className="h-5 w-5 text-white" />
-        </div>
-        <div>
-          <p className="font-bold text-gray-900 leading-none">Glow Apex</p>
-          <p className="text-xs text-gray-400 mt-0.5">Admin Panel</p>
-        </div>
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-200">
+        <Link to="/" className="flex items-center gap-2.5 min-w-0">
+          <img
+            src="/web-app-manifest-192x192-removebg-preview.png"
+            alt="BuyRealViews"
+            width={36}
+            height={36}
+            className="object-contain flex-shrink-0"
+          />
+          <div className="min-w-0">
+            <p className="font-bold text-gray-900 leading-none truncate">BuyRealViews</p>
+            <p className="text-xs text-gray-400 mt-0.5">Admin Panel</p>
+          </div>
+        </Link>
       </div>
 
       {/* Nav */}
@@ -146,14 +162,29 @@ const AdminLayout = () => {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Mobile topbar */}
-        <header className="lg:hidden flex items-center gap-4 px-4 py-3 bg-white border-b border-gray-200">
+        <header className="lg:hidden flex items-center px-4 py-3 bg-white border-b border-gray-200 relative">
           <button
             onClick={() => setSidebarOpen(true)}
             className="text-gray-500 hover:text-gray-900"
           >
             <Menu className="h-6 w-6" />
           </button>
-          <span className="font-semibold text-gray-900">Admin Panel</span>
+
+          {/* Logo — centered */}
+          <Link
+            to="/"
+            className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2"
+          >
+            <img
+              src="/web-app-manifest-192x192-removebg-preview.png"
+              alt="BuyRealViews"
+              width={32}
+              height={32}
+              className="object-contain"
+            />
+            <span className="text-sm font-bold text-gray-900">BuyRealViews</span>
+          </Link>
+
           {sidebarOpen && (
             <button
               onClick={() => setSidebarOpen(false)}

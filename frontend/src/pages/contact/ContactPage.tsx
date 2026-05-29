@@ -176,6 +176,24 @@ const ContactPage = () => {
           {/* Contact Form */}
           <div className="lg:col-span-3 bg-white rounded-2xl shadow-lg overflow-hidden">
             <div className="p-6 bg-white">
+              {!user && (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mb-4">
+                    <MessageSquare className="h-7 w-7 text-emerald-500" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-800 mb-2">Sign in to contact us</h3>
+                  <p className="text-gray-500 text-sm mb-6 max-w-xs">
+                    You need to be signed in to send a message or submit a support ticket.
+                  </p>
+                  <button
+                    onClick={() => navigate("/sign-in")}
+                    className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    Sign in
+                  </button>
+                </div>
+              )}
+              {user && (<>
               {/* Tab navigation */}
               <div className="flex mb-6 border-b flex-wrap">
                 <button
@@ -198,19 +216,17 @@ const ContactPage = () => {
                 >
                   Business Inquiries
                 </button>
-                {user && (
-                  <button
-                    className={`pb-3 px-4 text-lg font-medium flex items-center gap-1.5 ${
-                      activeTab === "ticket"
-                        ? "text-emerald-600 border-b-2 border-emerald-600"
-                        : "text-gray-500 hover:text-gray-700"
-                    }`}
-                    onClick={() => setActiveTab("ticket")}
-                  >
-                    <Ticket className="h-4 w-4" />
-                    Submit Ticket
-                  </button>
-                )}
+                <button
+                  className={`pb-3 px-4 text-lg font-medium flex items-center gap-1.5 ${
+                    activeTab === "ticket"
+                      ? "text-emerald-600 border-b-2 border-emerald-600"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                  onClick={() => setActiveTab("ticket")}
+                >
+                  <Ticket className="h-4 w-4" />
+                  Submit Ticket
+                </button>
               </div>
 
               {/* Ticket form */}
@@ -451,6 +467,7 @@ const ContactPage = () => {
                   </button>
                 </form>
               ))}
+              </>)}
             </div>
           </div>
 
@@ -605,7 +622,7 @@ const ContactPage = () => {
             </div>
             <div className="flex flex-col sm:flex-row gap-4">
               <Link
-                to="/2342/buy-youtube-views"
+                to="/buy-youtube-views"
                 className="px-6 py-3 bg-white text-emerald-600 font-medium rounded-lg hover:bg-gray-100 transition-colors flex items-center justify-center"
               >
                 Buy views now <ArrowRight className="ml-2 h-4 w-4" />

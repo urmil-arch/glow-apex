@@ -25,30 +25,30 @@ const Footer = () => {
             <ul className="text-muted-foreground  text-sm">
               <li className="mb-2 font-semibold text-white ">Services</li>
               <li>
-                <Link to={"/2342/buy-youtube-views"}>Buy Youtube Views</Link>
+                <Link to={"/buy-youtube-views"}>Buy Youtube Views</Link>
               </li>
               <li>
-                <Link to={"/5648/buy-youtube-video-likes"}>
+                <Link to={"/buy-youtube-video-likes"}>
                   Buy Youtube Likes
                 </Link>
               </li>
               <li>
-                <Link to={"/5648/buy-youtube-subscribers"}>
+                <Link to={"/buy-youtube-subscribers"}>
                   Buy Youtube Subscribers
                 </Link>
               </li>
               <li>
-                <Link to={"/376/buy-youtube-comments"}>
+                <Link to={"/buy-youtube-comments"}>
                   Buy Youtube Comments
                 </Link>
               </li>
               <li>
-                <Link to={"/2342/buy-youtube-shorts-views"}>
+                <Link to={"/buy-youtube-shorts-views"}>
                   Buy Youtube Shorts Views
                 </Link>
               </li>
               <li>
-                <Link to={"/2342/buy-youtube-shorts-likes"}>
+                <Link to={"/buy-youtube-shorts-likes"}>
                   Buy Youtube Shorts Likes
                 </Link>
               </li>

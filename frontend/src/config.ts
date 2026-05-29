@@ -56,6 +56,12 @@ export const API_ENDPOINTS = {
   // Admin — Routing Config
   ADMIN_ROUTING_CONFIG: `${API_BASE_URL}/admin/routing`,
 
+  // Admin — Payments
+  ADMIN_PAYMENTS: `${API_BASE_URL}/admin/payments`,
+
+  // Admin — Reports
+  ADMIN_REPORTS: `${API_BASE_URL}/admin/reports`,
+
   // Admin — Support
   ADMIN_SUPPORT_TICKETS: `${API_BASE_URL}/admin/support/tickets`,
   ADMIN_SUPPORT_MESSAGES: `${API_BASE_URL}/admin/support/messages`,

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { Eye, Heart, MessageCircle, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import RecentVisitors from "../common/recent-visitors";
@@ -12,12 +12,12 @@ const HomeHeroSection = () => {
     setIsVisible(true);
   }, []);
 
-  const fadeIn = {
+  const fadeIn: Variants = {
     hidden: { opacity: 0, y: 20 },
     visible: { opacity: 1, y: 0 },
   };
 
-  const staggerButtons = {
+  const staggerButtons: Variants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
@@ -27,7 +27,7 @@ const HomeHeroSection = () => {
     },
   };
 
-  const buttonVariant = {
+  const buttonVariant: Variants = {
     hidden: { scale: 0.9, opacity: 0 },
     visible: {
       scale: 1,
@@ -44,22 +44,22 @@ const HomeHeroSection = () => {
   const services = [
     {
       name: "Buy Youtube Likes",
-      link: "/services",
+      link: "/buy-youtube-video-likes",
       icon: <Heart />,
     },
     {
       name: "Buy Youtube Views",
-      link: "/services",
+      link: "/buy-youtube-views",
       icon: <Eye />,
     },
     {
       name: "Buy Youtube Comments",
-      link: "/services",
+      link: "/buy-youtube-comments",
       icon: <MessageCircle />,
     },
     {
       name: "Buy Youtube Subscribers",
-      link: "/services",
+      link: "/buy-youtube-subscribers",
       icon: <User />,
     },
   ];

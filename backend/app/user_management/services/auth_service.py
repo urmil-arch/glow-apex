@@ -126,6 +126,12 @@ class AuthService:
                 detail={"message": "Email not verified.", "email": user["email"]},
             )
 
+        if user.get("is_suspended"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"message": "Your account has been suspended.", "reason": "suspended"},
+            )
+
         if not verify_password(data.password, user["hashed_password"]):
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
 
@@ -139,6 +145,7 @@ class AuthService:
                 username=user["username"],
                 email=user["email"],
                 is_admin=user.get("is_admin", False),
+                is_suspended=user.get("is_suspended", False),
             ),
         )
 

@@ -21,6 +21,7 @@ class ProfileService:
             username=user["username"],
             email=user["email"],
             is_admin=user.get("is_admin", False),
+            is_suspended=user.get("is_suspended", False),
         )
 
     async def update_profile(self, user: dict, data: UpdateProfileRequest) -> ProfileResponse:
@@ -50,6 +51,7 @@ class ProfileService:
             username=refreshed["username"],
             email=refreshed["email"],
             is_admin=refreshed.get("is_admin", False),
+            is_suspended=refreshed.get("is_suspended", False),
         )
 
     async def change_password(self, user: dict, data: ChangePasswordRequest) -> dict:

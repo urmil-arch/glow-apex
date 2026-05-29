@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { CheckSquare } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { useParams, useNavigate } from "react-router-dom";
 import currency from "currency.js";
 import { currencyFormats, servicesPackages } from "@/config/data";
@@ -156,17 +156,17 @@ const YoutubeViewsHeroSection: React.FC = () => {
     return convertPrice(priceInUsd.toString(), selectedCurrency.code);
   };
 
-  const fadeIn = {
+  const fadeIn: Variants = {
     hidden: { opacity: 0, y: 20 },
     visible: { opacity: 1, y: 0 },
   };
 
-  const checkboxAnimation = {
+  const checkboxAnimation: Variants = {
     hidden: { opacity: 0, x: -20 },
     visible: { opacity: 1, x: 0 },
   };
 
-  const cardAnimation = {
+  const cardAnimation: Variants = {
     hidden: { opacity: 0, scale: 0.95 },
     visible: {
       opacity: 1,

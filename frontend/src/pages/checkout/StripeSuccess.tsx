@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, Navigate } from 'react-router-dom';
 import { CheckCircle, Loader, XCircle, AlertTriangle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config';
+import { useAuth } from '@/context/AuthContext';
 
 interface PaymentVerificationResult {
   order_id: string;
@@ -16,8 +17,10 @@ interface PaymentVerificationResult {
 }
 
 const StripeSuccess: React.FC = () => {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  if (!authLoading && !isAuthenticated) return <Navigate to="/sign-in" replace />;
   const [verification, setVerification] = useState<PaymentVerificationResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -89,7 +89,20 @@ const TicketPanel: React.FC<TicketPanelProps> = ({ ticket, onClose, onUpdate }) 
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
   const [statusChanging, setStatusChanging] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const statusRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!statusOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (statusRef.current && !statusRef.current.contains(e.target as Node)) {
+        setStatusOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [statusOpen]);
 
   // Fetch the ticket on open — this clears admin_has_unread on the server
   // and propagates the updated state back to the parent list.
@@ -133,6 +146,7 @@ const TicketPanel: React.FC<TicketPanelProps> = ({ ticket, onClose, onUpdate }) 
         status: newStatus,
       });
       onUpdate({ ...ticket, status: newStatus as TicketItem['status'] });
+      setStatusOpen(false);
     } catch {
       // silent — status badge stays as-is
     } finally {
@@ -156,25 +170,32 @@ const TicketPanel: React.FC<TicketPanelProps> = ({ ticket, onClose, onUpdate }) 
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {/* Status dropdown */}
-            <div className="relative group">
+            <div className="relative" ref={statusRef}>
               <button
                 disabled={statusChanging}
+                onClick={() => setStatusOpen(o => !o)}
                 className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium cursor-pointer ${TICKET_STATUS_CLASS[ticket.status]}`}
               >
                 {TICKET_STATUS_LABEL[ticket.status]}
-                <ChevronDown className="w-3 h-3" />
+                <ChevronDown className={`w-3 h-3 transition-transform ${statusOpen ? 'rotate-180' : ''}`} />
               </button>
-              <div className="absolute right-0 top-full mt-1 w-36 bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-10 hidden group-hover:block">
-                {(['open', 'in_progress', 'resolved', 'closed'] as const).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => changeStatus(s)}
-                    className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    {TICKET_STATUS_LABEL[s]}
-                  </button>
-                ))}
-              </div>
+              {statusOpen && (
+                <div className="absolute right-0 top-full mt-1 w-36 bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-10">
+                  {(['open', 'in_progress', 'resolved', 'closed'] as const).map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => changeStatus(s)}
+                      className={`w-full text-left px-3 py-2 text-xs transition-colors ${
+                        ticket.status === s
+                          ? 'font-semibold text-teal-700 bg-teal-50'
+                          : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {TICKET_STATUS_LABEL[s]}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
               <X className="w-5 h-5" />
@@ -191,12 +212,17 @@ const TicketPanel: React.FC<TicketPanelProps> = ({ ticket, onClose, onUpdate }) 
             });
             return (
               <div key={i} className={`flex gap-3 ${isAdmin ? 'flex-row-reverse' : ''}`}>
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    isAdmin ? 'bg-gradient-to-br from-teal-500 to-emerald-500' : 'bg-gray-200'
-                  }`}
-                >
-                  {isAdmin ? <ShieldCheck className="w-4 h-4 text-white" /> : <User className="w-4 h-4 text-gray-500" />}
+                <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                      isAdmin ? 'bg-gradient-to-br from-teal-500 to-emerald-500' : 'bg-gray-200'
+                    }`}
+                  >
+                    {isAdmin ? <ShieldCheck className="w-4 h-4 text-white" /> : <User className="w-4 h-4 text-gray-500" />}
+                  </div>
+                  <span className="text-[10px] text-gray-400 leading-none whitespace-nowrap">
+                    {isAdmin ? 'Admin' : ticket.user_username}
+                  </span>
                 </div>
                 <div className={`max-w-[75%] ${isAdmin ? 'items-end flex flex-col' : ''}`}>
                   <div

@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import SectionHeader from "@/components/common/section-header";
-import { motion, useAnimation } from "framer-motion";
+import { motion, useAnimation, type Variants } from "framer-motion";
 import { useInView } from "react-intersection-observer";
 import { ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -19,7 +19,7 @@ export const WhyPromoteSection: React.FC = () => {
     }
   }, [controls, inView]);
 
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
@@ -29,7 +29,7 @@ export const WhyPromoteSection: React.FC = () => {
     },
   };
 
-  const itemVariants = {
+  const itemVariants: Variants = {
     hidden: { y: 50, opacity: 0 },
     visible: {
       y: 0,
@@ -139,7 +139,7 @@ export const WhyPromoteSection: React.FC = () => {
         </motion.div>
         <motion.button
           onClick={() => {
-            navigate("/5648/buy-youtube-views");
+            navigate("/buy-youtube-views");
           }}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}

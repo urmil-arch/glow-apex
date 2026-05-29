@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, Navigate } from 'react-router-dom';
 import { XCircle, ArrowLeft, Home, RefreshCw, AlertTriangle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config';
+import { useAuth } from '@/context/AuthContext';
 
 interface SessionInfo {
   order_id?: string;
@@ -11,8 +12,10 @@ interface SessionInfo {
 }
 
 const StripeCancel: React.FC = () => {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  if (!authLoading && !isAuthenticated) return <Navigate to="/sign-in" replace />;
   const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
 
   const sessionId = searchParams.get('session_id');
