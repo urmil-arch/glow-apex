@@ -73,5 +73,7 @@ export interface UserOrder {
   start_count: string;
   remains: string;
   currency: string;
+  payment_method: string;
+  payment_status: string;
   created_at: string;
 }

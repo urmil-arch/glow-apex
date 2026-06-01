@@ -1,230 +1,189 @@
+import { useEffect, useState } from "react";
 import {
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  Download,
-  Search,
+  AlertCircle, CheckCircle, Clock, CreditCard,
+  ExternalLink, Loader2, Search,
 } from "lucide-react";
-import { useState } from "react";
+import { api } from "@/lib/api";
+import { API_ENDPOINTS } from "@/config";
 
-// Payment interface
-interface Payment {
+interface UserPayment {
   id: string;
-  date: string;
+  display_id: number;
+  order_id: string;
   amount: number;
+  currency: string;
   method: string;
-  status: "success" | "pending" | "failed";
-  invoiceUrl: string;
+  status: string;
+  service_name: string;
+  quantity: number;
+  memo: string;
+  order_status: string;
+  order_link: string;
+  order_provider_id: string;
+  created_at: string;
 }
 
+const paymentStatusBadge = (s: string) => {
+  const l = s.toLowerCase();
+  if (l === "paid")    return <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700"><CheckCircle className="w-3 h-3" />Paid</span>;
+  if (l === "pending") return <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700"><Clock className="w-3 h-3" />Pending</span>;
+  if (l === "failed")  return <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-600"><AlertCircle className="w-3 h-3" />Failed</span>;
+  return <span className="text-xs text-gray-400">{s || "—"}</span>;
+};
+
+const orderStatusBadge = (s: string) => {
+  if (!s) return <span className="text-xs text-gray-400">—</span>;
+  const l = s.toLowerCase();
+  const cls =
+    l === "completed"   ? "bg-green-100 text-green-700"   :
+    l === "pending" || l === "pending_payment" ? "bg-yellow-100 text-yellow-700" :
+    l === "processing" || l === "in progress"  ? "bg-blue-100 text-blue-700"    :
+    l === "cancelled"   ? "bg-red-100 text-red-600"        :
+    l === "failed" || l === "provider_error"   ? "bg-red-100 text-red-600"      :
+    "bg-gray-100 text-gray-500";
+  return <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${cls}`}>{s}</span>;
+};
+
+const methodBadge = (m: string) => {
+  const l = m.toLowerCase();
+  const cls =
+    l === "stripe"   ? "bg-indigo-100 text-indigo-700" :
+    l === "razorpay" ? "bg-blue-100 text-blue-700"     :
+    l === "manual"   ? "bg-teal-100 text-teal-700"     :
+    "bg-gray-100 text-gray-600";
+  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${cls}`}>{m || "—"}</span>;
+};
+
+const fmtDate = (d: string) =>
+  new Date(d).toLocaleString(undefined, {
+    month: "short", day: "numeric", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+
 const PaymentsPage = () => {
-  const [searchTerm, setSearchTerm] = useState("");
+  const [payments, setPayments] = useState<UserPayment[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState("");
+  const [search, setSearch]     = useState("");
+  const [expanded, setExpanded] = useState<string | null>(null);
 
-  // Mock payment data
-  const payments: Payment[] = [
-    {
-      id: "PAY-98765",
-      date: "Apr 10, 2025",
-      amount: 9.99,
-      method: "Credit Card",
-      status: "success",
-      invoiceUrl: "#invoice-123",
-    },
-    {
-      id: "PAY-98766",
-      date: "Apr 5, 2025",
-      amount: 14.99,
-      method: "PayPal",
-      status: "success",
-      invoiceUrl: "#invoice-124",
-    },
-    {
-      id: "PAY-98767",
-      date: "Apr 1, 2025",
-      amount: 12.99,
-      method: "Credit Card",
-      status: "success",
-      invoiceUrl: "#invoice-125",
-    },
-    {
-      id: "PAY-98768",
-      date: "Mar 25, 2025",
-      amount: 8.99,
-      method: "Crypto",
-      status: "failed",
-      invoiceUrl: "#invoice-126",
-    },
-    {
-      id: "PAY-98769",
-      date: "Mar 20, 2025",
-      amount: 5.49,
-      method: "Bank Transfer",
-      status: "pending",
-      invoiceUrl: "#invoice-127",
-    },
-  ];
+  useEffect(() => {
+    api.get<{ payments: UserPayment[]; total: number }>(
+      API_ENDPOINTS.USER_PAYMENTS,
+      { params: { page_size: 100 } },
+    )
+      .then(res => setPayments(res.data.payments ?? []))
+      .catch(() => setError("Failed to load payment history."))
+      .finally(() => setLoading(false));
+  }, []);
 
-  // Filter payments based on search term
-  const filteredPayments = payments.filter(
-    (payment) =>
-      payment.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      payment.method.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filtered = payments.filter(p => {
+    const q = search.toLowerCase();
+    return (
+      p.service_name.toLowerCase().includes(q) ||
+      p.method.toLowerCase().includes(q) ||
+      p.order_link.toLowerCase().includes(q) ||
+      String(p.display_id).includes(q)
+    );
+  });
 
-  // Helper function to display payment status badge
-  const getPaymentStatusBadge = (status: "success" | "pending" | "failed") => {
-    switch (status) {
-      case "success":
-        return (
-          <span className="px-2 py-1 inline-flex items-center text-xs font-medium rounded-full bg-green-100 text-green-800">
-            <CheckCircle className="w-3 h-3 mr-1" />
-            Success
-          </span>
-        );
-      case "pending":
-        return (
-          <span className="px-2 py-1 inline-flex items-center text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
-            <Clock className="w-3 h-3 mr-1" />
-            Pending
-          </span>
-        );
-      case "failed":
-        return (
-          <span className="px-2 py-1 inline-flex items-center text-xs font-medium rounded-full bg-red-100 text-red-800">
-            <AlertCircle className="w-3 h-3 mr-1" />
-            Failed
-          </span>
-        );
-      default:
-        return null;
-    }
-  };
+  if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-7 h-7 text-teal-500 animate-spin" /></div>;
+
   return (
-    <>
-      {/* Search and filters */}
-      <div className="p-4 md:p-6 border-b border-gray-100">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="relative flex-grow">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-5 w-5 text-gray-400" />
-            </div>
-            <input
-              type="text"
-              placeholder={`Search payments`}
-              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-        </div>
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold text-gray-800">Payment History</h2>
+
+      <div className="relative max-w-xs">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search payments…"
+          className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+        />
       </div>
-      <div className="p-4 md:p-6">
-        <div>
-          <div className="overflow-x-auto -mx-4 md:mx-0">
-            <div className="inline-block min-w-full align-middle">
-              <div className="overflow-hidden border border-gray-200 md:rounded-lg">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th
-                        scope="col"
-                        className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6"
-                      >
-                        Transaction ID
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6"
-                      >
-                        Date
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6"
-                      >
-                        Amount
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6 hidden sm:table-cell"
-                      >
-                        Method
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6"
-                      >
-                        Status
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6 hidden sm:table-cell"
-                      >
-                        Invoice
-                      </th>
+
+      {error ? (
+        <p className="text-center py-16 text-red-500 text-sm">{error}</p>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center py-20 gap-3 bg-white rounded-xl border border-gray-200">
+          <CreditCard className="w-10 h-10 text-gray-300" />
+          <p className="text-sm text-gray-400">{search ? "No payments match your search." : "No payment records yet."}</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">ID</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Service</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Amount</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">Via</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Payment</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">Order</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 hidden lg:table-cell">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(p => (
+                  <>
+                    <tr
+                      key={p.id}
+                      onClick={() => setExpanded(expanded === p.id ? null : p.id)}
+                      className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors"
+                    >
+                      <td className="px-4 py-3 font-mono text-xs text-gray-500">#{p.display_id}</td>
+                      <td className="px-4 py-3">
+                        <p className="text-xs font-medium text-gray-800 max-w-[140px] truncate">{p.service_name || p.memo || "—"}</p>
+                        <p className="text-xs text-gray-400">{p.quantity > 0 ? `${p.quantity.toLocaleString()} units` : ""}</p>
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-gray-900">${p.amount.toFixed(4)}</td>
+                      <td className="px-4 py-3 hidden sm:table-cell">{methodBadge(p.method)}</td>
+                      <td className="px-4 py-3">{paymentStatusBadge(p.status)}</td>
+                      <td className="px-4 py-3 hidden md:table-cell">{orderStatusBadge(p.order_status)}</td>
+                      <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell whitespace-nowrap">{fmtDate(p.created_at)}</td>
                     </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredPayments.length > 0 ? (
-                      filteredPayments.map((payment) => (
-                        <tr key={payment.id} className="hover:bg-gray-50">
-                          <td className="px-3 py-3 whitespace-nowrap text-xs md:text-sm font-medium text-gray-900 md:px-6">
-                            {payment.id}
-                          </td>
-                          <td className="px-3 py-3 whitespace-nowrap text-xs md:text-sm text-gray-800 md:px-6">
-                            {payment.date}
-                          </td>
-                          <td className="px-3 py-3 whitespace-nowrap text-xs md:text-sm text-gray-800 md:px-6">
-                            ${payment.amount.toFixed(2)}
-                          </td>
-                          <td className="px-3 py-3 whitespace-nowrap text-xs md:text-sm text-gray-800 hidden sm:table-cell md:px-6">
-                            {payment.method}
-                          </td>
-                          <td className="px-3 py-3 whitespace-nowrap md:px-6">
-                            {getPaymentStatusBadge(payment.status)}
-                          </td>
-                          <td className="px-3 py-3 whitespace-nowrap text-xs md:text-sm text-gray-500 hidden sm:table-cell md:px-6">
-                            <a
-                              href={payment.invoiceUrl}
-                              className="text-blue-600 hover:text-blue-800 font-medium inline-flex items-center"
-                            >
-                              <Download className="h-4 w-4 mr-1" />
-                              Invoice
-                            </a>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td
-                          colSpan={6}
-                          className="px-3 py-4 text-center text-gray-500 md:px-6"
-                        >
-                          No payment records matching your search criteria
+
+                    {/* Expanded order details row */}
+                    {expanded === p.id && (
+                      <tr key={`${p.id}-detail`} className="bg-teal-50 border-b border-teal-100">
+                        <td colSpan={7} className="px-6 py-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+                            <div>
+                              <p className="text-gray-400 mb-0.5">Order Status</p>
+                              {orderStatusBadge(p.order_status || "—")}
+                            </div>
+                            <div>
+                              <p className="text-gray-400 mb-0.5">Provider Order ID</p>
+                              <p className="font-mono text-gray-700">{p.order_provider_id || "—"}</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-400 mb-0.5">YouTube Link</p>
+                              {p.order_link ? (
+                                <a
+                                  href={p.order_link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-teal-600 hover:underline inline-flex items-center gap-1 max-w-[240px] truncate"
+                                  onClick={e => e.stopPropagation()}
+                                >
+                                  {p.order_link} <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                                </a>
+                              ) : "—"}
+                            </div>
+                          </div>
                         </td>
                       </tr>
                     )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          {/* Mobile-only invoice download button */}
-          <div className="mt-4 sm:hidden">
-            <h3 className="text-sm font-medium text-gray-500 mb-2">
-              Download Invoice:
-            </h3>
-            <div className="grid grid-cols-1 gap-2">
-              <button className="bg-blue-100 text-blue-700 py-2 px-4 rounded-md text-sm font-medium flex items-center justify-center">
-                <Download className="h-4 w-4 mr-1" />
-                Get Latest Invoice
-              </button>
-            </div>
+                  </>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
-      </div>
-    </>
+      )}
+    </div>
   );
 };
 

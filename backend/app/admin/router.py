@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from app.admin.orders.router import router as orders_router
+from app.admin.payments.router import router as payments_router
 from app.admin.provider_config.router import router as provider_config_router
 from app.admin.providers.router import router as providers_router
 from app.admin.services.router import router as services_router
@@ -12,6 +13,7 @@ from app.user_management.utils.dependencies import get_current_admin
 router = APIRouter()
 
 router.include_router(orders_router, prefix="/orders", tags=["Admin Orders"])
+router.include_router(payments_router, prefix="/payments", tags=["Admin Payments"])
 router.include_router(users_router, prefix="/users", tags=["Admin Users"])
 router.include_router(providers_router, prefix="/providers", tags=["Admin Providers"])
 router.include_router(services_router, prefix="/services", tags=["Admin Services"])

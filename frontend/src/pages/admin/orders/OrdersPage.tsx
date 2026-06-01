@@ -32,6 +32,8 @@ interface AdminOrder {
   start_count: string;
   remains: string;
   currency: string;
+  payment_method: string;
+  payment_status: string;
   created_at: string;
 }
 
@@ -455,6 +457,7 @@ const AdminOrdersPage: React.FC = () => {
                     'ID',
                     'User',
                     'Charge',
+                    'Payment',
                     'Link',
                     'Start Count',
                     'Current',
@@ -493,6 +496,24 @@ const AdminOrdersPage: React.FC = () => {
                     {/* Charge */}
                     <td className="px-4 py-3 whitespace-nowrap font-medium text-gray-800">
                       ${order.charge.toFixed(4)}
+                    </td>
+                    {/* Payment */}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {order.payment_method && order.payment_method !== "direct" ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-medium capitalize text-gray-700">{order.payment_method}</span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium w-fit ${
+                            order.payment_status === "paid"    ? "bg-green-100 text-green-700"   :
+                            order.payment_status === "pending" ? "bg-yellow-100 text-yellow-700" :
+                            order.payment_status === "failed"  ? "bg-red-100 text-red-600"       :
+                            "bg-gray-100 text-gray-500"
+                          }`}>
+                            {order.payment_status || "—"}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
                     </td>
                     {/* Link */}
                     <td className="px-4 py-3 max-w-52">
@@ -701,6 +722,24 @@ const AdminOrdersPage: React.FC = () => {
                   label="Charge"
                   value={`$${(detailLive ?? detailOrder).charge.toFixed(4)}`}
                 />
+                {(detailLive ?? detailOrder).payment_method && (detailLive ?? detailOrder).payment_method !== "direct" && (
+                  <>
+                    <DetailField
+                      label="Payment Method"
+                      value={(detailLive ?? detailOrder).payment_method}
+                    />
+                    <DetailField label="Payment Status">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        (detailLive ?? detailOrder).payment_status === "paid"    ? "bg-green-100 text-green-700"   :
+                        (detailLive ?? detailOrder).payment_status === "pending" ? "bg-yellow-100 text-yellow-700" :
+                        (detailLive ?? detailOrder).payment_status === "failed"  ? "bg-red-100 text-red-600"       :
+                        "bg-gray-100 text-gray-500"
+                      }`}>
+                        {(detailLive ?? detailOrder).payment_status || "—"}
+                      </span>
+                    </DetailField>
+                  </>
+                )}
                 <DetailField label="Currency" value={(detailLive ?? detailOrder).currency} />
                 <DetailField
                   label="Start Count"
