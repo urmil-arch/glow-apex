@@ -72,6 +72,14 @@ export const API_ENDPOINTS = {
   // User orders
   ORDERS: `${API_BASE_URL}/orders`,
   ORDERS_BY_CATEGORY: `${API_BASE_URL}/orders/by-category`,
+  ORDERS_STRIPE_INITIATE: `${API_BASE_URL}/orders/stripe/initiate`,
+
+  // User payments (separate collection)
+  USER_PAYMENTS: `${API_BASE_URL}/payments`,
+
+  // Razorpay
+  RAZORPAY_CREATE: `${API_BASE_URL}/payments/razorpay/create`,
+  RAZORPAY_VERIFY: `${API_BASE_URL}/payments/razorpay/verify`,
 
   // User tickets
   TICKETS: `${API_BASE_URL}/tickets`,

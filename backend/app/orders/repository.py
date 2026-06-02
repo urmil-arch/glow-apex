@@ -44,6 +44,26 @@ class OrderRepository:
             return
         await self._col.update_one({"_id": oid}, {"$set": updates})
 
+    async def find_by_stripe_session(self, session_id: str) -> dict | None:
+        """Find a pending order by its Stripe session ID."""
+        return await self._col.find_one({"stripe_session_id": session_id})
+
+    async def claim_for_payment(self, order_id: str) -> bool:
+        """
+        Atomically mark an order as paid only if it is still pending.
+        Returns True if this call won the race (order was pending and is now paid).
+        Returns False if another process already claimed it.
+        """
+        try:
+            oid = ObjectId(order_id)
+        except Exception:
+            return False
+        result = await self._col.update_one(
+            {"_id": oid, "payment_status": "pending"},
+            {"$set": {"payment_status": "paid"}},
+        )
+        return result.modified_count == 1
+
     async def find_by_id_admin(self, order_id: str) -> dict | None:
         """Return a single order regardless of user. Admin use only."""
         try:

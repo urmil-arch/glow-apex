@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     STRIPE_PUBLISHABLE_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
 
+    # Razorpay
+    RAZORPAY_KEY_ID: str = ""
+    RAZORPAY_KEY_SECRET: str = ""
+
     # Cryptomus
     CRYPTOMUS_MERCHANT_ID: str = ""
     CRYPTOMUS_API_KEY: str = ""

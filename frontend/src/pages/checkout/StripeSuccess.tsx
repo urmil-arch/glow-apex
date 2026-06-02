@@ -4,6 +4,7 @@ import { CheckCircle, Loader, XCircle, AlertTriangle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config';
 import { useAuth } from '@/context/AuthContext';
+import { useOrderStore } from '@/store/useOrderStore';
 
 interface PaymentVerificationResult {
   order_id: string;
@@ -18,6 +19,7 @@ interface PaymentVerificationResult {
 
 const StripeSuccess: React.FC = () => {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { clearServiceOrder, clearCategoryOrder } = useOrderStore();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   if (!authLoading && !isAuthenticated) return <Navigate to="/sign-in" replace />;
@@ -26,6 +28,12 @@ const StripeSuccess: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const sessionId = searchParams.get('session_id');
+
+  // Clear the order store now that payment is complete
+  useEffect(() => {
+    clearServiceOrder();
+    clearCategoryOrder();
+  }, []);
 
   useEffect(() => {
     if (sessionId) {

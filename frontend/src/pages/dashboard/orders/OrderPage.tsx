@@ -97,6 +97,26 @@ function StatusModal({ order, onClose, onRefresh }: StatusModalProps) {
             <span className="text-gray-500">Charge</span>
             <span className="text-gray-700">${localOrder.charge.toFixed(4)} {localOrder.currency}</span>
           </div>
+          {localOrder.payment_method && localOrder.payment_method !== "direct" && (
+            <>
+              <div className="border-t border-gray-100 my-1" />
+              <div className="flex justify-between">
+                <span className="text-gray-500">Payment Via</span>
+                <span className="capitalize font-medium text-gray-800">{localOrder.payment_method}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Payment Status</span>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                  localOrder.payment_status === "paid"    ? "bg-green-100 text-green-700"  :
+                  localOrder.payment_status === "pending" ? "bg-yellow-100 text-yellow-700" :
+                  localOrder.payment_status === "failed"  ? "bg-red-100 text-red-600"      :
+                  "bg-gray-100 text-gray-500"
+                }`}>
+                  {localOrder.payment_status || "—"}
+                </span>
+              </div>
+            </>
+          )}
         </div>
 
         {refillId && (

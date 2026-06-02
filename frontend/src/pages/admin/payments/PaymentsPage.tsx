@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Search, Download, Plus, Trash2, Loader2,
-  CreditCard, AlertCircle, X, Check,
+  CreditCard, AlertCircle, X, Check, ExternalLink,
 } from 'lucide-react';
 import axios from 'axios';
 import { api } from '@/lib/api';
@@ -21,6 +21,9 @@ interface Payment {
   type: 'credit' | 'debit';
   status: string;
   memo: string;
+  order_status: string;
+  order_link: string;
+  order_provider_id: string;
   created_at: string;
 }
 
@@ -449,7 +452,9 @@ const AdminPaymentsPage = () => {
                     <th className="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">Balance</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600">Amount</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">Method</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">Pay Status</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">Order Status</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 hidden xl:table-cell">Link</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 hidden lg:table-cell">Memo</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 hidden lg:table-cell">Created</th>
                     <th className="px-4 py-3" />
@@ -482,6 +487,33 @@ const AdminPaymentsPage = () => {
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusCls(p.status)}`}>
                             {p.status}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 hidden md:table-cell">
+                          {p.order_status ? (
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                              p.order_status.toLowerCase() === 'completed'                   ? 'bg-green-100 text-green-700'   :
+                              p.order_status.toLowerCase().includes('pending')               ? 'bg-yellow-100 text-yellow-700' :
+                              p.order_status.toLowerCase().includes('process')               ? 'bg-blue-100 text-blue-700'    :
+                              p.order_status.toLowerCase().includes('fail') ||
+                              p.order_status.toLowerCase().includes('error') ||
+                              p.order_status.toLowerCase() === 'cancelled'                   ? 'bg-red-100 text-red-600'       :
+                              'bg-gray-100 text-gray-500'
+                            }`}>
+                              {p.order_status}
+                            </span>
+                          ) : <span className="text-xs text-gray-400">—</span>}
+                        </td>
+                        <td className="px-4 py-3 hidden xl:table-cell max-w-[180px]">
+                          {p.order_link ? (
+                            <a
+                              href={p.order_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-teal-600 hover:underline text-xs inline-flex items-center gap-1 max-w-[160px] truncate"
+                            >
+                              {p.order_link} <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                            </a>
+                          ) : <span className="text-xs text-gray-400">—</span>}
                         </td>
                         <td className="px-4 py-3 text-xs text-gray-500 hidden lg:table-cell max-w-[180px] truncate">
                           {p.memo || '—'}
