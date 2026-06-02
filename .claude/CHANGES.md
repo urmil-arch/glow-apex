@@ -325,3 +325,5 @@
 [2026-05-30 12:00] | modify | backend/app/payments/stripe/router.py | Webhook updates PaymentLedgerRepository instead of order document. Expired sessions also update payment record to failed.
 [2026-05-30 12:00] | modify | backend/app/main.py, backend/app/app_components.py, backend/app/admin/router.py | Registered user_payments_router at /payments and admin payments router at /admin/payments. Added PaymentLedgerRepository.create_indexes() to lifespan.
 [2026-05-30 12:00] | modify | frontend/src/pages/dashboard/payments/PaymentsPage.tsx, frontend/src/config.ts | User payments page now fetches from GET /payments (dedicated endpoint). Added USER_PAYMENTS constant.
+
+[2026-06-02 00:00] | modify | backend/app/user_management/utils/otp.py | Added SMTP debug prints (SMTP_HOST, SMTP_PORT, SMTP_USER) and try/except around aiosmtplib.send() to expose SMTP errors in Render logs. Added timeout=30 to the send call. Temporary — remove once root cause is identified.

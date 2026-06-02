@@ -52,11 +52,21 @@ def _build_otp_email(to_email: str, full_name: str, otp: str) -> MIMEMultipart:
 async def send_otp_email(to_email: str, full_name: str, otp: str) -> None:
     """Send OTP verification email via Gmail SMTP (TLS on port 587)."""
     msg = _build_otp_email(to_email, full_name, otp)
-    await aiosmtplib.send(
-        msg,
-        hostname=settings.SMTP_HOST,
-        port=settings.SMTP_PORT,
-        username=settings.SMTP_USER,
-        password=settings.SMTP_PASSWORD,
-        start_tls=True,
-    )
+
+    print("SMTP_HOST:", settings.SMTP_HOST)
+    print("SMTP_PORT:", settings.SMTP_PORT)
+    print("SMTP_USER:", settings.SMTP_USER)
+
+    try:
+        await aiosmtplib.send(
+            msg,
+            hostname=settings.SMTP_HOST,
+            port=settings.SMTP_PORT,
+            username=settings.SMTP_USER,
+            password=settings.SMTP_PASSWORD,
+            start_tls=True,
+            timeout=30,
+        )
+    except Exception as e:
+        print("SMTP ERROR:", repr(e))
+        raise
