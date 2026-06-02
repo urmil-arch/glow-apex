@@ -1,36 +1,24 @@
 import asyncio
 import html as html_lib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
-import aiosmtplib
+import resend
 
 from app.common.config import settings
 
 
-def _build_owner_notification(
+def _build_owner_notification_html(
     name: str,
     email: str,
     subject: str,
     message: str,
     contact_type: str,
-) -> MIMEMultipart:
-    """Build the HTML notification email sent to the site owner."""
+) -> str:
     type_label = "Customer Support" if contact_type == "support" else "Business Inquiry"
-    owner_to = settings.CONTACT_OWNER_EMAIL or settings.SMTP_FROM
-
     safe_name = html_lib.escape(name)
     safe_email = html_lib.escape(email)
     safe_subject = html_lib.escape(subject)
     safe_message = html_lib.escape(message)
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"[BuyRealViews] {type_label} from {safe_name}: {safe_subject}"
-    msg["From"] = settings.SMTP_FROM
-    msg["To"] = owner_to
-    msg["Reply-To"] = email
-
-    html = f"""
+    return f"""
     <html>
       <body style="font-family: sans-serif; background: #f9fafb; padding: 32px;">
         <div style="max-width: 560px; margin: 0 auto; background: white; border-radius: 12px;
@@ -74,21 +62,12 @@ def _build_owner_notification(
       </body>
     </html>
     """
-    msg.attach(MIMEText(html, "html"))
-    return msg
 
 
-def _build_user_confirmation(name: str, subject: str, to_email: str) -> MIMEMultipart:
-    """Build the HTML confirmation email sent back to the user."""
+def _build_user_confirmation_html(name: str, subject: str) -> str:
     safe_name = html_lib.escape(name)
     safe_subject = html_lib.escape(subject)
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = "We received your message — BuyRealViews"
-    msg["From"] = settings.SMTP_FROM
-    msg["To"] = to_email
-
-    html = f"""
+    return f"""
     <html>
       <body style="font-family: sans-serif; background: #f9fafb; padding: 32px;">
         <div style="max-width: 480px; margin: 0 auto; background: white; border-radius: 12px;
@@ -115,20 +94,6 @@ def _build_user_confirmation(name: str, subject: str, to_email: str) -> MIMEMult
       </body>
     </html>
     """
-    msg.attach(MIMEText(html, "html"))
-    return msg
-
-
-async def _send(msg: MIMEMultipart) -> None:
-    """Send a single email via the configured SMTP server."""
-    await aiosmtplib.send(
-        msg,
-        hostname=settings.SMTP_HOST,
-        port=settings.SMTP_PORT,
-        username=settings.SMTP_USER,
-        password=settings.SMTP_PASSWORD,
-        start_tls=True,
-    )
 
 
 async def send_contact_emails(
@@ -138,7 +103,31 @@ async def send_contact_emails(
     message: str,
     contact_type: str,
 ) -> None:
-    """Send the owner notification and user confirmation emails in parallel."""
-    owner_msg = _build_owner_notification(name, email, subject, message, contact_type)
-    user_msg = _build_user_confirmation(name, subject, email)
-    await asyncio.gather(_send(owner_msg), _send(user_msg))
+    """Send the owner notification and user confirmation emails in parallel via Resend."""
+    resend.api_key = settings.RESEND_API_KEY
+    owner_to = settings.CONTACT_OWNER_EMAIL or settings.RESEND_FROM
+
+    owner_params: resend.Emails.SendParams = {
+        "from": settings.RESEND_FROM,
+        "to": [owner_to],
+        "reply_to": email,
+        "subject": f"[Glow-Apex] {'Customer Support' if contact_type == 'support' else 'Business Inquiry'} from {html_lib.escape(name)}: {html_lib.escape(subject)}",
+        "html": _build_owner_notification_html(name, email, subject, message, contact_type),
+    }
+    user_params: resend.Emails.SendParams = {
+        "from": settings.RESEND_FROM,
+        "to": [email],
+        "subject": "We received your message — Glow-Apex",
+        "html": _build_user_confirmation_html(name, subject),
+    }
+    await asyncio.gather(
+        asyncio.to_thread(resend.Emails.send, owner_params),
+        asyncio.to_thread(resend.Emails.send, user_params),
+    )
+
+
+# --- SMTP alternative (aiosmtplib) — see git history or otp.py comments for the original
+#     _build_owner_notification / _build_user_confirmation / _send implementations.
+#     To switch back: restore aiosmtplib import, restore MIMEMultipart builders,
+#     replace asyncio.gather calls with the original _send() pattern,
+#     and restore aiosmtplib in requirements.txt.

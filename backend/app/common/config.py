@@ -37,13 +37,17 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 1440  # 24 hours
 
-    # SMTP (Gmail)
+    # Resend (primary email provider)
+    RESEND_API_KEY: str = ""
+    RESEND_FROM: str = ""           # Must be a verified sender in Resend dashboard
+    CONTACT_OWNER_EMAIL: str = ""   # Receives contact form submissions; falls back to RESEND_FROM
+
+    # SMTP (Gmail) — kept for future fallback; not active while Resend is in use
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = ""
-    CONTACT_OWNER_EMAIL: str = ""  # Receives contact form submissions; falls back to SMTP_FROM
 
     # Provider API key encryption — 64 hex chars (32 bytes). Generate with:
     # python -c "import secrets; print(secrets.token_hex(32))"

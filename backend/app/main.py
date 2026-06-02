@@ -66,12 +66,3 @@ app.add_middleware(
 )
 
 include_routers(app)
-
-
-@app.get("/smtp-test")
-def smtp_test() -> dict:
-    try:
-        socket.create_connection(("smtp.gmail.com", 587), timeout=10)
-        return {"status": "connected"}
-    except Exception as e:
-        return {"error": str(e)}
