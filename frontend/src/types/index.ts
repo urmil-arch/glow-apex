@@ -65,6 +65,7 @@ export interface UserOrder {
   id: string;
   service_id: string;
   service_name: string;
+  category_name: string;
   provider_order_id: string;
   link: string;
   quantity: number;

@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Ticket, Loader2, ChevronRight, X } from 'lucide-react';
-import axios from 'axios';
+import { Plus, Ticket, Loader2, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config';
+import RaiseTicketModal from '@/components/common/RaiseTicketModal';
 
 interface TicketSummary {
   id: string;
@@ -37,27 +37,12 @@ const TYPE_LABEL: Record<string, string> = {
   other: 'Other',
 };
 
-interface NewTicketForm {
-  type: 'order_related' | 'payment_related' | 'other';
-  subject: string;
-  message: string;
-  order_id: string;
-}
-
 const TicketsPage: React.FC = () => {
   const navigate = useNavigate();
   const [tickets, setTickets] = useState<TicketSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState<NewTicketForm>({
-    type: 'order_related',
-    subject: '',
-    message: '',
-    order_id: '',
-  });
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState('');
 
   const fetchTickets = async () => {
     setIsLoading(true);
@@ -75,26 +60,6 @@ const TicketsPage: React.FC = () => {
   useEffect(() => {
     fetchTickets();
   }, []);
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    setSubmitError('');
-    try {
-      await api.post(API_ENDPOINTS.TICKETS, form);
-      setShowModal(false);
-      setForm({ type: 'order_related', subject: '', message: '', order_id: '' });
-      fetchTickets();
-    } catch (err: unknown) {
-      if (axios.isAxiosError(err)) {
-        setSubmitError(err.response?.data?.detail ?? 'Failed to create ticket.');
-      } else {
-        setSubmitError('Failed to create ticket.');
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const lastMessage = (t: TicketSummary) => t.messages[t.messages.length - 1];
 
@@ -174,95 +139,11 @@ const TicketsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Create Ticket Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h3 className="font-semibold text-gray-900">New Support Ticket</h3>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleCreate} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
-                <select
-                  value={form.type}
-                  onChange={(e) => setForm({ ...form, type: e.target.value as NewTicketForm['type'] })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                >
-                  <option value="order_related">Order Related</option>
-                  <option value="payment_related">Payment Related</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-
-              {(form.type === 'order_related' || form.type === 'payment_related') && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Order ID <span className="text-gray-400 font-normal">(optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={form.order_id}
-                    onChange={(e) => setForm({ ...form, order_id: e.target.value })}
-                    placeholder="Paste your order ID"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
-                <input
-                  type="text"
-                  required
-                  value={form.subject}
-                  onChange={(e) => setForm({ ...form, subject: e.target.value })}
-                  placeholder="Brief summary of your issue"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
-                <textarea
-                  required
-                  rows={4}
-                  value={form.message}
-                  onChange={(e) => setForm({ ...form, message: e.target.value })}
-                  placeholder="Describe your issue in detail"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 resize-none"
-                />
-              </div>
-
-              {submitError && (
-                <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
-                  {submitError}
-                </div>
-              )}
-
-              <div className="flex gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 border border-gray-300 text-gray-700 rounded-lg py-2 text-sm font-medium hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="flex-1 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-400 text-white rounded-lg py-2 text-sm font-medium transition-colors flex items-center justify-center gap-2"
-                >
-                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  {submitting ? 'Submitting…' : 'Submit Ticket'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <RaiseTicketModal
+          onClose={() => setShowModal(false)}
+          onSuccess={fetchTickets}
+        />
       )}
     </div>
   );

@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
+  Send,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config';
@@ -23,6 +24,7 @@ interface AdminOrder {
   user_username: string;
   service_id: string;
   service_name: string;
+  category_name: string;
   provider_id: string;
   provider_order_id: string;
   link: string;
@@ -50,6 +52,21 @@ interface ServiceOption {
   category_name: string;
 }
 
+interface ProviderOption {
+  id: string;
+  name: string;
+  url: string;
+}
+
+interface ProviderService {
+  service: string;
+  name: string;
+  rate: string;
+  min: string;
+  max: string;
+  type: string;
+}
+
 interface MenuPosition {
   buttonTop: number;
   buttonBottom: number;
@@ -61,52 +78,55 @@ interface MenuPosition {
 
 const PAGE_SIZE = 50;
 
-const STATUS_OPTIONS = [
-  'Pending',
-  'Processing',
-  'In progress',
-  'Completed',
-  'Cancelled',
-  'Refunded',
-  'Partial',
-  'Failed',
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: 'pending_payment', label: 'Payment Pending' },
+  { value: 'Pending',         label: 'Pending' },
+  { value: 'In progress',     label: 'In Progress' },
+  { value: 'Processing',      label: 'Processing' },
+  { value: 'Completed',       label: 'Completed' },
+  { value: 'Cancelled',       label: 'Cancelled' },
+  { value: 'Refunded',        label: 'Refunded' },
+  { value: 'Partial',         label: 'Partial' },
+  { value: 'Failed',          label: 'Error: Payment Failed' },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-const getStatusClass = (s: string): string => {
-  const lower = s.toLowerCase();
-  if (lower === 'completed') return 'bg-green-100 text-green-700';
-  if (lower === 'pending') return 'bg-yellow-100 text-yellow-700';
-  if (lower === 'processing' || lower === 'in progress') return 'bg-blue-100 text-blue-700';
-  if (lower === 'cancelled') return 'bg-red-100 text-red-700';
-  if (lower === 'refunded') return 'bg-purple-100 text-purple-700';
-  if (lower === 'partial') return 'bg-orange-100 text-orange-700';
-  if (lower === 'failed') return 'bg-red-100 text-red-700';
-  return 'bg-gray-100 text-gray-700';
-};
+function mapAdminStatus(raw: string, paymentStatus?: string): { label: string; cls: string } {
+  const s = (raw ?? '').toLowerCase().replace(/_/g, ' ');
+  if (s === 'pending payment') return { label: 'Payment Pending',          cls: 'bg-amber-100 text-amber-700' };
+  if (s === 'pending')         return { label: 'Pending',                  cls: 'bg-yellow-100 text-yellow-700' };
+  if (s === 'in progress' || s === 'inprogress' || s === 'processing')
+                               return { label: 'In Progress',              cls: 'bg-blue-100 text-blue-700' };
+  if (s === 'completed')       return { label: 'Completed',                cls: 'bg-green-100 text-green-700' };
+  if (s === 'cancelled')       return { label: 'Cancelled',                cls: 'bg-red-100 text-red-700' };
+  if (s === 'refunded')        return { label: 'Refunded',                 cls: 'bg-purple-100 text-purple-700' };
+  if (s === 'partial')         return { label: 'Partial',                  cls: 'bg-orange-100 text-orange-700' };
+  if (s === 'failed') {
+    const detail = paymentStatus === 'failed' ? 'Payment Failed' : 'Order Failed';
+    return { label: `Error: ${detail}`, cls: 'bg-red-100 text-red-700' };
+  }
+  if (s === 'provider error')  return { label: 'Error: Provider Unavailable', cls: 'bg-red-100 text-red-700' };
+  if (s.includes('error'))     return { label: `Error: ${raw}`,            cls: 'bg-red-100 text-red-700' };
+  return                              { label: raw || '—',                 cls: 'bg-gray-100 text-gray-700' };
+}
 
 const computeCurrent = (order: AdminOrder): string => {
   const sc = parseInt(order.start_count, 10);
   const rem = parseInt(order.remains, 10);
-  if (!isNaN(sc) && !isNaN(rem)) {
-    return (sc + (order.quantity - rem)).toLocaleString();
-  }
+  if (!isNaN(sc) && !isNaN(rem)) return (sc + (order.quantity - rem)).toLocaleString();
   return '—';
 };
 
+const toUtc = (d: string) => d && !d.endsWith('Z') && !d.includes('+') ? `${d}Z` : d;
+
 const formatDate = (iso: string): string => {
   try {
-    return new Date(iso).toLocaleString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+    return new Date(toUtc(iso)).toLocaleString(undefined, {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
     });
-  } catch {
-    return iso;
-  }
+  } catch { return iso; }
 };
 
 const shortId = (id: string): string => `#${id.slice(-8).toUpperCase()}`;
@@ -128,17 +148,10 @@ interface ModalProps {
 const Modal: React.FC<ModalProps> = ({ title, onClose, children, wide }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
     <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-    <div
-      className={`relative bg-white rounded-xl shadow-xl w-full ${
-        wide ? 'max-w-2xl' : 'max-w-md'
-      } p-6 max-h-[90vh] overflow-y-auto`}
-    >
+    <div className={`relative bg-white rounded-xl shadow-xl w-full ${wide ? 'max-w-2xl' : 'max-w-md'} p-6 max-h-[90vh] overflow-y-auto`}>
       <div className="flex items-center justify-between mb-5">
         <h3 className="font-semibold text-gray-900">{title}</h3>
-        <button
-          onClick={onClose}
-          className="text-gray-400 hover:text-gray-600 transition-colors"
-        >
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
           <X className="h-5 w-5" />
         </button>
       </div>
@@ -158,13 +171,10 @@ const ActionMenuItem: React.FC<ActionMenuItemProps> = ({ onClick, label, icon, d
   <button
     onClick={onClick}
     className={`flex items-center gap-2 w-full px-4 py-2 text-sm text-left transition-colors ${
-      danger
-        ? 'text-red-600 hover:bg-red-50'
-        : 'text-gray-700 hover:bg-gray-50'
+      danger ? 'text-red-600 hover:bg-red-50' : 'text-gray-700 hover:bg-gray-50'
     }`}
   >
-    {icon}
-    {label}
+    {icon}{label}
   </button>
 );
 
@@ -179,9 +189,7 @@ const DetailField: React.FC<DetailFieldProps> = ({ label, value, mono, children 
   <div>
     <p className="text-xs text-gray-400 mb-0.5">{label}</p>
     {children ?? (
-      <p className={`text-sm text-gray-800 break-all ${mono ? 'font-mono' : ''}`}>
-        {value ?? '—'}
-      </p>
+      <p className={`text-sm text-gray-800 break-all ${mono ? 'font-mono' : ''}`}>{value ?? '—'}</p>
     )}
   </div>
 );
@@ -195,11 +203,7 @@ interface SaveButtonProps {
 }
 
 const SaveButton: React.FC<SaveButtonProps> = ({
-  loading,
-  onClick,
-  disabled,
-  label = 'Save',
-  color = 'bg-teal-600 hover:bg-teal-700',
+  loading, onClick, disabled, label = 'Save', color = 'bg-teal-600 hover:bg-teal-700',
 }) => (
   <button
     onClick={onClick}
@@ -225,41 +229,42 @@ const AdminOrdersPage: React.FC = () => {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
 
-  // ── Modal state ──────────────────────────────────────────────────────────
+  // ── Standard modal state ──────────────────────────────────────────────────
   const [detailOrder, setDetailOrder] = useState<AdminOrder | null>(null);
   const [detailLive, setDetailLive] = useState<AdminOrder | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-
   const [editLinkOrder, setEditLinkOrder] = useState<AdminOrder | null>(null);
   const [editLinkValue, setEditLinkValue] = useState('');
-
   const [editServiceOrder, setEditServiceOrder] = useState<AdminOrder | null>(null);
   const [adminServices, setAdminServices] = useState<ServiceOption[]>([]);
   const [selectedServiceId, setSelectedServiceId] = useState('');
-
   const [startCountOrder, setStartCountOrder] = useState<AdminOrder | null>(null);
   const [startCountValue, setStartCountValue] = useState('');
-
   const [remainsOrder, setRemainsOrder] = useState<AdminOrder | null>(null);
   const [remainsValue, setRemainsValue] = useState('');
-
   const [partialOrder, setPartialOrder] = useState<AdminOrder | null>(null);
   const [partialValue, setPartialValue] = useState('');
-
   const [statusOrder, setStatusOrder] = useState<AdminOrder | null>(null);
   const [statusValue, setStatusValue] = useState('');
-
   const [cancelOrder, setCancelOrder] = useState<AdminOrder | null>(null);
-
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
 
+  // ── Custom Resend modal state ─────────────────────────────────────────────
+  const [resendOrder, setResendOrder] = useState<AdminOrder | null>(null);
+  const [resendProviders, setResendProviders] = useState<ProviderOption[]>([]);
+  const [resendProviderId, setResendProviderId] = useState('');
+  const [resendProviderServices, setResendProviderServices] = useState<ProviderService[]>([]);
+  const [resendServiceId, setResendServiceId] = useState('');
+  const [resendQuantity, setResendQuantity] = useState('');
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendServicesLoading, setResendServicesLoading] = useState(false);
+  const [resendServiceSearch, setResendServiceSearch] = useState('');
+  const [resendError, setResendError] = useState('');
+
   // ── Debounce search ──────────────────────────────────────────────────────
   useEffect(() => {
-    const t = setTimeout(() => {
-      setDebouncedSearch(search);
-      setPage(1);
-    }, 400);
+    const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 400);
     return () => clearTimeout(t);
   }, [search]);
 
@@ -268,41 +273,27 @@ const AdminOrdersPage: React.FC = () => {
     let cancelled = false;
     setLoading(true);
     setLoadError('');
-
     (async () => {
       try {
         const params = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
         if (statusFilter) params.set('status', statusFilter);
         if (debouncedSearch) params.set('search', debouncedSearch);
-        const res = await api.get<AdminOrderListResponse>(
-          `${API_ENDPOINTS.ADMIN_ORDERS}?${params}`,
-        );
-        if (!cancelled) {
-          setOrders(res.data.orders);
-          setTotal(res.data.total);
-        }
+        const res = await api.get<AdminOrderListResponse>(`${API_ENDPOINTS.ADMIN_ORDERS}?${params}`);
+        if (!cancelled) { setOrders(res.data.orders); setTotal(res.data.total); }
       } catch {
         if (!cancelled) setLoadError('Failed to load orders.');
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [page, statusFilter, debouncedSearch, refetch]);
 
   const triggerRefetch = () => setRefetch((r) => r + 1);
-
   const closeMenu = () => { setOpenMenuId(null); setMenuPosition(null); };
 
-  // ── Action helpers ────────────────────────────────────────────────────────
-  const handlePatch = async (
-    url: string,
-    body: Record<string, unknown>,
-    onSuccess: () => void,
-  ) => {
+  // ── Standard action helpers ───────────────────────────────────────────────
+  const handlePatch = async (url: string, body: Record<string, unknown>, onSuccess: () => void) => {
     setActionLoading(true);
     setActionError('');
     try {
@@ -330,7 +321,7 @@ const AdminOrdersPage: React.FC = () => {
     }
   };
 
-  // ── Open detail modal ─────────────────────────────────────────────────────
+  // ── Detail modal ──────────────────────────────────────────────────────────
   const openDetail = async (order: AdminOrder) => {
     setDetailOrder(order);
     setDetailLive(null);
@@ -358,22 +349,71 @@ const AdminOrdersPage: React.FC = () => {
     }
   };
 
-  // ── Open edit-service modal ───────────────────────────────────────────────
+  // ── Edit service modal ────────────────────────────────────────────────────
   const openEditService = async (order: AdminOrder) => {
     setEditServiceOrder(order);
     setSelectedServiceId(order.service_id);
     setActionError('');
     if (adminServices.length === 0) {
       try {
-        const res = await api.get<{ id: string; name: string; category_name: string }[]>(
-          API_ENDPOINTS.ADMIN_SERVICES,
-        );
-        setAdminServices(
-          res.data.map((s) => ({ id: s.id, name: s.name, category_name: s.category_name })),
-        );
-      } catch {
-        // leave empty
-      }
+        const res = await api.get<{ id: string; name: string; category_name: string }[]>(API_ENDPOINTS.ADMIN_SERVICES);
+        setAdminServices(res.data.map((s) => ({ id: s.id, name: s.name, category_name: s.category_name })));
+      } catch { /* leave empty */ }
+    }
+  };
+
+  // ── Custom Resend helpers ─────────────────────────────────────────────────
+  const openResend = async (order: AdminOrder) => {
+    setResendOrder(order);
+    setResendProviderId('');
+    setResendProviderServices([]);
+    setResendServiceId('');
+    setResendServiceSearch('');
+    setResendQuantity(String(order.quantity));
+    setResendError('');
+    try {
+      const res = await api.get<ProviderOption[] | { providers: ProviderOption[] }>(API_ENDPOINTS.ADMIN_PROVIDERS);
+      const list = Array.isArray(res.data) ? res.data : (res.data as { providers: ProviderOption[] }).providers ?? [];
+      setResendProviders(list);
+    } catch {
+      setResendError('Failed to load providers.');
+    }
+  };
+
+  const handleResendProviderChange = async (providerId: string) => {
+    setResendProviderId(providerId);
+    setResendServiceId('');
+    setResendProviderServices([]);
+    setResendServiceSearch('');
+    if (!providerId) return;
+    setResendServicesLoading(true);
+    setResendError('');
+    try {
+      const res = await api.get<ProviderService[]>(`${API_ENDPOINTS.ADMIN_PROVIDERS}/${providerId}/services`);
+      setResendProviderServices(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      setResendError('Failed to load services for this provider.');
+    } finally {
+      setResendServicesLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!resendOrder || !resendProviderId || !resendServiceId || !resendQuantity) return;
+    setResendLoading(true);
+    setResendError('');
+    try {
+      await api.post(`${API_ENDPOINTS.ADMIN_ORDERS}/${resendOrder.id}/resend`, {
+        provider_id: resendProviderId,
+        provider_service_id: resendServiceId,
+        quantity: parseInt(resendQuantity, 10),
+      });
+      setResendOrder(null);
+      triggerRefetch();
+    } catch (err) {
+      setResendError(extractDetail(err));
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -418,17 +458,12 @@ const AdminOrdersPage: React.FC = () => {
         </div>
         <select
           value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value);
-            setPage(1);
-          }}
+          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
           className="text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
         >
           <option value="">All statuses</option>
           {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
+            <option key={s.value} value={s.value}>{s.label}</option>
           ))}
         </select>
       </div>
@@ -453,140 +488,80 @@ const AdminOrdersPage: React.FC = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  {[
-                    'ID',
-                    'User',
-                    'Charge',
-                    'Payment',
-                    'Link',
-                    'Start Count',
-                    'Current',
-                    'Qty',
-                    'Service',
-                    'Status',
-                    'Remains',
-                    'Created',
-                    'Actions',
-                  ].map((h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap"
-                    >
+                  {['ID','User','Charge','Payment','Link','Start Count','Current','Qty','Service','Status','Remains','Created','Actions'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {orders.map((order) => (
-                  <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                    {/* ID */}
-                    <td className="px-4 py-3 font-mono text-xs text-gray-600 whitespace-nowrap">
-                      {shortId(order.id)}
-                    </td>
-                    {/* User */}
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <p className="text-xs font-medium text-gray-800 max-w-36 truncate">
-                        {order.user_email || order.user_id}
-                      </p>
-                      {order.user_username && (
-                        <p className="text-xs text-gray-400">@{order.user_username}</p>
-                      )}
-                    </td>
-                    {/* Charge */}
-                    <td className="px-4 py-3 whitespace-nowrap font-medium text-gray-800">
-                      ${order.charge.toFixed(4)}
-                    </td>
-                    {/* Payment */}
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {order.payment_method && order.payment_method !== "direct" ? (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-xs font-medium capitalize text-gray-700">{order.payment_method}</span>
-                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium w-fit ${
-                            order.payment_status === "paid"    ? "bg-green-100 text-green-700"   :
-                            order.payment_status === "pending" ? "bg-yellow-100 text-yellow-700" :
-                            order.payment_status === "failed"  ? "bg-red-100 text-red-600"       :
-                            "bg-gray-100 text-gray-500"
-                          }`}>
-                            {order.payment_status || "—"}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
-                    {/* Link */}
-                    <td className="px-4 py-3 max-w-52">
-                      <a
-                        href={order.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title={order.link}
-                        className="text-teal-600 hover:underline text-xs block truncate"
-                      >
-                        {order.link}
-                      </a>
-                    </td>
-                    {/* Start Count */}
-                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                      {order.start_count || '—'}
-                    </td>
-                    {/* Current */}
-                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                      {computeCurrent(order)}
-                    </td>
-                    {/* Quantity */}
-                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                      {order.quantity.toLocaleString()}
-                    </td>
-                    {/* Service */}
-                    <td className="px-4 py-3 max-w-40">
-                      <span
-                        className="text-xs text-gray-700 block truncate"
-                        title={order.service_name}
-                      >
-                        {order.service_name || '—'}
-                      </span>
-                    </td>
-                    {/* Status */}
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusClass(order.status)}`}
-                      >
-                        {order.status}
-                      </span>
-                    </td>
-                    {/* Remains */}
-                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                      {order.remains || '—'}
-                    </td>
-                    {/* Created */}
-                    <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
-                      {formatDate(order.created_at)}
-                    </td>
-                    {/* Actions */}
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (openMenuId === order.id) { closeMenu(); return; }
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          const openUpward = window.innerHeight - rect.bottom < 320;
-                          setMenuPosition({
-                            buttonTop: rect.top,
-                            buttonBottom: rect.bottom,
-                            right: window.innerWidth - rect.right,
-                            openUpward,
-                          });
-                          setOpenMenuId(order.id);
-                        }}
-                        className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                      >
-                        <MoreVertical className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {orders.map((order) => {
+                  const { label: statusLabel, cls: statusCls } = mapAdminStatus(order.status, order.payment_status);
+                  return (
+                    <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3 font-mono text-xs text-gray-600 whitespace-nowrap">{shortId(order.id)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <p className="text-xs font-medium text-gray-800 max-w-36 truncate">{order.user_email || order.user_id}</p>
+                        {order.user_username && <p className="text-xs text-gray-400">@{order.user_username}</p>}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap font-medium text-gray-800">${order.charge.toFixed(4)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {order.payment_method && order.payment_method !== 'direct' ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs font-medium capitalize text-gray-700">{order.payment_method}</span>
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium w-fit ${
+                              order.payment_status === 'paid'    ? 'bg-green-100 text-green-700'   :
+                              order.payment_status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                              order.payment_status === 'failed'  ? 'bg-red-100 text-red-600'       :
+                              'bg-gray-100 text-gray-500'
+                            }`}>
+                              {order.payment_status || '—'}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 max-w-52">
+                        <a href={order.link} target="_blank" rel="noopener noreferrer" title={order.link}
+                          className="text-teal-600 hover:underline text-xs block truncate">
+                          {order.link}
+                        </a>
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{order.start_count || '—'}</td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{computeCurrent(order)}</td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{order.quantity.toLocaleString()}</td>
+                      <td className="px-4 py-3 max-w-40">
+                        <span className="text-xs text-gray-700 block truncate" title={order.category_name || order.service_name}>
+                          {order.category_name || order.service_name || '—'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusCls}`}>
+                          {statusLabel}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{order.remains || '—'}</td>
+                      <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{formatDate(order.created_at)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (openMenuId === order.id) { closeMenu(); return; }
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const openUpward = window.innerHeight - rect.bottom < 340;
+                            setMenuPosition({ buttonTop: rect.top, buttonBottom: rect.bottom, right: window.innerWidth - rect.right, openUpward });
+                            setOpenMenuId(order.id);
+                          }}
+                          className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -596,82 +571,43 @@ const AdminOrdersPage: React.FC = () => {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-sm text-gray-600">
-          <span>
-            {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of{' '}
-            {total.toLocaleString()}
-          </span>
+          <span>{(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total.toLocaleString()}</span>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="flex items-center gap-1 px-3 py-1.5 border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Prev
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
+              className="flex items-center gap-1 px-3 py-1.5 border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors">
+              <ChevronLeft className="h-4 w-4" />Prev
             </button>
-            <span className="px-2">
-              Page {page} of {totalPages}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="flex items-center gap-1 px-3 py-1.5 border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors"
-            >
-              Next
-              <ChevronRight className="h-4 w-4" />
+            <span className="px-2">Page {page} of {totalPages}</span>
+            <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+              className="flex items-center gap-1 px-3 py-1.5 border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors">
+              Next<ChevronRight className="h-4 w-4" />
             </button>
           </div>
         </div>
       )}
 
-      {/* Action menu — portaled to <body> so it escapes overflow:hidden/auto containers */}
+      {/* Action menu — portaled to <body> */}
       {openMenuId && menuPosition && openMenuOrder &&
         createPortal(
           <>
             <div className="fixed inset-0 z-40" onClick={closeMenu} />
             <div
               className="fixed z-50 w-52 bg-white border border-gray-200 rounded-xl shadow-lg py-1"
-              style={
-                menuPosition.openUpward
-                  ? { bottom: window.innerHeight - menuPosition.buttonTop + 4, right: menuPosition.right }
-                  : { top: menuPosition.buttonBottom + 4, right: menuPosition.right }
+              style={menuPosition.openUpward
+                ? { bottom: window.innerHeight - menuPosition.buttonTop + 4, right: menuPosition.right }
+                : { top: menuPosition.buttonBottom + 4, right: menuPosition.right }
               }
             >
-              <ActionMenuItem
-                onClick={() => { closeMenu(); openDetail(openMenuOrder); }}
-                icon={<Eye className="h-4 w-4" />}
-                label="Order Details"
-              />
-              <ActionMenuItem
-                onClick={() => { closeMenu(); setEditLinkOrder(openMenuOrder); setEditLinkValue(openMenuOrder.link); setActionError(''); }}
-                label="Edit Link"
-              />
-              <ActionMenuItem
-                onClick={() => { closeMenu(); openEditService(openMenuOrder); }}
-                label="Edit Service"
-              />
-              <ActionMenuItem
-                onClick={() => { closeMenu(); setStartCountOrder(openMenuOrder); setStartCountValue(openMenuOrder.start_count); setActionError(''); }}
-                label="Set Start Count"
-              />
-              <ActionMenuItem
-                onClick={() => { closeMenu(); setRemainsOrder(openMenuOrder); setRemainsValue(openMenuOrder.remains); setActionError(''); }}
-                label="Set Remains"
-              />
-              <ActionMenuItem
-                onClick={() => { closeMenu(); setPartialOrder(openMenuOrder); setPartialValue(openMenuOrder.remains); setActionError(''); }}
-                label="Set Partial"
-              />
-              <ActionMenuItem
-                onClick={() => { closeMenu(); setStatusOrder(openMenuOrder); setStatusValue(openMenuOrder.status); setActionError(''); }}
-                label="Change Status"
-              />
+              <ActionMenuItem onClick={() => { closeMenu(); openDetail(openMenuOrder); }} icon={<Eye className="h-4 w-4" />} label="Order Details" />
+              <ActionMenuItem onClick={() => { closeMenu(); setEditLinkOrder(openMenuOrder); setEditLinkValue(openMenuOrder.link); setActionError(''); }} label="Edit Link" />
+              <ActionMenuItem onClick={() => { closeMenu(); openEditService(openMenuOrder); }} label="Edit Service" />
+              <ActionMenuItem onClick={() => { closeMenu(); setStartCountOrder(openMenuOrder); setStartCountValue(openMenuOrder.start_count); setActionError(''); }} label="Set Start Count" />
+              <ActionMenuItem onClick={() => { closeMenu(); setRemainsOrder(openMenuOrder); setRemainsValue(openMenuOrder.remains); setActionError(''); }} label="Set Remains" />
+              <ActionMenuItem onClick={() => { closeMenu(); setPartialOrder(openMenuOrder); setPartialValue(openMenuOrder.remains); setActionError(''); }} label="Set Partial" />
+              <ActionMenuItem onClick={() => { closeMenu(); setStatusOrder(openMenuOrder); setStatusValue(openMenuOrder.status); setActionError(''); }} label="Change Status" />
+              <ActionMenuItem onClick={() => { closeMenu(); openResend(openMenuOrder); }} icon={<Send className="h-4 w-4" />} label="Custom Resend" />
               <div className="border-t border-gray-100 my-1" />
-              <ActionMenuItem
-                onClick={() => { closeMenu(); setCancelOrder(openMenuOrder); setActionError(''); }}
-                label="Cancel & Refund"
-                danger
-              />
+              <ActionMenuItem onClick={() => { closeMenu(); setCancelOrder(openMenuOrder); setActionError(''); }} label="Cancel & Refund" danger />
             </div>
           </>,
           document.body,
@@ -684,85 +620,54 @@ const AdminOrdersPage: React.FC = () => {
       {detailOrder && (
         <Modal title="Order Details" onClose={() => setDetailOrder(null)} wide>
           {detailLoading && !detailLive ? (
-            <div className="flex items-center justify-center h-32">
-              <Loader2 className="h-6 w-6 animate-spin text-teal-500" />
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm mb-5">
-                <DetailField label="Order ID" value={shortId((detailLive ?? detailOrder).id)} mono />
-                <DetailField
-                  label="Provider Order ID"
-                  value={(detailLive ?? detailOrder).provider_order_id || '—'}
-                  mono
-                />
-                <DetailField label="User Email" value={(detailLive ?? detailOrder).user_email || '—'} />
-                <DetailField
-                  label="Username"
-                  value={
-                    (detailLive ?? detailOrder).user_username
-                      ? `@${(detailLive ?? detailOrder).user_username}`
-                      : '—'
-                  }
-                />
-                <DetailField label="Service" value={(detailLive ?? detailOrder).service_name || '—'} />
-                <DetailField label="Status">
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusClass((detailLive ?? detailOrder).status)}`}
-                  >
-                    {(detailLive ?? detailOrder).status}
-                  </span>
-                </DetailField>
-                <DetailField label="Link" value={(detailLive ?? detailOrder).link} />
-                <DetailField
-                  label="Quantity"
-                  value={(detailLive ?? detailOrder).quantity.toLocaleString()}
-                />
-                <DetailField
-                  label="Charge"
-                  value={`$${(detailLive ?? detailOrder).charge.toFixed(4)}`}
-                />
-                {(detailLive ?? detailOrder).payment_method && (detailLive ?? detailOrder).payment_method !== "direct" && (
-                  <>
-                    <DetailField
-                      label="Payment Method"
-                      value={(detailLive ?? detailOrder).payment_method}
-                    />
-                    <DetailField label="Payment Status">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                        (detailLive ?? detailOrder).payment_status === "paid"    ? "bg-green-100 text-green-700"   :
-                        (detailLive ?? detailOrder).payment_status === "pending" ? "bg-yellow-100 text-yellow-700" :
-                        (detailLive ?? detailOrder).payment_status === "failed"  ? "bg-red-100 text-red-600"       :
-                        "bg-gray-100 text-gray-500"
-                      }`}>
-                        {(detailLive ?? detailOrder).payment_status || "—"}
-                      </span>
-                    </DetailField>
-                  </>
-                )}
-                <DetailField label="Currency" value={(detailLive ?? detailOrder).currency} />
-                <DetailField
-                  label="Start Count"
-                  value={(detailLive ?? detailOrder).start_count || '—'}
-                />
-                <DetailField label="Current" value={computeCurrent(detailLive ?? detailOrder)} />
-                <DetailField label="Remains" value={(detailLive ?? detailOrder).remains || '—'} />
-                <DetailField label="Created" value={formatDate((detailLive ?? detailOrder).created_at)} />
-              </div>
-              <button
-                onClick={refreshDetail}
-                disabled={detailLoading}
-                className="flex items-center gap-2 text-sm px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40"
-              >
-                {detailLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4" />
-                )}
-                Refresh from Provider
-              </button>
-            </>
-          )}
+            <div className="flex items-center justify-center h-32"><Loader2 className="h-6 w-6 animate-spin text-teal-500" /></div>
+          ) : (() => {
+            const o = detailLive ?? detailOrder;
+            const { label: sl, cls: sc } = mapAdminStatus(o.status, o.payment_status);
+            return (
+              <>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm mb-5">
+                  <DetailField label="Order ID" value={shortId(o.id)} mono />
+                  <DetailField label="Provider Order ID" value={o.provider_order_id || '—'} mono />
+                  <DetailField label="User Email" value={o.user_email || '—'} />
+                  <DetailField label="Username" value={o.user_username ? `@${o.user_username}` : '—'} />
+                  <DetailField label="Service" value={o.category_name || o.service_name || '—'} />
+                  <DetailField label="Status">
+                    <div className="flex flex-col gap-1">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium w-fit ${sc}`}>{sl}</span>
+                      {o.status !== sl && <span className="text-xs text-gray-400 font-mono">{o.status}</span>}
+                    </div>
+                  </DetailField>
+                  <DetailField label="Link" value={o.link} />
+                  <DetailField label="Quantity" value={o.quantity.toLocaleString()} />
+                  <DetailField label="Charge" value={`$${o.charge.toFixed(4)}`} />
+                  {o.payment_method && o.payment_method !== 'direct' && (
+                    <>
+                      <DetailField label="Payment Method" value={o.payment_method} />
+                      <DetailField label="Payment Status">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          o.payment_status === 'paid'    ? 'bg-green-100 text-green-700'   :
+                          o.payment_status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                          o.payment_status === 'failed'  ? 'bg-red-100 text-red-600'       :
+                          'bg-gray-100 text-gray-500'
+                        }`}>{o.payment_status || '—'}</span>
+                      </DetailField>
+                    </>
+                  )}
+                  <DetailField label="Currency" value={o.currency} />
+                  <DetailField label="Start Count" value={o.start_count || '—'} />
+                  <DetailField label="Current" value={computeCurrent(o)} />
+                  <DetailField label="Remains" value={o.remains || '—'} />
+                  <DetailField label="Created" value={formatDate(o.created_at)} />
+                </div>
+                <button onClick={refreshDetail} disabled={detailLoading}
+                  className="flex items-center gap-2 text-sm px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40">
+                  {detailLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  Refresh from Provider
+                </button>
+              </>
+            );
+          })()}
         </Modal>
       )}
 
@@ -771,30 +676,12 @@ const AdminOrdersPage: React.FC = () => {
         <Modal title="Edit Link" onClose={() => setEditLinkOrder(null)}>
           <p className="text-xs text-gray-500 mb-4">Order {shortId(editLinkOrder.id)}</p>
           <label className="block text-sm font-medium text-gray-700 mb-1">New Link</label>
-          <input
-            type="text"
-            value={editLinkValue}
-            onChange={(e) => setEditLinkValue(e.target.value)}
-            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 mb-4"
-          />
+          <input type="text" value={editLinkValue} onChange={(e) => setEditLinkValue(e.target.value)}
+            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 mb-4" />
           {actionError && <p className="text-sm text-red-600 mb-3">{actionError}</p>}
           <div className="flex justify-end gap-2">
-            <button
-              onClick={() => setEditLinkOrder(null)}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <SaveButton
-              loading={actionLoading}
-              onClick={() =>
-                handlePatch(
-                  `${API_ENDPOINTS.ADMIN_ORDERS}/${editLinkOrder.id}/link`,
-                  { link: editLinkValue },
-                  () => setEditLinkOrder(null),
-                )
-              }
-            />
+            <button onClick={() => setEditLinkOrder(null)} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
+            <SaveButton loading={actionLoading} onClick={() => handlePatch(`${API_ENDPOINTS.ADMIN_ORDERS}/${editLinkOrder.id}/link`, { link: editLinkValue }, () => setEditLinkOrder(null))} />
           </div>
         </Modal>
       )}
@@ -804,39 +691,21 @@ const AdminOrdersPage: React.FC = () => {
         <Modal title="Edit Service" onClose={() => setEditServiceOrder(null)}>
           <p className="text-xs text-gray-500 mb-4">Order {shortId(editServiceOrder.id)}</p>
           <label className="block text-sm font-medium text-gray-700 mb-1">Select Service</label>
-          <select
-            value={selectedServiceId}
-            onChange={(e) => setSelectedServiceId(e.target.value)}
-            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 mb-4"
-          >
+          <select value={selectedServiceId} onChange={(e) => setSelectedServiceId(e.target.value)}
+            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 mb-4">
             <option value="">Select a service...</option>
             {adminServices.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} ({s.category_name})
-              </option>
+              <option key={s.id} value={s.id}>{s.name} ({s.category_name})</option>
             ))}
           </select>
           {actionError && <p className="text-sm text-red-600 mb-3">{actionError}</p>}
           <div className="flex justify-end gap-2">
-            <button
-              onClick={() => setEditServiceOrder(null)}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <SaveButton
-              loading={actionLoading}
-              disabled={!selectedServiceId}
-              onClick={() => {
-                const svc = adminServices.find((s) => s.id === selectedServiceId);
-                if (!svc) return;
-                handlePatch(
-                  `${API_ENDPOINTS.ADMIN_ORDERS}/${editServiceOrder.id}/service`,
-                  { service_id: svc.id, service_name: svc.name },
-                  () => setEditServiceOrder(null),
-                );
-              }}
-            />
+            <button onClick={() => setEditServiceOrder(null)} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
+            <SaveButton loading={actionLoading} disabled={!selectedServiceId} onClick={() => {
+              const svc = adminServices.find((s) => s.id === selectedServiceId);
+              if (!svc) return;
+              handlePatch(`${API_ENDPOINTS.ADMIN_ORDERS}/${editServiceOrder.id}/service`, { service_id: svc.id, service_name: svc.name }, () => setEditServiceOrder(null));
+            }} />
           </div>
         </Modal>
       )}
@@ -846,31 +715,12 @@ const AdminOrdersPage: React.FC = () => {
         <Modal title="Set Start Count" onClose={() => setStartCountOrder(null)}>
           <p className="text-xs text-gray-500 mb-4">Order {shortId(startCountOrder.id)}</p>
           <label className="block text-sm font-medium text-gray-700 mb-1">Start Count</label>
-          <input
-            type="number"
-            min="0"
-            value={startCountValue}
-            onChange={(e) => setStartCountValue(e.target.value)}
-            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 mb-4"
-          />
+          <input type="number" min="0" value={startCountValue} onChange={(e) => setStartCountValue(e.target.value)}
+            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 mb-4" />
           {actionError && <p className="text-sm text-red-600 mb-3">{actionError}</p>}
           <div className="flex justify-end gap-2">
-            <button
-              onClick={() => setStartCountOrder(null)}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <SaveButton
-              loading={actionLoading}
-              onClick={() =>
-                handlePatch(
-                  `${API_ENDPOINTS.ADMIN_ORDERS}/${startCountOrder.id}/start-count`,
-                  { value: startCountValue },
-                  () => setStartCountOrder(null),
-                )
-              }
-            />
+            <button onClick={() => setStartCountOrder(null)} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
+            <SaveButton loading={actionLoading} onClick={() => handlePatch(`${API_ENDPOINTS.ADMIN_ORDERS}/${startCountOrder.id}/start-count`, { value: startCountValue }, () => setStartCountOrder(null))} />
           </div>
         </Modal>
       )}
@@ -880,31 +730,12 @@ const AdminOrdersPage: React.FC = () => {
         <Modal title="Set Remains" onClose={() => setRemainsOrder(null)}>
           <p className="text-xs text-gray-500 mb-4">Order {shortId(remainsOrder.id)}</p>
           <label className="block text-sm font-medium text-gray-700 mb-1">Remains</label>
-          <input
-            type="number"
-            min="0"
-            value={remainsValue}
-            onChange={(e) => setRemainsValue(e.target.value)}
-            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 mb-4"
-          />
+          <input type="number" min="0" value={remainsValue} onChange={(e) => setRemainsValue(e.target.value)}
+            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 mb-4" />
           {actionError && <p className="text-sm text-red-600 mb-3">{actionError}</p>}
           <div className="flex justify-end gap-2">
-            <button
-              onClick={() => setRemainsOrder(null)}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <SaveButton
-              loading={actionLoading}
-              onClick={() =>
-                handlePatch(
-                  `${API_ENDPOINTS.ADMIN_ORDERS}/${remainsOrder.id}/remains`,
-                  { value: remainsValue },
-                  () => setRemainsOrder(null),
-                )
-              }
-            />
+            <button onClick={() => setRemainsOrder(null)} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
+            <SaveButton loading={actionLoading} onClick={() => handlePatch(`${API_ENDPOINTS.ADMIN_ORDERS}/${remainsOrder.id}/remains`, { value: remainsValue }, () => setRemainsOrder(null))} />
           </div>
         </Modal>
       )}
@@ -913,37 +744,15 @@ const AdminOrdersPage: React.FC = () => {
       {partialOrder && (
         <Modal title="Set Partial" onClose={() => setPartialOrder(null)}>
           <p className="text-xs text-gray-500 mb-1">Order {shortId(partialOrder.id)}</p>
-          <p className="text-xs text-amber-600 mb-4">
-            Sets order status to <strong>Partial</strong> with the given remains count.
-          </p>
+          <p className="text-xs text-amber-600 mb-4">Sets order status to <strong>Partial</strong> with the given remains count.</p>
           <label className="block text-sm font-medium text-gray-700 mb-1">Remains</label>
-          <input
-            type="number"
-            min="0"
-            value={partialValue}
-            onChange={(e) => setPartialValue(e.target.value)}
-            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 mb-4"
-          />
+          <input type="number" min="0" value={partialValue} onChange={(e) => setPartialValue(e.target.value)}
+            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 mb-4" />
           {actionError && <p className="text-sm text-red-600 mb-3">{actionError}</p>}
           <div className="flex justify-end gap-2">
-            <button
-              onClick={() => setPartialOrder(null)}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <SaveButton
-              loading={actionLoading}
-              label="Set Partial"
-              color="bg-orange-500 hover:bg-orange-600"
-              onClick={() =>
-                handlePatch(
-                  `${API_ENDPOINTS.ADMIN_ORDERS}/${partialOrder.id}/partial`,
-                  { remains: partialValue },
-                  () => setPartialOrder(null),
-                )
-              }
-            />
+            <button onClick={() => setPartialOrder(null)} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
+            <SaveButton loading={actionLoading} label="Set Partial" color="bg-orange-500 hover:bg-orange-600"
+              onClick={() => handlePatch(`${API_ENDPOINTS.ADMIN_ORDERS}/${partialOrder.id}/partial`, { remains: partialValue }, () => setPartialOrder(null))} />
           </div>
         </Modal>
       )}
@@ -953,35 +762,14 @@ const AdminOrdersPage: React.FC = () => {
         <Modal title="Change Status" onClose={() => setStatusOrder(null)}>
           <p className="text-xs text-gray-500 mb-4">Order {shortId(statusOrder.id)}</p>
           <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-          <select
-            value={statusValue}
-            onChange={(e) => setStatusValue(e.target.value)}
-            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 mb-4"
-          >
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
+          <select value={statusValue} onChange={(e) => setStatusValue(e.target.value)}
+            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 mb-4">
+            {STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
           {actionError && <p className="text-sm text-red-600 mb-3">{actionError}</p>}
           <div className="flex justify-end gap-2">
-            <button
-              onClick={() => setStatusOrder(null)}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <SaveButton
-              loading={actionLoading}
-              onClick={() =>
-                handlePatch(
-                  `${API_ENDPOINTS.ADMIN_ORDERS}/${statusOrder.id}/status`,
-                  { status: statusValue },
-                  () => setStatusOrder(null),
-                )
-              }
-            />
+            <button onClick={() => setStatusOrder(null)} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
+            <SaveButton loading={actionLoading} onClick={() => handlePatch(`${API_ENDPOINTS.ADMIN_ORDERS}/${statusOrder.id}/status`, { status: statusValue }, () => setStatusOrder(null))} />
           </div>
         </Modal>
       )}
@@ -989,42 +777,147 @@ const AdminOrdersPage: React.FC = () => {
       {/* Cancel & Refund */}
       {cancelOrder && (
         <Modal title="Cancel & Refund" onClose={() => setCancelOrder(null)}>
-          <p className="text-sm text-gray-700 mb-1">
-            Order <strong>{shortId(cancelOrder.id)}</strong>
-          </p>
-          <p className="text-sm text-gray-500 mb-5">
-            A cancel request will be sent to the provider. Choose how to mark the order in your
-            system.
-          </p>
+          <p className="text-sm text-gray-700 mb-1">Order <strong>{shortId(cancelOrder.id)}</strong></p>
+          <p className="text-sm text-gray-500 mb-5">A cancel request will be sent to the provider. Choose how to mark the order in your system.</p>
           {actionError && <p className="text-sm text-red-600 mb-3">{actionError}</p>}
           <div className="flex flex-wrap gap-2 justify-end">
-            <button
-              onClick={() => setCancelOrder(null)}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            <button onClick={() => setCancelOrder(null)} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Close</button>
+            <SaveButton loading={actionLoading} label="Cancel Order" color="bg-red-500 hover:bg-red-600" onClick={() => handlePost(`${API_ENDPOINTS.ADMIN_ORDERS}/${cancelOrder.id}/cancel`, () => setCancelOrder(null))} />
+            <SaveButton loading={actionLoading} label="Refund Order" color="bg-purple-500 hover:bg-purple-600" onClick={() => handlePost(`${API_ENDPOINTS.ADMIN_ORDERS}/${cancelOrder.id}/refund`, () => setCancelOrder(null))} />
+          </div>
+        </Modal>
+      )}
+
+      {/* Custom Resend */}
+      {resendOrder && (
+        <Modal title="Custom Resend" onClose={() => setResendOrder(null)}>
+          <p className="text-xs text-gray-500 mb-4">
+            Resend order <strong>{shortId(resendOrder.id)}</strong> to a custom provider and service.
+          </p>
+
+          {/* Link — read-only */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Link</label>
+            <p className="text-xs text-teal-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 break-all">{resendOrder.link}</p>
+          </div>
+
+          {/* Provider */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Provider</label>
+            <select
+              value={resendProviderId}
+              onChange={(e) => handleResendProviderChange(e.target.value)}
+              className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
             >
-              Close
+              <option value="">Select a provider…</option>
+              {resendProviders.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Service — shown after provider is chosen */}
+          {resendProviderId && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Service</label>
+              {resendServicesLoading ? (
+                <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading services…
+                </div>
+              ) : (
+                <>
+                  {/* Selected service indicator */}
+                  {resendServiceId && (() => {
+                    const sel = resendProviderServices.find(s => s.service === resendServiceId);
+                    return sel ? (
+                      <div className="flex items-center justify-between bg-teal-50 border border-teal-200 rounded-lg px-3 py-2 mb-2">
+                        <div className="text-xs text-teal-800 min-w-0">
+                          <span className="font-medium">[{sel.service}] {sel.name}</span>
+                          <span className="text-teal-600 ml-2">${sel.rate}/1k</span>
+                        </div>
+                        <button
+                          onClick={() => setResendServiceId('')}
+                          className="text-teal-400 hover:text-teal-600 ml-2 flex-shrink-0"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : null;
+                  })()}
+
+                  {/* Search input */}
+                  <div className="relative mb-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search by name or ID…"
+                      value={resendServiceSearch}
+                      onChange={(e) => setResendServiceSearch(e.target.value)}
+                      className="w-full pl-8 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+
+                  {/* Scrollable results list */}
+                  <div className="border border-gray-200 rounded-lg overflow-y-auto max-h-48 divide-y divide-gray-100">
+                    {(() => {
+                      const q = resendServiceSearch.toLowerCase();
+                      const filtered = resendProviderServices.filter(s =>
+                        !q || s.name.toLowerCase().includes(q) || s.service.includes(q)
+                      );
+                      if (filtered.length === 0) {
+                        return (
+                          <p className="text-xs text-gray-400 text-center py-4">No services match your search.</p>
+                        );
+                      }
+                      return filtered.map((s) => {
+                        const isSelected = s.service === resendServiceId;
+                        return (
+                          <button
+                            key={s.service}
+                            type="button"
+                            onClick={() => { setResendServiceId(s.service); setResendServiceSearch(''); }}
+                            className={`w-full text-left px-3 py-2.5 text-xs transition-colors ${
+                              isSelected
+                                ? 'bg-teal-50 text-teal-800'
+                                : 'hover:bg-gray-50 text-gray-700'
+                            }`}
+                          >
+                            <span className="font-medium">[{s.service}]</span> {s.name}
+                            <span className="text-gray-400 ml-2">${s.rate}/1k · min {s.min} · max {s.max}</span>
+                          </button>
+                        );
+                      });
+                    })()}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Quantity */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+            <input
+              type="number"
+              min="1"
+              value={resendQuantity}
+              onChange={(e) => setResendQuantity(e.target.value)}
+              className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+            />
+          </div>
+
+          {resendError && <p className="text-sm text-red-600 mb-3">{resendError}</p>}
+
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setResendOrder(null)} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+              Cancel
             </button>
             <SaveButton
-              loading={actionLoading}
-              label="Cancel Order"
-              color="bg-red-500 hover:bg-red-600"
-              onClick={() =>
-                handlePost(
-                  `${API_ENDPOINTS.ADMIN_ORDERS}/${cancelOrder.id}/cancel`,
-                  () => setCancelOrder(null),
-                )
-              }
-            />
-            <SaveButton
-              loading={actionLoading}
-              label="Refund Order"
-              color="bg-purple-500 hover:bg-purple-600"
-              onClick={() =>
-                handlePost(
-                  `${API_ENDPOINTS.ADMIN_ORDERS}/${cancelOrder.id}/refund`,
-                  () => setCancelOrder(null),
-                )
-              }
+              loading={resendLoading}
+              disabled={!resendProviderId || !resendServiceId || !resendQuantity}
+              label="Send Order"
+              color="bg-teal-600 hover:bg-teal-700"
+              onClick={handleResend}
             />
           </div>
         </Modal>

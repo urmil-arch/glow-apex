@@ -42,6 +42,7 @@ import AdminTasksPage from './pages/admin/tasks/TasksPage'
 import AdminPaymentsPage from './pages/admin/payments/PaymentsPage'
 import AdminReportsPage from './pages/admin/reports/ReportsPage'
 import AdminSupportPage from './pages/admin/support/SupportPage'
+import PricingPage from './pages/admin/pricing/PricingPage'
 import TicketsPage from './pages/dashboard/tickets/TicketsPage'
 import TicketThreadPage from './pages/dashboard/tickets/TicketThreadPage'
 import RouteScrollReset from './components/common/route-scroll-reset'
@@ -125,6 +126,7 @@ const App: React.FC = () => {
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="routing" element={<ProviderConfigPage />} />
                 <Route path="support" element={<AdminSupportPage />} />
+                <Route path="pricing" element={<PricingPage />} />
               </Route>
             </Route>
           </Routes>

@@ -7,6 +7,7 @@ from app.admin.orders.schemas import (
     AdminOrderListResponse,
     AdminOrderResponse,
     ChangeStatusRequest,
+    ResendOrderRequest,
     SetCountRequest,
     SetPartialRequest,
     UpdateLinkRequest,
@@ -33,6 +34,7 @@ def _serialize(doc: dict) -> AdminOrderResponse:
         user_username=user.get("username", ""),
         service_id=doc.get("service_id", ""),
         service_name=doc.get("service_name", ""),
+        category_name=doc.get("category_name", ""),
         provider_id=doc.get("provider_id", ""),
         provider_order_id=doc.get("provider_order_id", ""),
         link=doc.get("link", ""),
@@ -42,6 +44,8 @@ def _serialize(doc: dict) -> AdminOrderResponse:
         start_count=doc.get("start_count", ""),
         remains=doc.get("remains", ""),
         currency=doc.get("currency", "USD"),
+        payment_method=doc.get("payment_method", "direct"),
+        payment_status=doc.get("payment_status", ""),
         created_at=created.isoformat() if isinstance(created, datetime) else str(created),
     )
 
@@ -235,3 +239,49 @@ async def refund_order(
 
     await OrderRepository(db).update(order_id, {"status": "Refunded"})
     return _serialize({**order, "status": "Refunded"})
+
+
+@router.post("/{order_id}/resend", response_model=AdminOrderResponse)
+async def resend_order(
+    order_id: str,
+    body: ResendOrderRequest,
+    request: Request,
+) -> AdminOrderResponse:
+    """
+    Re-submit an order to a custom provider and service chosen by the admin.
+    Uses the existing order's link. Updates provider_id, provider_order_id,
+    quantity, and resets status to Pending.
+    """
+    db = request.app.state.db
+    order = await _get_order_or_404(order_id, db)
+    provider = await _get_provider_or_503(body.provider_id, db)
+
+    result = await call_provider(
+        provider["url"],
+        provider["api_key"],
+        {
+            "action": "add",
+            "service": body.provider_service_id,
+            "link": order["link"],
+            "quantity": body.quantity,
+        },
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, result["error"])
+
+    provider_order_id = str(result.get("order", ""))
+    updates = {
+        "provider_id": body.provider_id,
+        "provider_order_id": provider_order_id,
+        "quantity": body.quantity,
+        "status": "Pending",
+        "start_count": "",
+        "remains": str(body.quantity),
+    }
+    await OrderRepository(db).update(order_id, updates)
+    logger.info(
+        "Admin resent order %s to provider '%s' service '%s' qty=%s — new provider_order_id=%s",
+        order_id, provider.get("name"), body.provider_service_id, body.quantity, provider_order_id,
+    )
+    return _serialize({**order, **updates})

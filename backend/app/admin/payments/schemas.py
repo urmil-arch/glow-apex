@@ -16,6 +16,7 @@ class PaymentResponse(BaseModel):
     type: str          # "credit" | "debit"
     status: str
     service_name: str
+    category_name: str = ""
     quantity: int
     memo: str
     # Joined order fields

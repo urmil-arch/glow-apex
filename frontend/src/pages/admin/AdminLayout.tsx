@@ -15,6 +15,7 @@ import {
   ListTodo,
   CreditCard,
   BarChart3,
+  DollarSign,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
@@ -36,6 +37,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/admin/services', icon: <Package className="h-5 w-5" />, label: 'Services' },
   { to: '/admin/routing', icon: <GitBranch className="h-5 w-5" />, label: 'Routing' },
   { to: '/admin/support', icon: <HeadphonesIcon className="h-5 w-5" />, label: 'Support' },
+  { to: '/admin/pricing', icon: <DollarSign className="h-5 w-5" />, label: 'Pricing' },
   { to: '/admin/settings', icon: <Settings className="h-5 w-5" />, label: 'Settings' },
 ];
 

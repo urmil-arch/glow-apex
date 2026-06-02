@@ -34,6 +34,7 @@ def _serialize_order(doc: dict) -> OrderResponse:
         id=str(doc["_id"]),
         service_id=doc["service_id"],
         service_name=doc["service_name"],
+        category_name=doc.get("category_name", ""),
         provider_order_id=doc["provider_order_id"],
         link=doc["link"],
         quantity=doc["quantity"],
@@ -140,10 +141,14 @@ async def place_order(
     charge = round(service["rate"] * body.quantity / 1000, 6)
     user_id = str(user["_id"])
 
+    category = await CategoryRepository(db).find_by_id(service.get("category_id", ""))
+    category_name = category.get("name", "") if category else ""
+
     doc = {
         "user_id": user_id,
         "service_id": body.service_id,
         "service_name": service.get("name", ""),
+        "category_name": category_name,
         "provider_id": str(fulfilled_provider["_id"]),
         "provider_order_id": provider_order_id,
         "link": body.link,
@@ -243,6 +248,7 @@ async def place_order_by_category(
         "user_id": user_id,
         "service_id": str(fulfilled_service["_id"]),
         "service_name": fulfilled_service.get("name", ""),
+        "category_name": body.category_name,
         "provider_id": str(fulfilled_provider["_id"]),
         "provider_order_id": provider_order_id,
         "link": body.link,
@@ -411,12 +417,15 @@ async def initiate_stripe_order(
         service = await ServiceRepository(db).find_by_id(body.service_id)
         if not service:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Service not found")
+        cat = await CategoryRepository(db).find_by_id(service.get("category_id", ""))
+        category_name_val = cat.get("name", "") if cat else ""
         logger.info("[INITIATE] Service resolved directly: '%s' (id=%s, rate=$%.4f/1k)",
                     service.get("name"), body.service_id, service.get("rate", 0))
     else:
         category = await CategoryRepository(db).find_by_name(body.category_name)
         if not category:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Category not found")
+        category_name_val = body.category_name
         routing_cfg = await RoutingConfigRepository(db).find_by_category_id(str(category["_id"]))
         if routing_cfg and routing_cfg.get("default_service_id"):
             service = await ServiceRepository(db).find_by_id(routing_cfg["default_service_id"])
@@ -449,6 +458,7 @@ async def initiate_stripe_order(
         "user_id": user_id,
         "service_id": str(service["_id"]),
         "service_name": service.get("name", ""),
+        "category_name": category_name_val,
         "provider_id": "",
         "provider_order_id": "",
         "link": body.link,
@@ -502,8 +512,9 @@ async def initiate_stripe_order(
         "status": "pending",
         "stripe_session_id": session_result["session_id"],
         "service_name": service.get("name", ""),
+        "category_name": category_name_val,
         "quantity": body.quantity,
-        "memo": f"{service.get('name', 'Order')} × {body.quantity:,}",
+        "memo": f"{category_name_val or service.get('name', 'Order')} × {body.quantity:,}",
         "created_at": now,
         "updated_at": now,
     }

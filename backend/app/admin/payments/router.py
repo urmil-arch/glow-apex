@@ -36,6 +36,7 @@ def _serialize(doc: dict, index: int) -> PaymentResponse:
         type=doc.get("type", "credit"),
         status=doc.get("status", ""),
         service_name=doc.get("service_name", ""),
+        category_name=doc.get("category_name", ""),
         quantity=doc.get("quantity", 0),
         memo=doc.get("memo", ""),
         order_status=doc.get("order_status", ""),

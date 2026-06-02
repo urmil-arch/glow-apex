@@ -15,6 +15,8 @@ from app.user_management.routers.profile_router import router as profile_router
 from app.admin.router import router as admin_router
 from app.orders.router import router as orders_router
 from app.public_services.router import router as public_services_router
+from app.admin.pricing.router import router as admin_pricing_router
+from app.public_pricing.router import router as public_pricing_router
 
 
 def include_routers(app: FastAPI) -> None:
@@ -33,3 +35,5 @@ def include_routers(app: FastAPI) -> None:
     app.include_router(orders_router, prefix="/orders", tags=["Orders"])
     app.include_router(user_payments_router, prefix="/payments", tags=["User Payments"])
     app.include_router(public_services_router, prefix="/services", tags=["Services"])
+    app.include_router(admin_pricing_router, prefix="/admin/pricing", tags=["Admin Pricing"])
+    app.include_router(public_pricing_router, prefix="/pricing", tags=["Pricing"])

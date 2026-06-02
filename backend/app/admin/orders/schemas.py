@@ -8,6 +8,7 @@ class AdminOrderResponse(BaseModel):
     user_username: str
     service_id: str
     service_name: str
+    category_name: str = ""
     provider_id: str
     provider_order_id: str
     link: str
@@ -17,6 +18,8 @@ class AdminOrderResponse(BaseModel):
     start_count: str
     remains: str
     currency: str
+    payment_method: str = "direct"
+    payment_status: str = ""
     created_at: str
 
 
@@ -61,4 +64,18 @@ class ChangeStatusRequest(BaseModel):
         v = v.strip()
         if not v:
             raise ValueError("Status cannot be empty")
+        return v
+
+
+class ResendOrderRequest(BaseModel):
+    """Admin-initiated resend to a custom provider and service."""
+    provider_id: str
+    provider_service_id: str
+    quantity: int
+
+    @field_validator("quantity")
+    @classmethod
+    def quantity_positive(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("Quantity must be at least 1")
         return v

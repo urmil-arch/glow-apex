@@ -79,6 +79,7 @@ class OrderResponse(BaseModel):
     id: str
     service_id: str
     service_name: str
+    category_name: str = ""
     provider_order_id: str
     link: str
     quantity: int

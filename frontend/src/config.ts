@@ -83,4 +83,8 @@ export const API_ENDPOINTS = {
 
   // User tickets
   TICKETS: `${API_BASE_URL}/tickets`,
+
+  // Pricing
+  ADMIN_PRICING: `${API_BASE_URL}/admin/pricing`,
+  PUBLIC_PRICING: `${API_BASE_URL}/pricing`,
 }

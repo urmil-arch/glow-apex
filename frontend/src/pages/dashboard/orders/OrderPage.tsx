@@ -1,10 +1,53 @@
-import { CheckCircle, Clock, CreditCard, ExternalLink, Filter, Loader, Package, RefreshCw, Search, XCircle } from "lucide-react";
+import {
+  AlertCircle, CheckCircle, Clock, CreditCard, ExternalLink,
+  Filter, Loader, Package, RefreshCw, Search, XCircle,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { API_ENDPOINTS } from "@/config";
 import { useAuth } from "@/context/AuthContext";
 import { UserOrder } from "@/types";
+import RaiseTicketModal from "@/components/common/RaiseTicketModal";
+
+const toUtc = (d: string) => d && !d.endsWith('Z') && !d.includes('+') ? `${d}Z` : d;
+
+type StatusKey = "payment_pending" | "success" | "in_progress" | "error";
+
+function mapOrderStatus(raw: string): { label: string; key: StatusKey } {
+  const s = (raw ?? "").toLowerCase().replace(/_/g, " ");
+  if (s === "pending payment") return { label: "Payment Pending", key: "payment_pending" };
+  if (s === "pending")         return { label: "Success",         key: "success" };
+  if (s === "completed")       return { label: "Success",         key: "success" };
+  if (s === "in progress" || s === "inprogress" || s === "processing")
+                               return { label: "In Progress",     key: "in_progress" };
+  if (s === "partial")         return { label: "In Progress",     key: "in_progress" };
+  return                              { label: "Error",           key: "error" };
+}
+
+function getStatusBadge(rawStatus: string) {
+  const { label, key } = mapOrderStatus(rawStatus);
+  if (key === "success") return (
+    <span className="px-2 py-1 inline-flex items-center gap-1 text-xs font-medium rounded-full bg-emerald-50 text-emerald-700">
+      <CheckCircle className="w-3 h-3" />{label}
+    </span>
+  );
+  if (key === "in_progress") return (
+    <span className="px-2 py-1 inline-flex items-center gap-1 text-xs font-medium rounded-full bg-blue-50 text-blue-700">
+      <RefreshCw className="w-3 h-3" />{label}
+    </span>
+  );
+  if (key === "payment_pending") return (
+    <span className="px-2 py-1 inline-flex items-center gap-1 text-xs font-medium rounded-full bg-amber-50 text-amber-700">
+      <Clock className="w-3 h-3" />{label}
+    </span>
+  );
+  return (
+    <span className="px-2 py-1 inline-flex items-center gap-1 text-xs font-medium rounded-full bg-red-50 text-red-700">
+      <AlertCircle className="w-3 h-3" />{label}
+    </span>
+  );
+}
 
 interface StatusModalProps {
   order: UserOrder;
@@ -64,6 +107,8 @@ function StatusModal({ order, onClose, onRefresh }: StatusModalProps) {
     }
   }
 
+  const { label: mappedStatus } = mapOrderStatus(localOrder.status);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
@@ -74,16 +119,20 @@ function StatusModal({ order, onClose, onRefresh }: StatusModalProps) {
 
         <div className="space-y-2 text-sm mb-4">
           <div className="flex justify-between">
-            <span className="text-gray-500">Service</span>
-            <span className="font-medium text-gray-800 text-right max-w-[200px] truncate">{localOrder.service_name}</span>
+            <span className="text-gray-500">Order ID</span>
+            <span className="font-mono text-xs text-gray-500">#{localOrder.id.slice(-8)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-500">Provider Order ID</span>
-            <span className="font-medium text-gray-800">{localOrder.provider_order_id}</span>
+            <span className="text-gray-500">Service</span>
+            <span className="font-medium text-gray-800 text-right max-w-[200px] truncate">{localOrder.category_name || localOrder.service_name}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-500">Quantity</span>
+            <span className="text-gray-700">{localOrder.quantity.toLocaleString()}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-500">Status</span>
-            <span className="font-medium text-gray-800">{localOrder.status}</span>
+            <span>{getStatusBadge(localOrder.status)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-500">Start Count</span>
@@ -107,9 +156,9 @@ function StatusModal({ order, onClose, onRefresh }: StatusModalProps) {
               <div className="flex justify-between">
                 <span className="text-gray-500">Payment Status</span>
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                  localOrder.payment_status === "paid"    ? "bg-green-100 text-green-700"  :
+                  localOrder.payment_status === "paid"    ? "bg-green-100 text-green-700"   :
                   localOrder.payment_status === "pending" ? "bg-yellow-100 text-yellow-700" :
-                  localOrder.payment_status === "failed"  ? "bg-red-100 text-red-600"      :
+                  localOrder.payment_status === "failed"  ? "bg-red-100 text-red-600"       :
                   "bg-gray-100 text-gray-500"
                 }`}>
                   {localOrder.payment_status || "—"}
@@ -124,7 +173,6 @@ function StatusModal({ order, onClose, onRefresh }: StatusModalProps) {
             Refill submitted — ID: {refillId}
           </p>
         )}
-
         {error && (
           <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">
             {error}
@@ -142,46 +190,23 @@ function StatusModal({ order, onClose, onRefresh }: StatusModalProps) {
           </button>
           <button
             onClick={handleRefill}
-            disabled={loading !== null || localOrder.status === "Cancelled"}
+            disabled={loading !== null || mappedStatus === "Error"}
             className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg bg-teal-50 text-teal-700 hover:bg-teal-100 disabled:opacity-50 transition-colors"
           >
-            {loading === "refill" ? <Loader className="w-3.5 h-3.5 animate-spin" /> : null}
+            {loading === "refill" && <Loader className="w-3.5 h-3.5 animate-spin" />}
             Refill
           </button>
           <button
             onClick={handleCancel}
-            disabled={loading !== null || localOrder.status === "Cancelled"}
+            disabled={loading !== null || mappedStatus === "Error"}
             className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 transition-colors"
           >
-            {loading === "cancel" ? <Loader className="w-3.5 h-3.5 animate-spin" /> : null}
+            {loading === "cancel" && <Loader className="w-3.5 h-3.5 animate-spin" />}
             Cancel
           </button>
         </div>
       </div>
     </div>
-  );
-}
-
-function getStatusBadge(status: string) {
-  const s = status.toLowerCase();
-  if (s === "completed") {
-    return (
-      <span className="px-2 py-1 inline-flex items-center gap-1 text-xs font-medium rounded-full bg-emerald-50 text-emerald-700">
-        <CheckCircle className="w-3 h-3" />Completed
-      </span>
-    );
-  }
-  if (s === "cancelled") {
-    return (
-      <span className="px-2 py-1 inline-flex items-center gap-1 text-xs font-medium rounded-full bg-red-50 text-red-700">
-        <XCircle className="w-3 h-3" />Cancelled
-      </span>
-    );
-  }
-  return (
-    <span className="px-2 py-1 inline-flex items-center gap-1 text-xs font-medium rounded-full bg-amber-50 text-amber-700">
-      <Clock className="w-3 h-3" />{status || "Pending"}
-    </span>
   );
 }
 
@@ -193,6 +218,7 @@ const OrderPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [selectedOrder, setSelectedOrder] = useState<UserOrder | null>(null);
+  const [ticketOrder, setTicketOrder] = useState<UserOrder | null>(null);
 
   async function fetchOrders() {
     setLoadingOrders(true);
@@ -225,9 +251,9 @@ const OrderPage = () => {
   const filtered = orders.filter((o) => {
     const matchesSearch =
       o.service_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      o.link.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      o.provider_order_id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filterStatus === "all" || o.status.toLowerCase() === filterStatus;
+      o.link.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesFilter =
+      filterStatus === "all" || mapOrderStatus(o.status).key === filterStatus;
     return matchesSearch && matchesFilter;
   });
 
@@ -238,6 +264,14 @@ const OrderPage = () => {
           order={selectedOrder}
           onClose={() => setSelectedOrder(null)}
           onRefresh={refreshOrder}
+        />
+      )}
+      {ticketOrder && (
+        <RaiseTicketModal
+          initialType="order_related"
+          initialOrderId={ticketOrder.id}
+          onClose={() => setTicketOrder(null)}
+          onSuccess={() => {}}
         />
       )}
 
@@ -307,10 +341,10 @@ const OrderPage = () => {
               onChange={(e) => setFilterStatus(e.target.value)}
             >
               <option value="all">All Status</option>
-              <option value="completed">Completed</option>
-              <option value="pending">Pending</option>
-              <option value="processing">Processing</option>
-              <option value="cancelled">Cancelled</option>
+              <option value="payment_pending">Payment Pending</option>
+              <option value="success">Success</option>
+              <option value="in_progress">In Progress</option>
+              <option value="error">Error</option>
             </select>
             <Filter className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
           </div>
@@ -327,6 +361,7 @@ const OrderPage = () => {
             <table className="min-w-full divide-y divide-gray-100">
               <thead className="bg-gray-50">
                 <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider hidden sm:table-cell">Order ID</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Date</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider hidden md:table-cell">Link</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Service</th>
@@ -339,8 +374,14 @@ const OrderPage = () => {
                 {filtered.length > 0 ? (
                   filtered.map((order) => (
                     <tr key={order.id} className="hover:bg-gray-50/50">
+                      <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-gray-500 hidden sm:table-cell">
+                        #{order.id.slice(-8)}
+                      </td>
                       <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">
-                        {new Date(order.created_at).toLocaleDateString()}
+                        {new Date(toUtc(order.created_at)).toLocaleString(undefined, {
+                          month: "short", day: "numeric", year: "numeric",
+                          hour: "2-digit", minute: "2-digit",
+                        })}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-xs text-teal-600 hidden md:table-cell">
                         <a
@@ -354,7 +395,7 @@ const OrderPage = () => {
                         </a>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-700">
-                        <span className="block font-medium">{order.service_name}</span>
+                        <span className="block font-medium">{order.category_name || order.service_name}</span>
                         <span className="text-gray-400">Qty: {order.quantity.toLocaleString()}</span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-700 hidden sm:table-cell">
@@ -364,18 +405,27 @@ const OrderPage = () => {
                         {getStatusBadge(order.status)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-xs">
-                        <button
-                          onClick={() => setSelectedOrder(order)}
-                          className="font-medium text-teal-600 hover:text-teal-700"
-                        >
-                          Status
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setSelectedOrder(order)}
+                            className="font-medium text-teal-600 hover:text-teal-700"
+                          >
+                            Details
+                          </button>
+                          <span className="text-gray-200">|</span>
+                          <button
+                            onClick={() => setTicketOrder(order)}
+                            className="font-medium text-orange-500 hover:text-orange-600"
+                          >
+                            Raise Ticket
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-400">
+                    <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-400">
                       {orders.length === 0 ? (
                         <span>
                           No orders yet.{" "}
