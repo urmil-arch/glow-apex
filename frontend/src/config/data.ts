@@ -31,7 +31,10 @@ export interface BlogPost {
   tags: string[];
   imageUrl: string;
 }
-import { ServicesPackages } from "@/components/sections/hero/service-selection-component";
+type ServicesPackages = Record<string, Record<string, {
+  name: string;
+  quantities: Array<{ amount: number; price: string; discount?: number }>;
+}>>;
 
 export const services = [
   {
