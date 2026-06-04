@@ -233,6 +233,7 @@ const AdminOrdersPage: React.FC = () => {
   const [detailOrder, setDetailOrder] = useState<AdminOrder | null>(null);
   const [detailLive, setDetailLive] = useState<AdminOrder | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [refreshSuccess, setRefreshSuccess] = useState(false);
   const [editLinkOrder, setEditLinkOrder] = useState<AdminOrder | null>(null);
   const [editLinkValue, setEditLinkValue] = useState('');
   const [editServiceOrder, setEditServiceOrder] = useState<AdminOrder | null>(null);
@@ -339,9 +340,12 @@ const AdminOrdersPage: React.FC = () => {
   const refreshDetail = async () => {
     if (!detailOrder) return;
     setDetailLoading(true);
+    setRefreshSuccess(false);
     try {
       const res = await api.get<AdminOrder>(`${API_ENDPOINTS.ADMIN_ORDERS}/${detailOrder.id}`);
       setDetailLive(res.data);
+      setRefreshSuccess(true);
+      setTimeout(() => setRefreshSuccess(false), 2500);
     } catch {
       // keep existing data
     } finally {
@@ -660,11 +664,21 @@ const AdminOrdersPage: React.FC = () => {
                   <DetailField label="Remains" value={o.remains || '—'} />
                   <DetailField label="Created" value={formatDate(o.created_at)} />
                 </div>
-                <button onClick={refreshDetail} disabled={detailLoading}
-                  className="flex items-center gap-2 text-sm px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40">
-                  {detailLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  Refresh from Provider
-                </button>
+                <div className="flex items-center gap-3">
+                  <button onClick={refreshDetail} disabled={detailLoading}
+                    className="flex items-center gap-2 text-sm px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40">
+                    {detailLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                    Refresh from Provider
+                  </button>
+                  {refreshSuccess && (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                      </svg>
+                      Refreshed successfully
+                    </span>
+                  )}
+                </div>
               </>
             );
           })()}

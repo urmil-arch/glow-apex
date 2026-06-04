@@ -264,6 +264,15 @@ const AdminPaymentsPage = () => {
 
   useEffect(() => { fetchPayments(); }, [fetchPayments]);
 
+  // Auto-search after 400ms of no typing — same pattern as orders page
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const handleSearch = (e: React.FormEvent) => {

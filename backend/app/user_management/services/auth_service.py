@@ -98,6 +98,7 @@ class AuthService:
                 username=user["username"],
                 email=user["email"],
                 is_admin=user.get("is_admin", False),
+                personal_discount=float(user.get("personal_discount", 0) or 0),
             ),
         )
 
@@ -146,6 +147,7 @@ class AuthService:
                 email=user["email"],
                 is_admin=user.get("is_admin", False),
                 is_suspended=user.get("is_suspended", False),
+                personal_discount=float(user.get("personal_discount", 0) or 0),
             ),
         )
 

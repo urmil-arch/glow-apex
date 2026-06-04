@@ -22,6 +22,7 @@ class ProfileService:
             email=user["email"],
             is_admin=user.get("is_admin", False),
             is_suspended=user.get("is_suspended", False),
+            personal_discount=float(user.get("personal_discount", 0) or 0),
         )
 
     async def update_profile(self, user: dict, data: UpdateProfileRequest) -> ProfileResponse:
@@ -52,6 +53,7 @@ class ProfileService:
             email=refreshed["email"],
             is_admin=refreshed.get("is_admin", False),
             is_suspended=refreshed.get("is_suspended", False),
+            personal_discount=float(refreshed.get("personal_discount", 0) or 0),
         )
 
     async def change_password(self, user: dict, data: ChangePasswordRequest) -> dict:

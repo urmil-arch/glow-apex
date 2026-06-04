@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
 
+from app.admin.pricing.repository import PricingRepository
 from app.admin.provider_config.repository import RoutingConfigRepository
 from app.admin.providers.repository import ProviderRepository
 from app.admin.services.repository import CategoryRepository, ServiceRepository
@@ -19,6 +20,7 @@ from app.orders.schemas import (
     RefillResponse,
     StripeInitiateResponse,
 )
+from app.orders.pricing_utils import CATEGORY_TO_SERVICE_TYPE, calc_pricing_charge
 from app.payments.ledger_repository import PaymentLedgerRepository
 from app.payments.stripe import service as stripe_service
 from app.user_management.utils.dependencies import get_current_user
@@ -138,7 +140,8 @@ async def place_order(
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Service is currently unavailable. Please try again later.")
 
     provider_order_id = str(provider_result.get("order", ""))
-    charge = round(service["rate"] * body.quantity / 1000, 6)
+    server_cost = round(service["rate"] * body.quantity / 1000, 6)
+    charge = server_cost  # direct orders: user price = provider cost (no pricing page involved)
     user_id = str(user["_id"])
 
     category = await CategoryRepository(db).find_by_id(service.get("category_id", ""))
@@ -154,6 +157,7 @@ async def place_order(
         "link": body.link,
         "quantity": body.quantity,
         "charge": charge,
+        "server_cost": server_cost,
         "status": "Pending",
         "start_count": "",
         "remains": "",
@@ -241,7 +245,8 @@ async def place_order_by_category(
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Service is currently unavailable. Please try again later.")
 
     provider_order_id = str(provider_result.get("order", ""))
-    charge = round(fulfilled_service["rate"] * body.quantity / 1000, 6)
+    server_cost = round(fulfilled_service["rate"] * body.quantity / 1000, 6)
+    charge = server_cost  # direct orders: user price = provider cost
     user_id = str(user["_id"])
 
     doc = {
@@ -254,6 +259,7 @@ async def place_order_by_category(
         "link": body.link,
         "quantity": body.quantity,
         "charge": charge,
+        "server_cost": server_cost,
         "status": "Pending",
         "start_count": "",
         "remains": "",
@@ -450,8 +456,42 @@ async def initiate_stripe_order(
             f"Quantity must be between {min_qty} and {max_qty}",
         )
 
-    charge = max(round(service["rate"] * body.quantity / 1000, 6), 0.50)
+    # Use the admin pricing page price when a matching package is configured.
+    # This ensures users are charged exactly what the frontend showed them.
+    # Falls back to SMM service rate if no pricing is set for this category/quantity.
+    admin_charge: float | None = None
+    service_type_key = CATEGORY_TO_SERVICE_TYPE.get(category_name_val)
+    if service_type_key:
+        pricing_doc = await PricingRepository(db).find_by_service_type(service_type_key)
+        if pricing_doc:
+            admin_charge = calc_pricing_charge(pricing_doc, body.quantity)
+
+    if admin_charge is not None:
+        charge = max(round(admin_charge, 6), 0.50)
+        logger.info(
+            "[INITIATE] Using admin pricing: $%.4f for %s × %s (category=%s)",
+            charge, service_type_key, body.quantity, category_name_val,
+        )
+    else:
+        charge = max(round(service["rate"] * body.quantity / 1000, 6), 0.50)
+        logger.info(
+            "[INITIATE] No pricing package found — using service rate: $%.4f for qty=%s",
+            charge, body.quantity,
+        )
+
     user_id = str(user["_id"])
+
+    # Apply user's personal discount (set by admin) on top of the package price
+    personal_discount = float(user.get("personal_discount", 0) or 0)
+    if personal_discount > 0:
+        charge = max(round(charge * (1 - personal_discount / 100), 6), 0.50)
+        logger.info(
+            "[INITIATE] Personal discount %.1f%% applied — final charge=$%.4f | user=%s",
+            personal_discount, charge, user.get("username", user_id),
+        )
+
+    # server_cost = what we pay the SMM provider (provider rate, independent of our markup)
+    server_cost = round(service["rate"] * body.quantity / 1000, 6)
 
     # Create pending order record
     order_doc = {
@@ -464,6 +504,7 @@ async def initiate_stripe_order(
         "link": body.link,
         "quantity": body.quantity,
         "charge": charge,
+        "server_cost": server_cost,
         "status": "pending_payment",
         "start_count": "",
         "remains": str(body.quantity),

@@ -11,6 +11,7 @@ export interface User {
   email: string;
   is_admin?: boolean;
   is_suspended?: boolean;
+  personal_discount?: number;
 }
 
 interface AuthContextType {

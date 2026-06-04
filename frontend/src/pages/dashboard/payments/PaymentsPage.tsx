@@ -35,7 +35,7 @@ function mapOrderStatus(raw: string): { label: string; key: StatusKey } {
   if (s === "in progress" || s === "inprogress" || s === "processing")
                                return { label: "In Progress",     key: "in_progress" };
   if (s === "partial")         return { label: "In Progress",     key: "in_progress" };
-  return                              { label: "Error",           key: "error" };
+  return                              { label: "In Progress",     key: "in_progress" };
 }
 
 const paymentStatusBadge = (s: string) => {

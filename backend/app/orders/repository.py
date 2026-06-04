@@ -27,14 +27,69 @@ class OrderRepository:
         page: int = 1,
         page_size: int = 50,
     ) -> tuple[list[dict], int]:
-        """Return a paginated slice of a user's orders and the total count."""
-        query = {"user_id": user_id}
-        total = await self._col.count_documents(query)
+        """
+        Return a paginated slice of a user's orders and the total count.
+        For orders missing category_name (placed before that field was added),
+        look it up from admin_services → service_categories so the user always
+        sees a clean category name instead of the raw provider service name.
+        """
         skip = (page - 1) * page_size
-        cursor = (
-            self._col.find(query).sort("created_at", -1).skip(skip).limit(page_size)
-        )
-        orders = await cursor.to_list(length=page_size)
+        base_match = {"user_id": user_id}
+
+        # Total count (fast, no joins needed)
+        total = await self._col.count_documents(base_match)
+
+        pipeline: list[dict] = [
+            {"$match": base_match},
+            {"$sort": {"created_at": -1}},
+            {"$skip": skip},
+            {"$limit": page_size},
+            # Join admin_services by service_id (stored as string, _id is ObjectId)
+            {
+                "$lookup": {
+                    "from": "admin_services",
+                    "let": {"svc_id": "$service_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": [{"$toString": "$_id"}, "$$svc_id"]}}},
+                        {"$project": {"category_id": 1}},
+                    ],
+                    "as": "_svc",
+                }
+            },
+            # Join service_categories to get the category name
+            {
+                "$lookup": {
+                    "from": "service_categories",
+                    "let": {"cat_id": {"$arrayElemAt": ["$_svc.category_id", 0]}},
+                    "pipeline": [
+                        {"$match": {"$expr": {
+                            "$and": [
+                                {"$ne": ["$$cat_id", None]},
+                                {"$ne": ["$$cat_id", ""]},
+                                {"$eq": [{"$toString": "$_id"}, "$$cat_id"]},
+                            ]
+                        }}},
+                        {"$project": {"name": 1}},
+                    ],
+                    "as": "_cat",
+                }
+            },
+            # Use stored category_name when present; fall back to DB lookup for old orders
+            {
+                "$addFields": {
+                    "category_name": {
+                        "$cond": {
+                            "if": {"$gt": [{"$strLenCP": {"$ifNull": ["$category_name", ""]}}, 0]},
+                            "then": "$category_name",
+                            "else": {"$ifNull": [{"$arrayElemAt": ["$_cat.name", 0]}, ""]},
+                        }
+                    }
+                }
+            },
+            {"$project": {"_svc": 0, "_cat": 0}},
+        ]
+
+        orders = await self._col.aggregate(pipeline).to_list(length=page_size)
         return orders, total
 
     async def update(self, order_id: str, updates: dict) -> None:
@@ -99,8 +154,36 @@ class OrderRepository:
         if status_filter:
             match["status"] = status_filter
         if search:
-            pattern = {"$regex": search, "$options": "i"}
-            match["$or"] = [{"link": pattern}, {"service_name": pattern}]
+            term    = search.lstrip("#").strip()
+            pattern = {"$regex": term, "$options": "i"}
+
+            # Resolve user IDs whose username or email matches the search term.
+            # user_id is stored as a string on the order so we convert _id → str.
+            user_ids: list[str] = []
+            async for u in self._col.database["users"].find(
+                {"$or": [
+                    {"username": {"$regex": term, "$options": "i"}},
+                    {"email":    {"$regex": term, "$options": "i"}},
+                ]},
+                {"_id": 1},
+            ):
+                user_ids.append(str(u["_id"]))
+
+            or_conditions: list[dict] = [
+                {"link":          pattern},
+                {"service_name":  pattern},
+                {"category_name": pattern},
+                # Short ID lookup — match the hex _id string (case-insensitive)
+                {"$expr": {"$regexMatch": {
+                    "input":  {"$toLower": {"$toString": "$_id"}},
+                    "regex":  term.lower(),
+                    "options": "",
+                }}},
+            ]
+            if user_ids:
+                or_conditions.append({"user_id": {"$in": user_ids}})
+
+            match["$or"] = or_conditions
 
         pipeline: list[dict] = [
             {"$match": match},

@@ -1,9 +1,10 @@
 import {
   AlertCircle, CheckCircle, Clock, CreditCard, ExternalLink,
-  Filter, Loader, Package, RefreshCw, Search, XCircle,
+  Filter, Loader, Package, RefreshCw, Search,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useOrderStore } from "@/store/useOrderStore";
 import { api } from "@/lib/api";
 import { API_ENDPOINTS } from "@/config";
 import { useAuth } from "@/context/AuthContext";
@@ -11,6 +12,7 @@ import { UserOrder } from "@/types";
 import RaiseTicketModal from "@/components/common/RaiseTicketModal";
 
 const toUtc = (d: string) => d && !d.endsWith('Z') && !d.includes('+') ? `${d}Z` : d;
+
 
 type StatusKey = "payment_pending" | "success" | "in_progress" | "error";
 
@@ -22,7 +24,7 @@ function mapOrderStatus(raw: string): { label: string; key: StatusKey } {
   if (s === "in progress" || s === "inprogress" || s === "processing")
                                return { label: "In Progress",     key: "in_progress" };
   if (s === "partial")         return { label: "In Progress",     key: "in_progress" };
-  return                              { label: "Error",           key: "error" };
+  return                              { label: "In Progress",     key: "in_progress" };
 }
 
 function getStatusBadge(rawStatus: string) {
@@ -53,18 +55,13 @@ interface StatusModalProps {
   order: UserOrder;
   onClose: () => void;
   onRefresh: (id: string) => Promise<void>;
+  onRefill: () => void;
 }
 
-function StatusModal({ order, onClose, onRefresh }: StatusModalProps) {
-  const [loading, setLoading] = useState<"refresh" | "refill" | "cancel" | null>(null);
+function StatusModal({ order, onClose, onRefresh, onRefill }: StatusModalProps) {
+  const [loading, setLoading] = useState<"refresh" | "cancel" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [refillId, setRefillId] = useState<string | null>(null);
   const [localOrder, setLocalOrder] = useState<UserOrder>(order);
-
-  function extractDetail(err: unknown, fallback: string): string {
-    const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-    return typeof detail === "string" ? detail : fallback;
-  }
 
   async function handleRefresh() {
     setLoading("refresh");
@@ -73,21 +70,8 @@ function StatusModal({ order, onClose, onRefresh }: StatusModalProps) {
       const res = await api.get<UserOrder>(`${API_ENDPOINTS.ORDERS}/${localOrder.id}`);
       setLocalOrder(res.data);
       await onRefresh(localOrder.id);
-    } catch (err: unknown) {
-      setError(extractDetail(err, "Failed to refresh status."));
-    } finally {
-      setLoading(null);
-    }
-  }
-
-  async function handleRefill() {
-    setLoading("refill");
-    setError(null);
-    try {
-      const res = await api.post<{ refill_id: string }>(`${API_ENDPOINTS.ORDERS}/${localOrder.id}/refill`);
-      setRefillId(res.data.refill_id);
-    } catch (err: unknown) {
-      setError(extractDetail(err, "Refill request failed."));
+    } catch {
+      setError("Unable to refresh status at the moment. Please try again later.");
     } finally {
       setLoading(null);
     }
@@ -100,14 +84,12 @@ function StatusModal({ order, onClose, onRefresh }: StatusModalProps) {
       await api.post(`${API_ENDPOINTS.ORDERS}/${localOrder.id}/cancel`);
       setLocalOrder({ ...localOrder, status: "Cancelled" });
       await onRefresh(localOrder.id);
-    } catch (err: unknown) {
-      setError(extractDetail(err, "Cancel request failed."));
+    } catch {
+      setError("Unable to cancel at the moment. Please try again later.");
     } finally {
       setLoading(null);
     }
   }
-
-  const { label: mappedStatus } = mapOrderStatus(localOrder.status);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
@@ -168,11 +150,6 @@ function StatusModal({ order, onClose, onRefresh }: StatusModalProps) {
           )}
         </div>
 
-        {refillId && (
-          <p className="text-xs text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 mb-3">
-            Refill submitted — ID: {refillId}
-          </p>
-        )}
         {error && (
           <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">
             {error}
@@ -189,20 +166,19 @@ function StatusModal({ order, onClose, onRefresh }: StatusModalProps) {
             Refresh
           </button>
           <button
-            onClick={handleRefill}
-            disabled={loading !== null || mappedStatus === "Error"}
+            onClick={onRefill}
+            disabled={loading !== null}
             className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg bg-teal-50 text-teal-700 hover:bg-teal-100 disabled:opacity-50 transition-colors"
           >
-            {loading === "refill" && <Loader className="w-3.5 h-3.5 animate-spin" />}
-            Refill
+            Order Again
           </button>
           <button
             onClick={handleCancel}
-            disabled={loading !== null || mappedStatus === "Error"}
+            disabled={loading !== null}
             className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 transition-colors"
           >
             {loading === "cancel" && <Loader className="w-3.5 h-3.5 animate-spin" />}
-            Cancel
+            Cancel this Order
           </button>
         </div>
       </div>
@@ -212,6 +188,8 @@ function StatusModal({ order, onClose, onRefresh }: StatusModalProps) {
 
 const OrderPage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const { setCategoryOrder } = useOrderStore();
   const [orders, setOrders] = useState<UserOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -264,6 +242,15 @@ const OrderPage = () => {
           order={selectedOrder}
           onClose={() => setSelectedOrder(null)}
           onRefresh={refreshOrder}
+          onRefill={() => {
+            setCategoryOrder({
+              categoryName: selectedOrder.category_name || selectedOrder.service_name,
+              quantity: selectedOrder.quantity,
+              link: selectedOrder.link,
+            });
+            setSelectedOrder(null);
+            navigate("/checkout");
+          }}
         />
       )}
       {ticketOrder && (
@@ -287,7 +274,7 @@ const OrderPage = () => {
             </p>
           </div>
           <Link
-            to="/services"
+            to="/"
             className="self-start sm:self-center bg-white text-emerald-600 font-semibold px-5 py-2.5 rounded-lg hover:bg-teal-50 transition-colors text-sm whitespace-nowrap"
           >
             + New Order
@@ -344,7 +331,6 @@ const OrderPage = () => {
               <option value="payment_pending">Payment Pending</option>
               <option value="success">Success</option>
               <option value="in_progress">In Progress</option>
-              <option value="error">Error</option>
             </select>
             <Filter className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
           </div>

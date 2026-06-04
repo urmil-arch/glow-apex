@@ -31,6 +31,7 @@ export interface ServiceOrderData {
 export interface CategoryOrderData {
   categoryName: string
   quantity: number
+  link?: string
 }
 
 interface OrderStore {

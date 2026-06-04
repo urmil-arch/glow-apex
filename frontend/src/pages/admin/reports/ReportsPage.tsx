@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo, Fragment } from 'react';
 import {
   BarChart3, TrendingUp, ShoppingCart, Ticket,
   DollarSign, Layers, Server, RefreshCw, Loader2, AlertCircle,
+  ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config';
@@ -36,9 +37,28 @@ interface ReportSummary {
   total_refills: number;
 }
 
+interface OrderRow extends ReportRow {
+  order_id: string;
+  time: string;
+  service_name: string;
+  status: string;
+}
+
+interface PaymentRow extends ReportRow {
+  payment_id: string;
+  time: string;
+  user: string;
+  method: string;
+  status: string;
+  memo: string;
+  amount: number;
+}
+
 interface ReportResponse {
   summary: ReportSummary;
   rows: ReportRow[];
+  order_rows: OrderRow[];
+  payment_rows: PaymentRow[];
 }
 
 type PeriodKey = 'today' | 'week' | 'month' | '3months' | 'year' | 'all';
@@ -67,6 +87,9 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'server_price', label: 'Server Price'    },
   { key: 'refiller',     label: 'Refiller'        },
 ];
+
+// Tabs that use individual expandable rows (not aggregated)
+const EXPANDABLE_TABS = new Set<TabKey>(['orders', 'charges', 'quantity', 'server_price', 'profit', 'payments']);
 
 interface ColDef {
   header: string;
@@ -97,10 +120,9 @@ const TAB_COLS: Record<TabKey, ColDef[]> = {
     { header: 'Total Replies', getValue: r => r.ticket_replies, format: v => num(v as number) },
   ],
   profit: [
-    { header: 'Revenue',      getValue: r => r.revenue,      format: v => $(v as number),  cls: () => 'text-green-600' },
-    { header: 'Charges',      getValue: r => r.charges,      format: v => $(v as number),  cls: () => 'text-gray-700' },
+    { header: 'Charges',      getValue: r => r.charges,      format: v => $(v as number),  cls: () => 'text-gray-700 font-medium' },
     { header: 'Server Price', getValue: r => r.server_price, format: v => $(v as number),  cls: () => 'text-orange-600' },
-    { header: 'Profit',       getValue: r => r.profit,       format: v => $(v as number),  cls: v => (v as number) >= 0 ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold' },
+    { header: 'Revenue',      getValue: r => r.revenue,      format: v => $(v as number),  cls: v => (v as number) >= 0 ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold' },
   ],
   charges: [
     { header: 'Charges',  getValue: r => r.charges,  format: v => $(v as number), cls: () => 'text-orange-600 font-medium' },
@@ -122,6 +144,25 @@ const TAB_COLS: Record<TabKey, ColDef[]> = {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
+const toUtc = (d: string) => d && !d.endsWith('Z') && !d.includes('+') ? `${d}Z` : d;
+
+const fmtTime = (iso: string) => {
+  if (!iso) return '—';
+  if (/^\d{2}:\d{2}$/.test(iso)) return iso;
+  const d = new Date(toUtc(iso));
+  return isNaN(d.getTime()) ? iso : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+};
+
+const fmtDateTime = (iso: string) => {
+  if (!iso) return '—';
+  if (/^\d{2}:\d{2}$/.test(iso)) return iso;
+  const d = new Date(toUtc(iso));
+  return isNaN(d.getTime()) ? iso : d.toLocaleString(undefined, {
+    month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+};
+
 const fmtPeriod = (p: string, groupBy: GroupBy) => {
   if (!p) return '—';
   if (groupBy === 'month') {
@@ -138,7 +179,18 @@ const emptySummary: ReportSummary = {
   total_tickets: 0,  total_ticket_replies: 0, total_refills: 0,
 };
 
-const ORDER_STATUSES = ['Pending', 'Processing', 'In progress', 'Completed', 'Cancelled', 'Partial', 'Refunded', 'Failed'] as const;
+const ORDER_STATUSES: { key: string; label: string }[] = [
+  { key: 'pending_payment', label: 'Payment Pending' },
+  { key: 'Pending',         label: 'Pending'         },
+  { key: 'In progress',     label: 'In Progress'     },
+  { key: 'Processing',      label: 'Processing'      },
+  { key: 'Completed',       label: 'Completed'       },
+  { key: 'Partial',         label: 'Partial'         },
+  { key: 'Cancelled',       label: 'Cancelled'       },
+  { key: 'Refunded',        label: 'Refunded'        },
+  { key: 'failed',          label: 'Payment Failed'  },
+  { key: 'provider_error',  label: 'Provider Error'  },
+];
 const TICKET_STATUSES: { key: string; label: string }[] = [
   { key: 'open', label: 'Open' },
   { key: 'in_progress', label: 'In Progress' },
@@ -152,14 +204,16 @@ const TICKET_TYPES: { key: string; label: string }[] = [
 ];
 
 const orderStatusCls = (s: string): string => {
-  const l = s.toLowerCase();
-  if (l === 'completed')   return 'bg-green-50 border border-green-100';
-  if (l === 'pending')     return 'bg-yellow-50 border border-yellow-100';
+  const l = s.toLowerCase().replace(/_/g, ' ');
+  if (l === 'completed')        return 'bg-green-50 border border-green-100';
+  if (l === 'pending')          return 'bg-yellow-50 border border-yellow-100';
+  if (l === 'pending payment')  return 'bg-amber-50 border border-amber-100';
   if (l === 'processing' || l === 'in progress') return 'bg-blue-50 border border-blue-100';
-  if (l === 'cancelled')   return 'bg-red-50 border border-red-100';
-  if (l === 'failed')      return 'bg-red-50 border border-red-100';
-  if (l === 'partial')     return 'bg-purple-50 border border-purple-100';
-  if (l === 'refunded')    return 'bg-orange-50 border border-orange-100';
+  if (l === 'cancelled')        return 'bg-red-50 border border-red-100';
+  if (l === 'failed')           return 'bg-red-50 border border-red-100';
+  if (l === 'partial')          return 'bg-purple-50 border border-purple-100';
+  if (l === 'refunded')         return 'bg-orange-50 border border-orange-100';
+  if (l === 'provider error')   return 'bg-rose-50 border border-rose-100';
   return 'bg-gray-50 border border-gray-100';
 };
 
@@ -201,10 +255,14 @@ const ReportsPage = () => {
   const [period,  setPeriod]  = useState<PeriodKey>('today');
   const [groupBy, setGroupBy] = useState<GroupBy>('day');
   const [tab,     setTab]     = useState<TabKey>('orders');
-  const [summary, setSummary] = useState<ReportSummary>(emptySummary);
-  const [rows,    setRows]    = useState<ReportRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState('');
+  const [summary,          setSummary]          = useState<ReportSummary>(emptySummary);
+  const [rows,             setRows]             = useState<ReportRow[]>([]);
+  const [orderRows,        setOrderRows]        = useState<OrderRow[]>([]);
+  const [paymentRows,      setPaymentRows]      = useState<PaymentRow[]>([]);
+  const [collapsedPeriods, setCollapsedPeriods] = useState<Set<string>>(new Set());
+  const [loading,          setLoading]          = useState(true);
+  const [error,            setError]            = useState('');
+  const [refreshSuccess,   setRefreshSuccess]   = useState(false);
 
   const [orderBreakdown,        setOrderBreakdown]        = useState<Record<string, number>>({});
   const [orderBreakdownLoading, setOrderBreakdownLoading] = useState(false);
@@ -221,6 +279,11 @@ const ReportsPage = () => {
       });
       setSummary(res.data.summary ?? emptySummary);
       setRows(res.data.rows ?? []);
+      setOrderRows(res.data.order_rows ?? []);
+      setPaymentRows(res.data.payment_rows ?? []);
+      setCollapsedPeriods(new Set());
+      setRefreshSuccess(true);
+      setTimeout(() => setRefreshSuccess(false), 2500);
     } catch {
       setError('Failed to load report data. The reports endpoint may not be implemented yet.');
       setSummary(emptySummary);
@@ -238,12 +301,12 @@ const ReportsPage = () => {
       const results = await Promise.all(
         ORDER_STATUSES.map(s =>
           api.get<{ orders: unknown[]; total: number }>(API_ENDPOINTS.ADMIN_ORDERS, {
-            params: { status_filter: s, page_size: 1 },
-          }).then(r => ({ status: s, count: r.data.total ?? 0 }))
+            params: { status: s.key, page_size: 1 },
+          }).then(r => ({ key: s.key, count: r.data.total ?? 0 }))
         )
       );
       const bd: Record<string, number> = {};
-      results.forEach(r => { bd[r.status] = r.count; });
+      results.forEach(r => { bd[r.key] = r.count; });
       setOrderBreakdown(bd);
     } catch { /* non-critical */ }
     finally { setOrderBreakdownLoading(false); }
@@ -281,6 +344,37 @@ const ReportsPage = () => {
     if (tab === 'tickets') fetchTicketBreakdown();
   }, [tab, fetchOrderBreakdown, fetchTicketBreakdown]);
 
+  const isExpandableTab = EXPANDABLE_TABS.has(tab);
+
+  const paymentGrouped = useMemo(() => {
+    const map = new Map<string, PaymentRow[]>();
+    paymentRows.forEach(r => {
+      if (!map.has(r.period)) map.set(r.period, []);
+      map.get(r.period)!.push(r);
+    });
+    return Array.from(map.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([periodKey, rows]) => ({ periodKey, periodOrderRows: rows as unknown as OrderRow[] }));
+  }, [paymentRows]);
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, OrderRow[]>();
+    orderRows.forEach(r => {
+      if (!map.has(r.period)) map.set(r.period, []);
+      map.get(r.period)!.push(r);
+    });
+    return Array.from(map.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([periodKey, periodOrderRows]) => ({ periodKey, periodOrderRows }));
+  }, [orderRows]);
+
+  const togglePeriod = (key: string) =>
+    setCollapsedPeriods(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+
   const cols = TAB_COLS[tab];
 
   // Compute totals row
@@ -304,13 +398,24 @@ const ReportsPage = () => {
             Analytics and statistics across all platform activity.
           </p>
         </div>
-        <button
-          onClick={fetchReport}
-          className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={fetchReport}
+            disabled={loading}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors"
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Refresh
+          </button>
+          {refreshSuccess && (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+              </svg>
+              Refreshed successfully
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Period selector */}
@@ -357,16 +462,16 @@ const ReportsPage = () => {
           iconColor="text-blue-500"
         />
         <StatCard
-          label={`Revenue — ${periodLabel}`}
-          value={$(summary.total_revenue)}
+          label={`Charges — ${periodLabel}`}
+          value={$(summary.total_charges)}
           sub={`${summary.total_payments} payments`}
           icon={<DollarSign className="w-4 h-4" />}
           iconBg="bg-green-50"
           iconColor="text-green-500"
         />
         <StatCard
-          label={`Profit — ${periodLabel}`}
-          value={$(summary.total_profit)}
+          label={`Revenue — ${periodLabel}`}
+          value={$(summary.total_revenue)}
           sub={`Server: ${$(summary.total_server_price)}`}
           icon={<TrendingUp className="w-4 h-4" />}
           iconBg="bg-teal-50"
@@ -400,75 +505,186 @@ const ReportsPage = () => {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        {loading ? (
-          <div className="flex justify-center py-20">
+      {(() => {
+        if (loading) return (
+          <div className="bg-white rounded-xl border border-gray-200 flex justify-center py-20">
             <Loader2 className="w-7 h-7 text-teal-500 animate-spin" />
           </div>
-        ) : error ? (
-          <div className="flex flex-col items-center py-16 gap-3">
+        );
+        if (error) return (
+          <div className="bg-white rounded-xl border border-gray-200 flex flex-col items-center py-16 gap-3">
             <AlertCircle className="w-8 h-8 text-amber-400" />
             <p className="text-sm text-gray-500 text-center max-w-sm">{error}</p>
           </div>
-        ) : rows.length === 0 ? (
-          <div className="flex flex-col items-center py-20 text-gray-400 gap-2">
+        );
+
+        const hasData = isExpandableTab
+          ? (tab === 'payments' ? paymentRows.length > 0 : orderRows.length > 0)
+          : rows.length > 0;
+        if (!hasData) return (
+          <div className="bg-white rounded-xl border border-gray-200 flex flex-col items-center py-20 text-gray-400 gap-2">
             <BarChart3 className="w-10 h-10 text-gray-300" />
             <p className="text-sm">No data for this period</p>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">
-                    {groupBy === 'day' ? 'Date' : 'Month'}
-                  </th>
-                  {cols.map(c => (
-                    <th key={c.header} className="text-left px-4 py-3 font-medium text-gray-600">
-                      {c.header}
+        );
+
+        return (
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50">
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[200px]">
+                      {isExpandableTab ? 'Order' : (groupBy === 'day' ? 'Date' : 'Month')}
                     </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row, i) => (
-                  <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 text-gray-700 font-medium text-xs whitespace-nowrap">
-                      {fmtPeriod(row.period, groupBy)}
-                    </td>
-                    {cols.map(c => {
-                      const val = c.getValue(row);
-                      const formatted = c.format(val);
-                      const colorCls = c.cls ? c.cls(val) : 'text-gray-700';
+                    {cols.map(c => (
+                      <th key={c.header} className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">
+                        {c.header}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {isExpandableTab ? (
+                    // ── Grouped expandable individual rows (orders or payments) ──
+                    (tab === 'payments' ? paymentGrouped : grouped).map(({ periodKey, periodOrderRows }) => {
+                      const isExpanded = !collapsedPeriods.has(periodKey);
+                      const itemLabel  = tab === 'payments' ? 'payment' : 'order';
+                      const groupTotals = periodOrderRows.reduce<Record<string, number>>((acc, r) => {
+                        cols.forEach(c => {
+                          const v = c.getValue(r as ReportRow);
+                          if (typeof v === 'number') acc[c.header] = (acc[c.header] ?? 0) + v;
+                        });
+                        return acc;
+                      }, {});
                       return (
-                        <td key={c.header} className={`px-4 py-3 text-sm ${colorCls}`}>
+                        <Fragment key={periodKey}>
+                          {/* Period group header */}
+                          <tr
+                            onClick={() => togglePeriod(periodKey)}
+                            className="cursor-pointer bg-gray-50 hover:bg-teal-50/40 border-b border-gray-200 transition-colors select-none"
+                          >
+                            <td className="px-4 py-2.5 font-semibold text-gray-800 text-xs">
+                              <span className="inline-flex items-center gap-2">
+                                {isExpanded
+                                  ? <ChevronDown className="w-3.5 h-3.5 text-teal-500 flex-shrink-0" />
+                                  : <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />}
+                                {fmtPeriod(periodKey, groupBy)}
+                                <span className="text-gray-400 font-normal">
+                                  ({periodOrderRows.length} {itemLabel}{periodOrderRows.length !== 1 ? 's' : ''})
+                                </span>
+                              </span>
+                            </td>
+                            {cols.map(c => {
+                              const val = groupTotals[c.header] ?? 0;
+                              const colorCls = c.cls ? c.cls(val) : 'text-gray-700';
+                              return (
+                                <td key={c.header} className={`px-4 py-2.5 text-xs font-semibold ${colorCls}`}>
+                                  {c.format(val)}
+                                </td>
+                              );
+                            })}
+                          </tr>
+
+                          {/* Individual rows */}
+                          {isExpanded && periodOrderRows.map((row, i) => {
+                            const pr = row as unknown as PaymentRow;
+                            return (
+                              <tr
+                                key={`${periodKey}-${i}`}
+                                className="border-b border-gray-50 hover:bg-gray-50 transition-colors"
+                              >
+                                <td className="px-4 py-2.5 pl-8">
+                                  {tab === 'payments' ? (
+                                    <span className="flex flex-col gap-0.5">
+                                      <span className="text-xs flex items-center gap-1.5">
+                                        <span className="text-gray-400">{groupBy === 'month' ? fmtDateTime(pr.time) : fmtTime(pr.time)}</span>
+                                        <span className="font-mono text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">
+                                          #{pr.payment_id}
+                                        </span>
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded capitalize font-medium ${
+                                          pr.status?.toLowerCase() === 'paid' || pr.status?.toLowerCase() === 'completed'
+                                            ? 'bg-green-100 text-green-700'
+                                            : pr.status?.toLowerCase() === 'pending'
+                                            ? 'bg-yellow-100 text-yellow-700'
+                                            : 'bg-red-100 text-red-600'
+                                        }`}>{pr.status}</span>
+                                      </span>
+                                      <span className="text-xs flex items-center gap-1.5 text-gray-500">
+                                        <span className="truncate max-w-[140px]">{pr.user}</span>
+                                        <span className="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded capitalize">
+                                          {pr.method}
+                                        </span>
+                                      </span>
+                                    </span>
+                                  ) : (
+                                    <span className="flex flex-col gap-0.5">
+                                      <span className="text-xs text-gray-700 flex items-center gap-1.5">
+                                        <span className="text-gray-400">{groupBy === 'month' ? fmtDateTime(row.time) : fmtTime(row.time)}</span>
+                                        <span className="font-mono text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">
+                                          #{row.order_id}
+                                        </span>
+                                      </span>
+                                      <span className="text-xs text-gray-500 truncate max-w-[240px]">{row.service_name}</span>
+                                    </span>
+                                  )}
+                                </td>
+                                {cols.map(c => {
+                                  const val = c.getValue(row as ReportRow);
+                                  const colorCls = c.cls ? c.cls(val) : 'text-gray-700';
+                                  return (
+                                    <td key={c.header} className={`px-4 py-2.5 text-sm ${colorCls}`}>
+                                      {c.format(val)}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            );
+                          })}
+                        </Fragment>
+                      );
+                    })
+                  ) : (
+                    // ── Aggregated rows (payments, tickets, etc.) ──
+                    rows.map((row, i) => (
+                      <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3 text-gray-700 font-medium text-xs whitespace-nowrap">
+                          {fmtPeriod(row.period, groupBy)}
+                        </td>
+                        {cols.map(c => {
+                          const val = c.getValue(row);
+                          const colorCls = c.cls ? c.cls(val) : 'text-gray-700';
+                          return (
+                            <td key={c.header} className={`px-4 py-3 text-sm ${colorCls}`}>
+                              {c.format(val)}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                {/* Totals row */}
+                <tfoot>
+                  <tr className="border-t-2 border-gray-200 bg-gray-50">
+                    <td className="px-4 py-3 font-semibold text-gray-800 text-xs">Total</td>
+                    {cols.map(c => {
+                      const val = totals[c.header] ?? 0;
+                      const formatted = typeof val === 'number' ? c.format(val) : '—';
+                      const colorCls = c.cls ? c.cls(val) : 'text-gray-800';
+                      return (
+                        <td key={c.header} className={`px-4 py-3 text-sm font-semibold ${colorCls}`}>
                           {formatted}
                         </td>
                       );
                     })}
                   </tr>
-                ))}
-              </tbody>
-              {/* Totals row */}
-              <tfoot>
-                <tr className="border-t-2 border-gray-200 bg-gray-50">
-                  <td className="px-4 py-3 font-semibold text-gray-800 text-xs">Total</td>
-                  {cols.map(c => {
-                    const val = totals[c.header] ?? 0;
-                    const formatted = typeof val === 'number' ? c.format(val) : '—';
-                    const colorCls = c.cls ? c.cls(val) : 'text-gray-800';
-                    return (
-                      <td key={c.header} className={`px-4 py-3 text-sm font-semibold ${colorCls}`}>
-                        {formatted}
-                      </td>
-                    );
-                  })}
-                </tr>
-              </tfoot>
-            </table>
+                </tfoot>
+              </table>
+            </div>
           </div>
-        )}
-      </div>
+        );
+      })()}
 
       {/* Order Status Breakdown */}
       {tab === 'orders' && (
@@ -482,11 +698,11 @@ const ReportsPage = () => {
               <Loader2 className="w-5 h-5 text-teal-500 animate-spin" />
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
               {ORDER_STATUSES.map(s => (
-                <div key={s} className={`rounded-xl p-3 text-center ${orderStatusCls(s)}`}>
-                  <p className="text-2xl font-bold text-gray-900">{(orderBreakdown[s] ?? 0).toLocaleString()}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{s}</p>
+                <div key={s.key} className={`rounded-xl p-3 text-center ${orderStatusCls(s.key)}`}>
+                  <p className="text-2xl font-bold text-gray-900">{(orderBreakdown[s.key] ?? 0).toLocaleString()}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
                 </div>
               ))}
             </div>
@@ -544,19 +760,19 @@ const ReportsPage = () => {
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="flex items-center gap-2 mb-3">
               <Layers className="w-4 h-4 text-gray-400" />
-              <p className="text-sm font-medium text-gray-700">Charges</p>
+              <p className="text-sm font-medium text-gray-700">Charges (User Billing)</p>
             </div>
-            <p className="text-xl font-bold text-orange-600">{$(summary.total_charges)}</p>
+            <p className="text-xl font-bold text-gray-800">{$(summary.total_charges)}</p>
             <p className="text-xs text-gray-400 mt-1">{num(summary.total_quantity)} total units</p>
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="flex items-center gap-2 mb-3">
               <Server className="w-4 h-4 text-gray-400" />
-              <p className="text-sm font-medium text-gray-700">Server Price</p>
+              <p className="text-sm font-medium text-gray-700">Server Price (Provider Cost)</p>
             </div>
             <p className="text-xl font-bold text-orange-500">{$(summary.total_server_price)}</p>
-            <p className="text-xs text-gray-400 mt-1">SMM panel costs</p>
+            <p className="text-xs text-gray-400 mt-1">Paid to SMM providers</p>
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 p-5">

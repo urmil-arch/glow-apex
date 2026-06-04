@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2, Save, Loader2, DollarSign, ToggleLeft, ToggleRight } from "lucide-react";
+import { Plus, Trash2, Save, Loader2, DollarSign, ToggleLeft, ToggleRight, ChevronDown, ChevronRight } from "lucide-react";
 import { api } from "@/lib/api";
 import { API_ENDPOINTS } from "@/config";
 
@@ -234,6 +234,7 @@ interface ServiceCardProps {
 }
 
 const ServiceCard: React.FC<ServiceCardProps> = ({ serviceType, initial, minQty, maxQty }) => {
+  const [isOpen,  setIsOpen]  = useState(false);
   const [config, setConfig] = useState<LocalConfig>(initial);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved]   = useState(false);
@@ -281,27 +282,48 @@ const ServiceCard: React.FC<ServiceCardProps> = ({ serviceType, initial, minQty,
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className={`bg-white rounded-xl border transition-colors ${isOpen ? "border-teal-200" : "border-gray-200"}`}>
+      {/* Clickable header */}
+      <div
+        className="flex items-center justify-between px-5 py-4 cursor-pointer select-none"
+        onClick={() => setIsOpen((o) => !o)}
+      >
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-teal-50 flex items-center justify-center flex-shrink-0">
-            <DollarSign className="w-4 h-4 text-teal-600" />
+          {isOpen
+            ? <ChevronDown className="w-4 h-4 text-teal-500 flex-shrink-0" />
+            : <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />}
+          <div className="w-8 h-8 rounded-lg bg-teal-50 flex items-center justify-center flex-shrink-0">
+            <DollarSign className="w-3.5 h-3.5 text-teal-600" />
           </div>
-          <h2 className="font-semibold text-gray-900">{config.display_name}</h2>
+          <div>
+            <h2 className="font-semibold text-gray-900 text-sm">{config.display_name}</h2>
+            {!isOpen && config.price_per_1000 > 0 && (
+              <p className="text-xs text-gray-400">
+                ${config.price_per_1000}/1k ·{" "}
+                {config.value_packages.filter((p) => p.is_active).length} value,{" "}
+                {config.bulk_packages.filter((p) => p.is_active).length} bulk active
+              </p>
+            )}
+          </div>
         </div>
-        <button
-          onClick={() => set({ is_active: !config.is_active })}
-          className={`flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg border transition-colors ${
-            config.is_active
-              ? "border-teal-200 bg-teal-50 text-teal-700"
-              : "border-gray-200 bg-gray-50 text-gray-400"
-          }`}
-        >
-          {config.is_active ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
-          {config.is_active ? "Active" : "Inactive"}
-        </button>
+        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => set({ is_active: !config.is_active })}
+            className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-colors ${
+              config.is_active
+                ? "border-teal-200 bg-teal-50 text-teal-700"
+                : "border-gray-200 bg-gray-50 text-gray-400"
+            }`}
+          >
+            {config.is_active ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}
+            {config.is_active ? "Active" : "Inactive"}
+          </button>
+        </div>
       </div>
+
+      {/* Expandable body */}
+      {isOpen && (
+      <div className="px-5 pb-5 space-y-5 border-t border-gray-100">
 
       {/* Price per 1000 */}
       <div>
@@ -372,6 +394,8 @@ const ServiceCard: React.FC<ServiceCardProps> = ({ serviceType, initial, minQty,
           </button>
         </div>
       </div>
+      </div>
+      )}
     </div>
   );
 };

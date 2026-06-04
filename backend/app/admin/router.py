@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from app.admin.orders.router import router as orders_router
+from app.admin.reports.router import router as reports_router
 from app.admin.payments.router import router as payments_router
 from app.admin.provider_config.router import router as provider_config_router
 from app.admin.providers.router import router as providers_router
@@ -19,7 +20,8 @@ router.include_router(providers_router, prefix="/providers", tags=["Admin Provid
 router.include_router(services_router, prefix="/services", tags=["Admin Services"])
 router.include_router(settings_router, prefix="/settings", tags=["Admin Settings"])
 router.include_router(provider_config_router, prefix="/routing", tags=["Admin Routing Config"])
-router.include_router(support_router, prefix="/support", tags=["Admin Support"])
+router.include_router(support_router,  prefix="/support",  tags=["Admin Support"])
+router.include_router(reports_router,  prefix="/reports",  tags=["Admin Reports"])
 
 
 @router.get("/health")

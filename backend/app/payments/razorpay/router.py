@@ -15,7 +15,9 @@ from app.payments.razorpay.schemas import (
     RazorpayCreateResponse,
     RazorpayVerifyRequest,
 )
+from app.orders.pricing_utils import CATEGORY_TO_SERVICE_TYPE, calc_pricing_charge
 from app.orders.provider_api import call_provider
+from app.admin.pricing.repository import PricingRepository
 from app.admin.providers.repository import ProviderRepository
 from app.user_management.utils.dependencies import get_current_user
 
@@ -68,19 +70,45 @@ async def create_razorpay_order(
         raise HTTPException(status.HTTP_400_BAD_REQUEST,
                             f"Quantity must be between {min_qty} and {max_qty}")
 
-    charge_usd = max(round(service["rate"] * body.quantity / 1000, 6), 0.50)
-    description = f"{service.get('name', 'Order')} × {body.quantity:,}"
+    # Resolve category name for the service (needed for pricing lookup)
+    if body.category_name:
+        category_name_val = body.category_name
+    else:
+        cat = await CategoryRepository(db).find_by_id(service.get("category_id", ""))
+        category_name_val = cat.get("name", "") if cat else ""
+
+    # Use admin pricing page price when a matching package is configured
+    server_cost = round(service["rate"] * body.quantity / 1000, 6)
+    admin_charge: float | None = None
+    service_type_key = CATEGORY_TO_SERVICE_TYPE.get(category_name_val)
+    if service_type_key:
+        pricing_doc = await PricingRepository(db).find_by_service_type(service_type_key)
+        if pricing_doc:
+            admin_charge = calc_pricing_charge(pricing_doc, body.quantity)
+
+    charge_usd = max(round(admin_charge if admin_charge is not None else server_cost, 6), 0.50)
+
+    # Apply personal discount
+    personal_discount = float(user.get("personal_discount", 0) or 0)
+    if personal_discount > 0:
+        charge_usd = max(round(charge_usd * (1 - personal_discount / 100), 6), 0.50)
+        logger.info("[RZP-INITIATE] Personal discount %.1f%% applied — charge=$%.4f | user=%s",
+                    personal_discount, charge_usd, user.get("username", user_id))
+
+    description = f"{category_name_val or service.get('name', 'Order')} × {body.quantity:,}"
 
     # Create pending order in DB
     order_doc = {
         "user_id": user_id,
         "service_id": str(service["_id"]),
         "service_name": service.get("name", ""),
+        "category_name": category_name_val,
         "provider_id": "",
         "provider_order_id": "",
         "link": body.link,
         "quantity": body.quantity,
         "charge": charge_usd,
+        "server_cost": server_cost,
         "status": "pending_payment",
         "start_count": "",
         "remains": str(body.quantity),
@@ -119,6 +147,7 @@ async def create_razorpay_order(
         "status": "pending",
         "razorpay_order_id": rzp_order["id"],
         "service_name": service.get("name", ""),
+        "category_name": category_name_val,
         "quantity": body.quantity,
         "memo": description,
         "created_at": now,

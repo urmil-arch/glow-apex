@@ -103,12 +103,21 @@ class PaymentLedgerRepository:
         if status_filter:
             match["status"] = status_filter
         if search:
-            pattern = {"$regex": search, "$options": "i"}
+            term    = search.lstrip("#").strip()
+            pattern = {"$regex": term, "$options": "i"}
             match["$or"] = [
-                {"user_email": pattern},
+                {"user_email":    pattern},
                 {"user_username": pattern},
-                {"service_name": pattern},
-                {"memo": pattern},
+                {"service_name":  pattern},
+                {"category_name": pattern},
+                {"memo":          pattern},
+                # Match by linked order_id (stored as string) or payment's own _id
+                {"order_id": pattern},
+                {"$expr": {"$regexMatch": {
+                    "input":  {"$toLower": {"$toString": "$_id"}},
+                    "regex":  term.lower(),
+                    "options": "",
+                }}},
             ]
 
         pipeline: list[dict] = [
