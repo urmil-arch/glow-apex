@@ -4,9 +4,12 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 
+from datetime import datetime, timezone
+
 from app.admin.provider_config.repository import RoutingConfigRepository
 from app.admin.providers.repository import ProviderRepository
 from app.admin.services.repository import ServiceRepository
+from app.admin.tasks.repository import TaskRepository
 from app.orders.provider_api import call_provider
 from app.orders.repository import OrderRepository
 from app.payments.ledger_repository import PaymentLedgerRepository
@@ -210,6 +213,38 @@ async def stripe_webhook(request: Request) -> dict:
         if not placed:
             logger.error("[ORDER %s] All %d provider(s) failed — payment received but SMM order needs manual review", order_id, len(candidates))
             await repo.update(order_id, {"status": "provider_error"})
+
+            # Auto-create a failed_order task so the admin knows to manually fulfil this order.
+            task_repo = TaskRepository(db)
+            if not await task_repo.exists_for_order(order_id, "failed_order"):
+                user_info = (order.get("user_info") or [{}])[0]
+                now = datetime.now(timezone.utc)
+                await task_repo.insert({
+                    "type": "failed_order",
+                    "status": "open",
+                    "priority": "high",
+                    "title": f"Provider unavailable — {order.get('category_name') or order.get('service_name', 'Unknown')} × {order.get('quantity', 0):,}",
+                    "description": (
+                        f"Order #{order_id[-8:]} was paid (${order.get('charge', 0):.4f}) but all "
+                        f"{len(candidates)} provider(s) rejected the order. "
+                        "Manual fulfilment or refund is required."
+                    ),
+                    "notes": "",
+                    "order_id": order_id,
+                    "user_id": order.get("user_id", ""),
+                    "user_email": user_info.get("email", ""),
+                    "user_username": user_info.get("username", ""),
+                    "order_link": order.get("link", ""),
+                    "service_name": order.get("service_name", ""),
+                    "category_name": order.get("category_name", ""),
+                    "quantity": order.get("quantity"),
+                    "charge": order.get("charge"),
+                    "currency": order.get("currency", "USD"),
+                    "seen_by_admin": False,
+                    "resolved_at": None,
+                    "created_at": now,
+                    "updated_at": now,
+                })
 
     elif event.type == "checkout.session.expired":
         session = event.data.object

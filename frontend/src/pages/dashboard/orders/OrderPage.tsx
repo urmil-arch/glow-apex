@@ -1,6 +1,6 @@
 import {
   AlertCircle, CheckCircle, Clock, CreditCard, ExternalLink,
-  Filter, Loader, Package, RefreshCw, Search,
+  Filter, Loader, Package, RefreshCw, Search, XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -8,13 +8,14 @@ import { useOrderStore } from "@/store/useOrderStore";
 import { api } from "@/lib/api";
 import { API_ENDPOINTS } from "@/config";
 import { useAuth } from "@/context/AuthContext";
+import { useCurrency } from "@/context/CurrencyContext";
 import { UserOrder } from "@/types";
 import RaiseTicketModal from "@/components/common/RaiseTicketModal";
 
 const toUtc = (d: string) => d && !d.endsWith('Z') && !d.includes('+') ? `${d}Z` : d;
 
 
-type StatusKey = "payment_pending" | "success" | "in_progress" | "error";
+type StatusKey = "payment_pending" | "success" | "in_progress" | "cancelled" | "error";
 
 function mapOrderStatus(raw: string): { label: string; key: StatusKey } {
   const s = (raw ?? "").toLowerCase().replace(/_/g, " ");
@@ -24,6 +25,8 @@ function mapOrderStatus(raw: string): { label: string; key: StatusKey } {
   if (s === "in progress" || s === "inprogress" || s === "processing")
                                return { label: "In Progress",     key: "in_progress" };
   if (s === "partial")         return { label: "In Progress",     key: "in_progress" };
+  if (s === "cancelled" || s === "canceled")
+                               return { label: "Cancelled",       key: "cancelled" };
   return                              { label: "In Progress",     key: "in_progress" };
 }
 
@@ -44,6 +47,11 @@ function getStatusBadge(rawStatus: string) {
       <Clock className="w-3 h-3" />{label}
     </span>
   );
+  if (key === "cancelled") return (
+    <span className="px-2 py-1 inline-flex items-center gap-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600">
+      <XCircle className="w-3 h-3" />{label}
+    </span>
+  );
   return (
     <span className="px-2 py-1 inline-flex items-center gap-1 text-xs font-medium rounded-full bg-red-50 text-red-700">
       <AlertCircle className="w-3 h-3" />{label}
@@ -59,6 +67,7 @@ interface StatusModalProps {
 }
 
 function StatusModal({ order, onClose, onRefresh, onRefill }: StatusModalProps) {
+  const { fmt } = useCurrency();
   const [loading, setLoading] = useState<"refresh" | "cancel" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [localOrder, setLocalOrder] = useState<UserOrder>(order);
@@ -126,7 +135,7 @@ function StatusModal({ order, onClose, onRefresh, onRefill }: StatusModalProps) 
           </div>
           <div className="flex justify-between">
             <span className="text-gray-500">Charge</span>
-            <span className="text-gray-700">${localOrder.charge.toFixed(4)} {localOrder.currency}</span>
+            <span className="text-gray-700">{fmt(localOrder.charge, 4)}</span>
           </div>
           {localOrder.payment_method && localOrder.payment_method !== "direct" && (
             <>
@@ -172,14 +181,16 @@ function StatusModal({ order, onClose, onRefresh, onRefill }: StatusModalProps) 
           >
             Order Again
           </button>
-          <button
-            onClick={handleCancel}
-            disabled={loading !== null}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 transition-colors"
-          >
-            {loading === "cancel" && <Loader className="w-3.5 h-3.5 animate-spin" />}
-            Cancel this Order
-          </button>
+          {!["cancelled", "canceled", "completed"].includes(localOrder.status.toLowerCase()) && (
+            <button
+              onClick={handleCancel}
+              disabled={loading !== null}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 transition-colors"
+            >
+              {loading === "cancel" && <Loader className="w-3.5 h-3.5 animate-spin" />}
+              Cancel this Order
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -188,6 +199,7 @@ function StatusModal({ order, onClose, onRefresh, onRefill }: StatusModalProps) 
 
 const OrderPage = () => {
   const { user } = useAuth();
+  const { fmt } = useCurrency();
   const navigate = useNavigate();
   const { setCategoryOrder } = useOrderStore();
   const [orders, setOrders] = useState<UserOrder[]>([]);
@@ -227,9 +239,10 @@ const OrderPage = () => {
   const totalSpent = orders.reduce((sum, o) => sum + o.charge, 0);
 
   const filtered = orders.filter((o) => {
+    const q = searchTerm.toLowerCase();
     const matchesSearch =
-      o.service_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      o.link.toLowerCase().includes(searchTerm.toLowerCase());
+      (o.category_name || o.service_name).toLowerCase().includes(q) ||
+      o.id.slice(-8).toLowerCase().includes(q);
     const matchesFilter =
       filterStatus === "all" || mapOrderStatus(o.status).key === filterStatus;
     return matchesSearch && matchesFilter;
@@ -256,7 +269,7 @@ const OrderPage = () => {
       {ticketOrder && (
         <RaiseTicketModal
           initialType="order_related"
-          initialOrderId={ticketOrder.id}
+          initialOrderId={ticketOrder.id.slice(-8)}
           onClose={() => setTicketOrder(null)}
           onSuccess={() => {}}
         />
@@ -299,7 +312,7 @@ const OrderPage = () => {
           </div>
           <div>
             <p className="text-xs text-gray-400">Total Spent</p>
-            <p className="text-2xl font-bold text-gray-800">${totalSpent.toFixed(4)}</p>
+            <p className="text-2xl font-bold text-gray-800">{fmt(totalSpent, 4)}</p>
           </div>
         </div>
       </div>
@@ -331,6 +344,7 @@ const OrderPage = () => {
               <option value="payment_pending">Payment Pending</option>
               <option value="success">Success</option>
               <option value="in_progress">In Progress</option>
+              <option value="cancelled">Cancelled</option>
             </select>
             <Filter className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
           </div>
@@ -385,7 +399,7 @@ const OrderPage = () => {
                         <span className="text-gray-400">Qty: {order.quantity.toLocaleString()}</span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-700 hidden sm:table-cell">
-                        ${order.charge.toFixed(4)}
+                        {fmt(order.charge, 4)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         {getStatusBadge(order.status)}

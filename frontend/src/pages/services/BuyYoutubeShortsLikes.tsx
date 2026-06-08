@@ -181,7 +181,7 @@ const YoutubeShortsLikes = () => {
       <TestimonialSection />
 
       {/* How to Buy Section */}
-      <HowToBuy btnText="Buy likes now" />
+      <HowToBuy btnText="Buy Likes Now" />
 
       {/* FAQ Section */}
       <FAQSection faqs={youtubeShortsLikesFaqData} />

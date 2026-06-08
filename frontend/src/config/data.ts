@@ -889,7 +889,7 @@ Visit BuyRealViews.com and start your journey to YouTube success today!
       "youtube views purchase guide",
       "buy youtube views pros and cons",
     ],
-    imageUrl: "/assets/blogs/blog-1.jpg",
+    imageUrl: "/assets/illustration/hero.svg",
   },
   {
     id: 2,
@@ -1029,7 +1029,7 @@ Don't wait for your content to get lucky. Take charge of your growth with safe, 
       "short-form video content",
       "youtube shorts algorithm",
     ],
-    imageUrl: "/assets/blogs/blog-2.jpg",
+    imageUrl: "/assets/illustration/growth.svg",
   },
   {
     id: 3,
@@ -1178,7 +1178,7 @@ Visit BuyRealViews.com to get **real YouTube views**, boost your credibility, an
       "youtube video optimization",
       "youtube keyword research",
     ],
-    imageUrl: "/assets/blogs/blog-3.jpg",
+    imageUrl: "/assets/illustration/seo-growth.svg",
   },
   {
     id: 4,
@@ -1319,7 +1319,7 @@ Visit BuyRealViews.com today to **buy YouTube likes**, boost visibility, and gro
       "likes vs views youtube algorithm",
       "how important are likes on YouTube",
     ],
-    imageUrl: "/assets/blogs/blog-4.jpg",
+    imageUrl: "/assets/illustration/targeted-audience.svg",
   },
   {
     id: 5,
@@ -1428,7 +1428,7 @@ Don't leave your success to chance. Explore our **YouTube Shorts services** at B
       "make money with youtube shorts",
       "youtube shorts earnings",
     ],
-    imageUrl: "/assets/blogs/blog-5.jpg",
+    imageUrl: "/assets/illustration/grow-your-money.svg",
   },
 ];
 

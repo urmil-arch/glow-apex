@@ -206,7 +206,7 @@ const YouTubeSubscribers = () => {
 
       {/* How to Buy Section */}
       <section className="bg-gray-50 pt-16">
-        <HowToBuy btnText="Buy subscribers now" />
+        <HowToBuy btnText="Buy Subscribers Now" />
       </section>
 
       {/* Benefits Section */}

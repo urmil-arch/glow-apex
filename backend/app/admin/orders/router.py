@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
@@ -14,6 +14,7 @@ from app.admin.orders.schemas import (
     UpdateServiceRequest,
 )
 from app.admin.providers.repository import ProviderRepository
+from app.admin.tasks.repository import TaskRepository
 from app.orders.provider_api import call_provider
 from app.orders.repository import OrderRepository
 from app.user_management.utils.dependencies import get_current_admin
@@ -21,6 +22,12 @@ from app.user_management.utils.dependencies import get_current_admin
 logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(get_current_admin)])
+
+
+def _is_error_status(s: str) -> bool:
+    """Return True for any provider status that indicates a failed/errored order."""
+    s = s.lower()
+    return "fail" in s or "error" in s or s == "provider_error"
 
 
 def _serialize(doc: dict) -> AdminOrderResponse:
@@ -92,6 +99,7 @@ async def get_order(
     db = request.app.state.db
     order = await _get_order_or_404(order_id, db)
 
+    old_status = order.get("status", "")
     try:
         provider = await ProviderRepository(db).find_by_id(order.get("provider_id", ""))
         if provider:
@@ -107,6 +115,35 @@ async def get_order(
             }
             await OrderRepository(db).update(order_id, updates)
             order = {**order, **updates}
+
+            new_status = updates["status"]
+            if _is_error_status(new_status) and not _is_error_status(old_status):
+                task_repo = TaskRepository(db)
+                if not await task_repo.exists_for_order(order_id, "failed_order"):
+                    user_info = (order.get("user_info") or [{}])[0]
+                    now = datetime.now(timezone.utc)
+                    await task_repo.insert({
+                        "type": "failed_order",
+                        "status": "open",
+                        "priority": "high",
+                        "title": f"Order error ({new_status}) — {order.get('category_name') or order.get('service_name', 'Unknown')} × {order.get('quantity', 0):,}",
+                        "description": f"Order #{order_id[-8:]} status changed to '{new_status}' (was '{old_status}'). Detected during admin status sync.",
+                        "notes": "",
+                        "order_id": order_id,
+                        "user_id": order.get("user_id", ""),
+                        "user_email": user_info.get("email", ""),
+                        "user_username": user_info.get("username", ""),
+                        "order_link": order.get("link", ""),
+                        "service_name": order.get("service_name", ""),
+                        "category_name": order.get("category_name", ""),
+                        "quantity": order.get("quantity"),
+                        "charge": order.get("charge"),
+                        "currency": order.get("currency", "USD"),
+                        "seen_by_admin": False,
+                        "resolved_at": None,
+                        "created_at": now,
+                        "updated_at": now,
+                    })
     except Exception as exc:
         logger.warning("Live status fetch failed for order %s: %s", order_id, exc)
 

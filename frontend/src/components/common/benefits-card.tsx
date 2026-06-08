@@ -24,8 +24,8 @@ export const BenefitsCard: React.FC<BenefitsCardProps> = ({
     <motion.div
       ref={ref}
       initial={{ opacity: 0, y: 30 }}
-      animate={inView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.6 }}
+      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
+      transition={{ duration: 0.5 }}
       whileHover={{
         y: -5,
         boxShadow: "0 25px 50px -12px rgba(14, 202, 109, 0.25)",
@@ -34,7 +34,7 @@ export const BenefitsCard: React.FC<BenefitsCardProps> = ({
     >
       <motion.div
         initial={{ scale: 0.8, opacity: 0 }}
-        animate={inView ? { scale: 1, opacity: 1 } : {}}
+        animate={inView ? { scale: 1, opacity: 1 } : { scale: 0.8, opacity: 0 }}
         transition={{ duration: 0.4, delay: 0.2 }}
         className="w-14 h-14 bg-emerald-100 rounded-xl flex items-center justify-center mb-4 text-emerald-600"
       >
@@ -43,7 +43,7 @@ export const BenefitsCard: React.FC<BenefitsCardProps> = ({
 
       <motion.h3
         initial={{ opacity: 0 }}
-        animate={inView ? { opacity: 1 } : {}}
+        animate={inView ? { opacity: 1 } : { opacity: 0 }}
         transition={{ duration: 0.4, delay: 0.3 }}
         className="font-semibold text-xl mb-4"
       >
@@ -51,8 +51,8 @@ export const BenefitsCard: React.FC<BenefitsCardProps> = ({
       </motion.h3>
 
       <motion.div
-        initial={{ width: 0 }}
-        animate={inView ? { width: "60px" } : { width: 0 }}
+        initial={{ width: 0, opacity: 0 }}
+        animate={inView ? { width: "60px", opacity: 1 } : { width: 0, opacity: 0 }}
         transition={{ duration: 0.6, delay: 0.4 }}
         className="h-1 bg-emerald-500 mb-5 rounded-full"
       ></motion.div>
@@ -62,7 +62,7 @@ export const BenefitsCard: React.FC<BenefitsCardProps> = ({
           <motion.li
             key={index}
             initial={{ opacity: 0, x: -10 }}
-            animate={inView ? { opacity: 1, x: 0 } : {}}
+            animate={inView ? { opacity: 1, x: 0 } : { opacity: 0, x: -10 }}
             transition={{ duration: 0.4, delay: 0.5 + index * 0.1 }}
             className="flex items-start gap-2 text-gray-700"
           >

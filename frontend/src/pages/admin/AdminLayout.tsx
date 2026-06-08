@@ -14,7 +14,6 @@ import {
   HeadphonesIcon,
   ListTodo,
   CreditCard,
-  BarChart3,
   DollarSign,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
@@ -33,7 +32,6 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/admin/orders', icon: <ClipboardList className="h-5 w-5" />, label: 'Orders' },
   { to: '/admin/tasks', icon: <ListTodo className="h-5 w-5" />, label: 'Tasks' },
   { to: '/admin/payments', icon: <CreditCard className="h-5 w-5" />, label: 'Payments' },
-  { to: '/admin/reports', icon: <BarChart3 className="h-5 w-5" />, label: 'Reports' },
   { to: '/admin/services', icon: <Package className="h-5 w-5" />, label: 'Services' },
   { to: '/admin/routing', icon: <GitBranch className="h-5 w-5" />, label: 'Routing' },
   { to: '/admin/support', icon: <HeadphonesIcon className="h-5 w-5" />, label: 'Support' },
@@ -47,6 +45,7 @@ const AdminLayout = () => {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [hasUnreadTicket, setHasUnreadTicket] = useState(false);
+  const [unreadTasks, setUnreadTasks] = useState(0);
 
   useEffect(() => {
     Promise.all([
@@ -60,6 +59,22 @@ const AdminLayout = () => {
         messages.some((m) => !m.is_read)
       );
     }).catch(() => {/* non-critical, silent */});
+  }, [location.pathname]);
+
+  // Poll unread task count every 60s; reset immediately when admin opens tasks page
+  useEffect(() => {
+    const fetchUnread = () => {
+      api.get<{ count: number }>(API_ENDPOINTS.ADMIN_TASKS_UNREAD)
+        .then(res => setUnreadTasks(res.data.count ?? 0))
+        .catch(() => {/* non-critical */});
+    };
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (location.pathname === '/admin/tasks') setUnreadTasks(0);
   }, [location.pathname]);
 
   const handleLogout = () => {
@@ -89,7 +104,8 @@ const AdminLayout = () => {
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         {NAV_ITEMS.map((item) => {
-          const showDot = item.to === '/admin/support' && hasUnreadTicket;
+          const showSupportDot = item.to === '/admin/support' && hasUnreadTicket;
+          const taskBadge = item.to === '/admin/tasks' && unreadTasks > 0 ? unreadTasks : 0;
           return (
             <NavLink
               key={item.to}
@@ -97,6 +113,7 @@ const AdminLayout = () => {
               end={item.to === '/admin'}
               onClick={() => {
                 if (item.to === '/admin/support') setHasUnreadTicket(false);
+                if (item.to === '/admin/tasks') setUnreadTasks(0);
                 setSidebarOpen(false);
               }}
               className={({ isActive }) =>
@@ -109,8 +126,13 @@ const AdminLayout = () => {
             >
               {item.icon}
               {item.label}
-              {showDot && (
+              {showSupportDot && (
                 <span className="ml-auto w-2 h-2 rounded-full bg-teal-500" />
+              )}
+              {taskBadge > 0 && (
+                <span className="ml-auto min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1">
+                  {taskBadge > 99 ? '99+' : taskBadge}
+                </span>
               )}
             </NavLink>
           );

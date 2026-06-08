@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { API_ENDPOINTS } from "@/config";
+import { useCurrency } from "@/context/CurrencyContext";
 import RaiseTicketModal from "@/components/common/RaiseTicketModal";
 
 interface UserPayment {
@@ -85,6 +86,7 @@ const fmtDate = (d: string) =>
   });
 
 const PaymentsPage = () => {
+  const { fmt } = useCurrency();
   const [payments, setPayments] = useState<UserPayment[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState("");
@@ -119,7 +121,7 @@ const PaymentsPage = () => {
       {ticketPayment && (
         <RaiseTicketModal
           initialType="payment_related"
-          initialOrderId={ticketPayment.order_id}
+          initialOrderId={ticketPayment.order_id.slice(-8)}
           onClose={() => setTicketPayment(null)}
           onSuccess={() => {}}
         />
@@ -175,7 +177,7 @@ const PaymentsPage = () => {
                         <p className="text-xs font-medium text-gray-800 max-w-[140px] truncate">{p.category_name || p.service_name || p.memo || "—"}</p>
                         <p className="text-xs text-gray-400">{p.quantity > 0 ? `${p.quantity.toLocaleString()} units` : ""}</p>
                       </td>
-                      <td className="px-4 py-3 font-semibold text-gray-900">${p.amount.toFixed(4)}</td>
+                      <td className="px-4 py-3 font-semibold text-gray-900">{fmt(p.amount, 4)}</td>
                       <td className="px-4 py-3 hidden sm:table-cell">{methodBadge(p.method)}</td>
                       <td className="px-4 py-3">{paymentStatusBadge(p.status)}</td>
                       <td className="px-4 py-3 hidden md:table-cell">{orderStatusBadge(p.order_status)}</td>

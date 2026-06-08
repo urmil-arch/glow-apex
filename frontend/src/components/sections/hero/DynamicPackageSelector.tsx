@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useOrderStore } from "@/store/useOrderStore";
 import { usePricing, calcPackagePrice } from "@/context/PricingContext";
+import { useCurrency } from "@/context/CurrencyContext";
 
 interface DynamicPackageSelectorProps {
   serviceType: string;   // backend key e.g. "youtube_views"
@@ -19,6 +20,7 @@ const DynamicPackageSelector: React.FC<DynamicPackageSelectorProps> = ({
   const navigate = useNavigate();
   const { setCategoryOrder } = useOrderStore();
   const { getPricing, isLoading } = usePricing();
+  const { currency, rate, fmt } = useCurrency();
   const [packageType, setPackageType] = useState<"value" | "bulk">("value");
   const [selectedQuantity, setSelectedQuantity] = useState<number | null>(null);
 
@@ -46,7 +48,7 @@ const DynamicPackageSelector: React.FC<DynamicPackageSelectorProps> = ({
   const discountLabel = hasDiscount
     ? selectedPkg.discount_type === "percentage"
       ? `${selectedPkg.discount_value}% OFF`
-      : `$${selectedPkg.discount_value.toFixed(2)} OFF`
+      : `${fmt(selectedPkg.discount_value)} OFF`
     : null;
 
   const handleTypeSwitch = (type: "value" | "bulk") => {
@@ -152,13 +154,6 @@ const DynamicPackageSelector: React.FC<DynamicPackageSelectorProps> = ({
                     <p className="text-2xl font-bold text-gray-800">
                       {pkg.quantity.toLocaleString()}
                     </p>
-                    {pkg.discount_type !== "none" && (
-                      <p className="text-xs text-emerald-600 mt-0.5">
-                        {pkg.discount_type === "percentage"
-                          ? `${pkg.discount_value}% OFF`
-                          : `$${pkg.discount_value.toFixed(2)} OFF`}
-                      </p>
-                    )}
                   </motion.div>
                 );
               })}
@@ -180,8 +175,8 @@ const DynamicPackageSelector: React.FC<DynamicPackageSelectorProps> = ({
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: "spring", stiffness: 200 }}
               >
-                <span className="text-lg font-normal text-black">$</span>
-                {price.toFixed(2)}
+                <span className="text-lg font-normal text-black">{currency.symbol}</span>
+                {(price * rate).toFixed(2)}
               </motion.p>
               {discountLabel && (
                 <motion.span
@@ -195,14 +190,14 @@ const DynamicPackageSelector: React.FC<DynamicPackageSelectorProps> = ({
             </div>
 
             <div className="text-center text-gray-500 text-sm mb-6">
-              {effectiveQuantity?.toLocaleString()} units at $
+              {effectiveQuantity?.toLocaleString()} units at {currency.symbol}
               {pricing.price_per_1000 > 0
-                ? (pricing.price_per_1000 / 1000).toFixed(4)
+                ? ((pricing.price_per_1000 / 1000) * rate).toFixed(4)
                 : "0.0000"}{" "}
               each
               {hasDiscount && (
                 <span className="ml-2 line-through text-gray-400">
-                  ${basePrice.toFixed(2)}
+                  {fmt(basePrice)}
                 </span>
               )}
             </div>

@@ -6,6 +6,7 @@ from fastapi.concurrency import run_in_threadpool
 
 from app.admin.provider_config.repository import RoutingConfigRepository
 from app.admin.services.repository import CategoryRepository, ServiceRepository
+from app.admin.tasks.repository import TaskRepository
 from app.common.config import settings
 from app.orders.repository import OrderRepository
 from app.payments.ledger_repository import PaymentLedgerRepository
@@ -270,5 +271,36 @@ async def verify_razorpay_payment(
     if not placed:
         logger.error("[RZP-VERIFY] [ORDER %s] All providers failed", body.order_id)
         await repo.update(body.order_id, {"status": "provider_error"})
+
+        task_repo = TaskRepository(db)
+        if not await task_repo.exists_for_order(body.order_id, "failed_order"):
+            user_info = (order.get("user_info") or [{}])[0]
+            now = datetime.now(timezone.utc)
+            await task_repo.insert({
+                "type": "failed_order",
+                "status": "open",
+                "priority": "high",
+                "title": f"Provider unavailable — {order.get('category_name') or order.get('service_name', 'Unknown')} × {order.get('quantity', 0):,}",
+                "description": (
+                    f"Order #{body.order_id[-8:]} was paid (${order.get('charge', 0):.4f}) via Razorpay "
+                    f"but all {len(candidates)} provider(s) rejected the order. "
+                    "Manual fulfilment or refund is required."
+                ),
+                "notes": "",
+                "order_id": body.order_id,
+                "user_id": order.get("user_id", ""),
+                "user_email": user_info.get("email", ""),
+                "user_username": user_info.get("username", ""),
+                "order_link": order.get("link", ""),
+                "service_name": order.get("service_name", ""),
+                "category_name": order.get("category_name", ""),
+                "quantity": order.get("quantity"),
+                "charge": order.get("charge"),
+                "currency": order.get("currency", "USD"),
+                "seen_by_admin": False,
+                "resolved_at": None,
+                "created_at": now,
+                "updated_at": now,
+            })
 
     return {"status": "success", "order_id": body.order_id, "payment_id": body.razorpay_payment_id}

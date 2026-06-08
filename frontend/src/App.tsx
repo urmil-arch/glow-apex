@@ -3,6 +3,7 @@ import { Routes, Route, Outlet, Navigate, useLocation } from 'react-router-dom'
 import { ThemeProvider } from 'next-themes'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ServicesProvider } from './context/ServicesContext'
+import { CurrencyProvider } from './context/CurrencyContext'
 import Navbar from './components/navbar'
 import Footer from './components/footer'
 
@@ -32,7 +33,6 @@ import PaymentsPage from './pages/dashboard/payments/PaymentsPage'
 import ProfilePage from './pages/dashboard/profile/ProfilePage'
 import AdminGuard from './components/admin/AdminGuard'
 import AdminLayout from './pages/admin/AdminLayout'
-import AdminDashboard from './pages/admin/AdminDashboard'
 import UsersPage from './pages/admin/users/UsersPage'
 import ServicesPage from './pages/admin/services/ServicesPage'
 import SettingsPage from './pages/admin/settings/SettingsPage'
@@ -68,6 +68,7 @@ const PublicLayout = () => (
 const App: React.FC = () => {
   return (
     <ThemeProvider attribute="class" defaultTheme="light">
+      <CurrencyProvider>
       <AuthProvider>
         <ServicesProvider>
           <RouteScrollReset />
@@ -116,12 +117,11 @@ const App: React.FC = () => {
             {/* Admin routes — requires is_admin */}
             <Route element={<AdminGuard />}>
               <Route path="/admin" element={<AdminLayout />}>
-                <Route index element={<AdminDashboard />} />
+                <Route index element={<AdminReportsPage />} />
                 <Route path="users" element={<UsersPage />} />
                 <Route path="orders" element={<AdminOrdersPage />} />
                 <Route path="tasks" element={<AdminTasksPage />} />
                 <Route path="payments" element={<AdminPaymentsPage />} />
-                <Route path="reports" element={<AdminReportsPage />} />
                 <Route path="services" element={<ServicesPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="routing" element={<ProviderConfigPage />} />
@@ -133,6 +133,7 @@ const App: React.FC = () => {
           </SuspensionGuard>
         </ServicesProvider>
       </AuthProvider>
+      </CurrencyProvider>
     </ThemeProvider>
   )
 }

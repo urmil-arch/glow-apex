@@ -55,7 +55,7 @@ const SignInPage = () => {
     try {
       const loggedInUser = await login(form.identifier.trim(), form.password);
       setIsSuccess(true);
-      setTimeout(() => navigate(loggedInUser.is_admin ? "/admin" : "/"), 1000);
+      setTimeout(() => navigate(loggedInUser.is_admin ? "/admin" : "/dashboard"), 1000);
     } catch (err: unknown) {
       if ((err as { reason?: string })?.reason === "suspended") return;
       if (axios.isAxiosError(err)) {
@@ -99,7 +99,7 @@ const SignInPage = () => {
     try {
       const verifiedUser = await verifyOtp(unverifiedEmail, otp);
       setIsSuccess(true);
-      setTimeout(() => navigate(verifiedUser.is_admin ? "/admin" : "/"), 1500);
+      setTimeout(() => navigate(verifiedUser.is_admin ? "/admin" : "/dashboard"), 1500);
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
         setOtpError(err.response?.data?.detail ?? "Invalid OTP. Please try again.");
@@ -132,8 +132,12 @@ const SignInPage = () => {
           <div className="bg-white rounded-3xl shadow-xl overflow-hidden">
             <div className="p-8">
               <div className="text-center mb-8">
-                <Link to="/">
-                  <h1 className="text-2xl font-bold text-gray-900">GLOW APEX</h1>
+                <Link to="/" className="inline-block">
+                  <img
+                    src="/web-app-manifest-192x192-removebg-preview.png"
+                    alt="BuyRealViews"
+                    className="h-14 w-auto mx-auto"
+                  />
                 </Link>
                 <h2 className="mt-4 text-2xl font-bold">
                   {step === "login" ? "Welcome Back" : "Verify your email"}

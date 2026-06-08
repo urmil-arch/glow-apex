@@ -24,7 +24,7 @@ const BenefitsSection: React.FC<{ benefitsData: Benefit[] }> = ({
       ></motion.div>
 
       <motion.div
-        className="absolute -left-20 bottom-40 w-60 h-60 bg-emerald-600 rounded-full opacity-10 blur-3xl"
+        className="absolute -left-20 bottom-40 w-60 h-60 bg-emerald-100 rounded-full opacity-10 blur-3xl"
         animate={{
           y: [0, -30, 0],
           x: [0, 20, 0],

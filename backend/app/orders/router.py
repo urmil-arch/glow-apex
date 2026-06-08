@@ -8,6 +8,8 @@ from app.admin.pricing.repository import PricingRepository
 from app.admin.provider_config.repository import RoutingConfigRepository
 from app.admin.providers.repository import ProviderRepository
 from app.admin.services.repository import CategoryRepository, ServiceRepository
+from app.admin.tasks.repository import TaskRepository
+from app.user_management.repositories.user_repository import UserRepository
 from app.common.config import settings
 from app.orders.provider_api import call_provider
 from app.orders.repository import OrderRepository
@@ -28,6 +30,12 @@ from app.user_management.utils.dependencies import get_current_user
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _is_error_status(s: str) -> bool:
+    """Return True for any provider status that indicates a failed/errored order."""
+    s = s.lower()
+    return "fail" in s or "error" in s or s == "provider_error"
 
 
 def _serialize_order(doc: dict) -> OrderResponse:
@@ -305,6 +313,10 @@ async def get_order(
     user_id = str(user["_id"])
     order, provider = await _get_order_and_provider(order_id, user_id, db)
 
+    old_status = order.get("status", "")
+    if old_status.lower() in ("cancelled", "canceled", "completed"):
+        return _serialize_order(order)
+
     try:
         live = await call_provider(
             provider["url"],
@@ -318,6 +330,35 @@ async def get_order(
         }
         await OrderRepository(db).update(order_id, updates)
         order = {**order, **updates}
+
+        new_status = updates["status"]
+        if _is_error_status(new_status) and not _is_error_status(old_status):
+            task_repo = TaskRepository(db)
+            if not await task_repo.exists_for_order(order_id, "failed_order"):
+                now = datetime.now(timezone.utc)
+                user_doc = await UserRepository(db).find_by_id(user_id) if user_id else None
+                await task_repo.insert({
+                    "type": "failed_order",
+                    "status": "open",
+                    "priority": "high",
+                    "title": f"Order error ({new_status}) — {order.get('category_name') or order.get('service_name', 'Unknown')} × {order.get('quantity', 0):,}",
+                    "description": f"Order #{order_id[-8:]} status changed to '{new_status}' (was '{old_status}'). Detected during user status sync.",
+                    "notes": "",
+                    "order_id": order_id,
+                    "user_id": user_id,
+                    "user_email": user_doc.get("email", "") if user_doc else "",
+                    "user_username": user_doc.get("username", "") if user_doc else "",
+                    "order_link": order.get("link", ""),
+                    "service_name": order.get("service_name", ""),
+                    "category_name": order.get("category_name", ""),
+                    "quantity": order.get("quantity"),
+                    "charge": order.get("charge"),
+                    "currency": order.get("currency", "USD"),
+                    "seen_by_admin": False,
+                    "resolved_at": None,
+                    "created_at": now,
+                    "updated_at": now,
+                })
     except Exception:
         pass
 
@@ -393,6 +434,34 @@ async def cancel_order(
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, result[0]["error"])
 
     await OrderRepository(db).update(order_id, {"status": "Cancelled"})
+
+    # Auto-create a refund request task so the admin knows to process the refund manually.
+    task_repo = TaskRepository(db)
+    if not await task_repo.exists_for_order(order_id, "refund_request"):
+        now = datetime.now(timezone.utc)
+        await task_repo.insert({
+            "type": "refund_request",
+            "status": "open",
+            "priority": "medium",
+            "title": f"Refund request — {order.get('category_name') or order.get('service_name', 'Unknown')} × {order.get('quantity', 0):,}",
+            "description": f"Order #{order_id[-8:]} was cancelled by the user and confirmed by the provider. Refund of {order.get('currency', 'USD')} {order.get('charge', 0):.4f} needs to be processed manually.",
+            "notes": "",
+            "order_id": order_id,
+            "user_id": user_id,
+            "user_email": user.get("email", ""),
+            "user_username": user.get("username", ""),
+            "order_link": order.get("link", ""),
+            "service_name": order.get("service_name", ""),
+            "category_name": order.get("category_name", ""),
+            "quantity": order.get("quantity"),
+            "charge": order.get("charge"),
+            "currency": order.get("currency", "USD"),
+            "seen_by_admin": False,
+            "resolved_at": None,
+            "created_at": now,
+            "updated_at": now,
+        })
+
     return {"message": "Order cancelled successfully"}
 
 

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config';
+import { useAuth } from '@/context/AuthContext';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -252,7 +253,8 @@ const StatCard = ({ label, value, sub, icon, iconBg, iconColor }: StatCardProps)
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 const ReportsPage = () => {
-  const [period,  setPeriod]  = useState<PeriodKey>('today');
+  const { user } = useAuth();
+  const [period,  setPeriod]  = useState<PeriodKey>('all');
   const [groupBy, setGroupBy] = useState<GroupBy>('day');
   const [tab,     setTab]     = useState<TabKey>('orders');
   const [summary,          setSummary]          = useState<ReportSummary>(emptySummary);
@@ -390,6 +392,12 @@ const ReportsPage = () => {
 
   return (
     <div>
+      {/* Welcome banner */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Welcome back, {user?.full_name}</h1>
+        <p className="text-gray-500 text-sm mt-1">Manage your platform from here.</p>
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>

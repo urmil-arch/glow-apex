@@ -102,8 +102,12 @@ const AllBlogsPage = () => {
                 className="bg-card rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all border border-border"
               >
                 <Link to={`/blogs/${post.slug}`} className="block">
-                  <div className="h-48 bg-muted relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/30 to-emerald-600/30 mix-blend-multiply"></div>
+                  <div className="h-48 bg-emerald-50 relative overflow-hidden flex items-center justify-center">
+                    <img
+                      src={post.imageUrl}
+                      alt={post.title}
+                      className="h-36 w-auto object-contain"
+                    />
                     <div className="absolute top-4 left-4 bg-emerald-500 text-white text-xs font-medium px-3 py-1 rounded-full">
                       {post.category}
                     </div>

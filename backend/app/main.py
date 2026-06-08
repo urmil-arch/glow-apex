@@ -18,6 +18,7 @@ from app.app_components import include_routers
 from app.common.config import settings
 from app.admin.providers.repository import ProviderRepository
 from app.admin.services.repository import CategoryRepository, ServiceRepository
+from app.admin.tasks.repository import TaskRepository
 from app.contact.repository import ContactMessageRepository
 from app.orders.repository import OrderRepository
 from app.payments.ledger_repository import PaymentLedgerRepository
@@ -51,6 +52,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await ContactMessageRepository(db).create_index()
     await TicketRepository(db).create_index()
     await PricingRepository(db).create_index()
+    await TaskRepository(db).create_indexes()
 
     yield
 

@@ -179,25 +179,25 @@ const Navbar = () => {
         );
       case "menu":
         return (
-          <li key={menuItem.id}>
-            <Menubar className="p-0 shadow-none bg-none">
-              <MenubarMenu>
-                <MenubarTrigger className="transition-colors flex items-center justify-center text-base">
-                  {menuItem.title} <ChevronDown />
-                </MenubarTrigger>
-                <MenubarContent className="rounded-xl border-none bg-background/10 backdrop-blur-2xl">
-                  {menuItem.items!.map((item) => (
-                    <MenubarItem
-                      key={item.id}
-                      onClick={() => navigate(item.href)}
-                      className="cursor-pointer"
-                    >
-                      {item.title}
-                    </MenubarItem>
-                  ))}
-                </MenubarContent>
-              </MenubarMenu>
-            </Menubar>
+          <li key={menuItem.id} className="relative group px-3 py-2.5">
+            <button className="nav-link flex items-center gap-1 !text-base cursor-default select-none">
+              {menuItem.title} <ChevronDown className="w-4 h-4" />
+            </button>
+            {/* Invisible bridge so hovering into the dropdown doesn't close it */}
+            <div className="absolute left-0 top-full w-full h-2" />
+            <div className="absolute top-[calc(100%+4px)] left-0 hidden group-hover:block z-50">
+              <div className="rounded-xl bg-white/95 backdrop-blur-2xl shadow-lg py-1 min-w-[220px] border border-gray-100">
+                {menuItem.items!.map((item) => (
+                  <Link
+                    key={item.id}
+                    to={item.href}
+                    className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+                  >
+                    {item.title}
+                  </Link>
+                ))}
+              </div>
+            </div>
           </li>
         );
       default:
@@ -236,10 +236,10 @@ const Navbar = () => {
 
             <Menubar>
               <MenubarMenu>
-                <MenubarTrigger className="transition-colors flex items-center justify-center bg-emerald-700 text-white rounded-full gap-2 py-1 px-3 text-sm">
+                <MenubarTrigger className="transition-colors flex items-center justify-center bg-emerald-700 text-white rounded-full gap-2 py-1 px-3 text-sm data-[state=open]:bg-emerald-700 data-[state=open]:text-white">
                   {selectedCurrency.symbol} {selectedCurrency.name}
                 </MenubarTrigger>
-                <MenubarContent className="rounded-xl border-none bg-background/10 backdrop-blur-2xl text-sm">
+                <MenubarContent align="end" className="rounded-xl border-none bg-background/10 backdrop-blur-2xl text-sm w-fit min-w-0">
                   {currencies.map((currency) => (
                     <MenubarItem
                       key={currency.code}

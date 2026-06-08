@@ -9,37 +9,37 @@ export const menuitems = [
     title: "YouTube Shorts",
     items: [
       {
-        id: 242,
+        id: 21,
         title: "YouTube Shorts Likes",
-        href: "/2342/buy-youtube-shorts-likes",
+        href: "/buy-youtube-shorts-likes",
       },
       {
-        id: 232,
+        id: 22,
         title: "YouTube Shorts Views",
-        href: "/5648/buy-youtube-shorts-views",
+        href: "/buy-youtube-shorts-views",
       },
     ],
   },
   {
-    id: 2342,
+    id: 3,
     title: "YouTube Likes",
-    href: "/2342/buy-youtube-video-likes",
+    href: "/buy-youtube-video-likes",
   },
   {
-    id: 376,
+    id: 4,
     title: "YouTube Subscriber",
-    href: "/376/buy-youtube-subscribers",
+    href: "/buy-youtube-subscribers",
   },
   {
-    id: 5209,
+    id: 5,
     title: "YouTube Views",
-    href: "/5648/buy-youtube-views",
+    href: "/buy-youtube-views",
     type: "link",
   },
   {
-    id: 5649,
+    id: 6,
     title: "YouTube Comments",
-    href: "/5649/buy-youtube-comments",
+    href: "/buy-youtube-comments",
   },
   {
     id: 7,
@@ -47,7 +47,7 @@ export const menuitems = [
     href: "/blogs",
   },
   {
-    id: 6,
+    id: 8,
     title: "Contact",
     href: "/contact-us",
   },

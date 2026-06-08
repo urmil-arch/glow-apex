@@ -173,7 +173,7 @@ const YoutubeVideoLikes = () => {
       </section>
       <FeatureSection data={youtubeFeatureData} />
       <TestimonialSection />
-      <HowToBuy btnText="Buy likes now" />
+      <HowToBuy btnText="Buy Likes Now" />
       <FAQSection faqs={youtubeLikesFaqData} />
     </div>
   );

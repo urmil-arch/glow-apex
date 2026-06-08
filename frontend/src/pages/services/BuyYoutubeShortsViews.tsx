@@ -185,7 +185,7 @@ const YouTubeShortsViews = () => {
       <TestimonialSection />
 
       {/* How to Buy Section */}
-      <HowToBuy btnText="Buy views now" />
+      <HowToBuy btnText="Buy Views Now" />
       {/* FAQ Section */}
       <FAQSection faqs={youtubeShortsViewsFaqData} />
     </div>

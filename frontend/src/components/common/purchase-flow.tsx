@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import SectionHeader from "./section-header";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 
 export type FlowCardProps = {
   number: number;
@@ -110,7 +110,6 @@ const PurchaseFlow: React.FC<{ data: FlowCardProps[]; btnText?: string }> = ({
   const [activeStep, setActiveStep] = useState(0);
   const [autoAnimate, setAutoAnimate] = useState(true);
   const { service_id } = useParams();
-  const navigate = useNavigate();
 
   useEffect(() => {
     // Auto-animate through steps
@@ -213,7 +212,7 @@ const PurchaseFlow: React.FC<{ data: FlowCardProps[]; btnText?: string }> = ({
       >
         <motion.button
           onClick={() => {
-            navigate(`/`);
+            window.scrollTo({ top: 0, behavior: "smooth" });
           }}
           className="bg-[#0eca6d] text-white font-bold px-8 py-3 rounded-full shadow-lg flex items-center gap-2"
           whileHover={{

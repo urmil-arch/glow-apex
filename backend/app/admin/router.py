@@ -8,6 +8,7 @@ from app.admin.providers.router import router as providers_router
 from app.admin.services.router import router as services_router
 from app.admin.settings.router import router as settings_router
 from app.admin.support.router import router as support_router
+from app.admin.tasks.router import router as tasks_router
 from app.admin.users.router import router as users_router
 from app.user_management.utils.dependencies import get_current_admin
 
@@ -22,6 +23,7 @@ router.include_router(settings_router, prefix="/settings", tags=["Admin Settings
 router.include_router(provider_config_router, prefix="/routing", tags=["Admin Routing Config"])
 router.include_router(support_router,  prefix="/support",  tags=["Admin Support"])
 router.include_router(reports_router,  prefix="/reports",  tags=["Admin Reports"])
+router.include_router(tasks_router,    prefix="/tasks",    tags=["Admin Tasks"])
 
 
 @router.get("/health")

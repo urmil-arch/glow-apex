@@ -67,8 +67,8 @@ const BlogSlugPage: React.FC = () => {
           </Link>
 
           {/* Hero Image */}
-          <div className="rounded-2xl overflow-hidden mb-8 aspect-video">
-            <img src={post.imageUrl} alt={post.title} className="w-full h-full object-cover" />
+          <div className="rounded-2xl overflow-hidden mb-8 bg-emerald-50 flex items-center justify-center h-64">
+            <img src={post.imageUrl} alt={post.title} className="h-52 w-auto object-contain" />
           </div>
 
           {/* Header */}
@@ -120,8 +120,8 @@ const BlogSlugPage: React.FC = () => {
               <div className="grid md:grid-cols-3 gap-6">
                 {relatedPosts.map((related) => (
                   <Link key={related.id} to={`/blogs/${related.slug}`} className="group rounded-xl overflow-hidden border hover:shadow-md transition-shadow">
-                    <div className="aspect-video overflow-hidden">
-                      <img src={related.imageUrl} alt={related.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <div className="h-36 bg-emerald-50 flex items-center justify-center overflow-hidden">
+                      <img src={related.imageUrl} alt={related.title} className="h-28 w-auto object-contain group-hover:scale-105 transition-transform duration-300" />
                     </div>
                     <div className="p-4">
                       <span className="text-xs text-emerald-600 font-medium">{related.category}</span>

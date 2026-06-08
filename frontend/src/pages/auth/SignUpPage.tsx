@@ -164,7 +164,11 @@ const SignUpPage = () => {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link to="/" className="inline-block">
-            <h1 className="text-3xl font-bold text-gray-900">GLOW APEX</h1>
+            <img
+                    src="/web-app-manifest-192x192-removebg-preview.png"
+                    alt="BuyRealViews"
+                    className="h-14 w-auto mx-auto"
+                  />
           </Link>
           <h2 className="mt-6 text-2xl font-semibold text-gray-900">
             {step === "register" ? "Create your account" : "Verify your email"}

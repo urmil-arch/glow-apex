@@ -183,7 +183,7 @@ const BuyYoutubeComments = () => {
         </div>
       </section>
       <section className="pb-32">
-        <PurchaseFlow btnText="Buy comments now" />
+        <PurchaseFlow btnText="Buy Comments Now" />
       </section>
       <section className="container pb-32">
         <SectionHeader

@@ -8,6 +8,7 @@ import { useOrderStore } from "@/store/useOrderStore";
 import { useAuth } from "@/context/AuthContext";
 import { useServices } from "@/context/ServicesContext";
 import { usePricing, calcPackagePrice } from "@/context/PricingContext";
+import { useCurrency } from "@/context/CurrencyContext";
 import { api } from "@/lib/api";
 import { API_ENDPOINTS } from "@/config";
 
@@ -50,9 +51,13 @@ const CATEGORY_TO_SERVICE_TYPE: Record<string, string> = {
   "Country Targeted Subscribers": "country_targeted_subscribers",
 };
 
-function buildDiscountLabel(discountType: string, discountValue: number): string | undefined {
+function buildDiscountLabel(
+  discountType: string,
+  discountValue: number,
+  fmtAmount: (v: number) => string,
+): string | undefined {
   if (discountType === "percentage") return `${discountValue}% OFF`;
-  if (discountType === "fixed") return `$${discountValue.toFixed(2)} OFF`;
+  if (discountType === "fixed") return `${fmtAmount(discountValue)} OFF`;
   return undefined;
 }
 
@@ -73,6 +78,7 @@ const CheckoutPage = () => {
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const { services } = useServices();
   const { getPricing } = usePricing();
+  const { currency, fmt } = useCurrency();
   const { serviceOrder, clearServiceOrder, categoryOrder, clearCategoryOrder } = useOrderStore();
   const navigate = useNavigate();
 
@@ -100,7 +106,7 @@ const CheckoutPage = () => {
         quantity: p.quantity,
         packageType: "value",
         price: calcPackagePrice(pricing, p.quantity, "value"),
-        discountLabel: buildDiscountLabel(p.discount_type, p.discount_value),
+        discountLabel: buildDiscountLabel(p.discount_type, p.discount_value, fmt),
       });
     });
     pricing.bulk_packages.filter((p) => p.is_active).forEach((p) => {
@@ -109,7 +115,7 @@ const CheckoutPage = () => {
         quantity: p.quantity,
         packageType: "bulk",
         price: calcPackagePrice(pricing, p.quantity, "bulk"),
-        discountLabel: buildDiscountLabel(p.discount_type, p.discount_value),
+        discountLabel: buildDiscountLabel(p.discount_type, p.discount_value, fmt),
       });
     });
   }
@@ -287,7 +293,7 @@ const CheckoutPage = () => {
                         <optgroup label="Value Packages">
                           {valueOptions.map((opt) => (
                             <option key={opt.key} value={opt.key}>
-                              {opt.quantity.toLocaleString()} units — ${opt.price.toFixed(2)}
+                              {opt.quantity.toLocaleString()} units — {fmt(opt.price)}
                               {opt.discountLabel ? ` (${opt.discountLabel})` : ""}
                             </option>
                           ))}
@@ -297,7 +303,7 @@ const CheckoutPage = () => {
                         <optgroup label="Bulk Packages">
                           {bulkOptions.map((opt) => (
                             <option key={opt.key} value={opt.key}>
-                              {opt.quantity.toLocaleString()} units — ${opt.price.toFixed(2)}
+                              {opt.quantity.toLocaleString()} units — {fmt(opt.price)}
                               {opt.discountLabel ? ` (${opt.discountLabel})` : ""}
                             </option>
                           ))}
@@ -442,7 +448,7 @@ const CheckoutPage = () => {
                 ) : (
                   <>
                     <Lock className="w-4 h-4" />
-                    Pay ${finalCharge.toFixed(2)} — {paymentMethod === "razorpay" ? "Razorpay" : "Stripe"}
+                    Pay {fmt(finalCharge)} — {paymentMethod === "razorpay" ? "Razorpay" : "Stripe"}
                   </>
                 )}
               </button>
@@ -499,7 +505,7 @@ const CheckoutPage = () => {
                         <div className="flex justify-between text-gray-400">
                           <span>Original price</span>
                           <span className="line-through">
-                            ${((displayQuantity / 1000) * (pricing?.price_per_1000 ?? 0)).toFixed(2)}
+                            {fmt((displayQuantity / 1000) * (pricing?.price_per_1000 ?? 0))}
                           </span>
                         </div>
                         <div className="flex justify-between text-emerald-600">
@@ -512,7 +518,7 @@ const CheckoutPage = () => {
                 ) : activeRate > 0 && (
                   <div className="flex justify-between text-gray-600">
                     <span>Rate</span>
-                    <span className="font-medium">${activeRate.toFixed(3)} / 1k</span>
+                    <span className="font-medium">{fmt(activeRate, 3)} / 1k</span>
                   </div>
                 )}
 
@@ -526,19 +532,18 @@ const CheckoutPage = () => {
                 <div className="border-t border-gray-100 pt-3 mt-1 flex justify-between items-center">
                   <span className="font-semibold text-gray-900">Total</span>
                   <div className="text-right">
-                    <span className="text-xl font-bold text-gray-900">${finalCharge.toFixed(2)}</span>
-                    <span className="text-xs text-gray-400 ml-1">USD</span>
+                    <span className="text-xl font-bold text-gray-900">{fmt(finalCharge)}</span>
+                    <span className="text-xs text-gray-400 ml-1">{currency.code}</span>
                   </div>
                 </div>
 
-                {paymentMethod === "razorpay" && (
+                {paymentMethod === "razorpay" && currency.code === "USD" && (
                   <div className="flex justify-between text-xs text-gray-400">
-                    <span>≈ INR</span>
-                    <span>₹{(finalCharge * 83).toFixed(2)}</span>
+                    <span>≈ INR equivalent charged by Razorpay</span>
                   </div>
                 )}
                 {rawCharge < 0.50 && (activeRate > 0 || selectedPkg) && (
-                  <p className="text-xs text-amber-600">$0.50 minimum charge applied.</p>
+                  <p className="text-xs text-amber-600">{fmt(0.50)} minimum charge applied.</p>
                 )}
               </div>
             </div>
