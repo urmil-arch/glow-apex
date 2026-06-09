@@ -165,9 +165,9 @@ const ContactPage = () => {
             <p className="text-gray-600 mb-4">
               Chat with our support team in real-time
             </p>
-            <button className="text-emerald-600 font-semibold hover:text-emerald-700 flex items-center">
+            <Link to="/dashboard/tickets" className="text-emerald-600 font-semibold hover:text-emerald-700 flex items-center">
               Start Chat <ChevronRight className="h-4 w-4 ml-1" />
-            </button>
+            </Link>
           </div>
         </div>
 

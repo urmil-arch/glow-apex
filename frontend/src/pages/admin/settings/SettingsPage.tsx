@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react';
 import {
-  Bell,
   Check,
   CreditCard,
   DollarSign,
   Edit2,
   EyeOff,
   Globe,
-  Layers,
   Loader2,
   Mail,
   Plus,
@@ -17,25 +15,21 @@ import {
   Type,
   Wallet,
   X,
+  Zap,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config';
+import { useAuth } from '@/context/AuthContext';
 
 // ---- Types ----
 
 interface PlatformSettings {
   site_name: string;
   support_email: string;
-  currency: 'USD' | 'INR' | 'EUR';
+  currency: 'USD' | 'INR';
   maintenance_mode: boolean;
-  min_order_quantity: number;
-  max_order_quantity: number;
   payment_stripe_enabled: boolean;
-  payment_cashfree_enabled: boolean;
-  payment_cryptomus_enabled: boolean;
-  payment_payeer_enabled: boolean;
-  notify_new_order: boolean;
-  notify_new_ticket: boolean;
+  payment_razorpay_enabled: boolean;
   social_twitter: string;
   social_instagram: string;
   social_youtube: string;
@@ -213,9 +207,10 @@ interface ProviderCardProps {
   provider: Provider;
   onEdit: () => void;
   onDelete: () => void;
+  canManage: boolean;
 }
 
-const ProviderCard = ({ provider, onEdit, onDelete }: ProviderCardProps) => {
+const ProviderCard = ({ provider, onEdit, onDelete, canManage }: ProviderCardProps) => {
   const [balance, setBalance] = useState<{ balance: string; currency: string } | null>(null);
   const [loadingBalance, setLoadingBalance] = useState(false);
   const [balanceError, setBalanceError] = useState('');
@@ -247,20 +242,22 @@ const ProviderCard = ({ provider, onEdit, onDelete }: ProviderCardProps) => {
             <p className="text-xs text-gray-400 truncate max-w-xs">{provider.url}</p>
           </div>
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={onEdit}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-          >
-            <Edit2 className="h-4 w-4" />
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        </div>
+        {canManage && (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onEdit}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              <Edit2 className="h-4 w-4" />
+            </button>
+            <button
+              onClick={onDelete}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between pt-3 border-t border-gray-100">
@@ -335,6 +332,8 @@ const DeleteConfirm = ({ label, onClose, onConfirm }: DeleteConfirmProps) => {
 // ---- Main page ----
 
 const SettingsPage = () => {
+  const { user } = useAuth();
+  const canManageProviders = user?.role === 'admin';
   const [tab, setTab] = useState<'general' | 'providers'>('general');
 
   const [settings, setSettings] = useState<PlatformSettings>({
@@ -342,14 +341,8 @@ const SettingsPage = () => {
     support_email: '',
     currency: 'USD',
     maintenance_mode: false,
-    min_order_quantity: 100,
-    max_order_quantity: 100000,
     payment_stripe_enabled: true,
-    payment_cashfree_enabled: true,
-    payment_cryptomus_enabled: true,
-    payment_payeer_enabled: true,
-    notify_new_order: true,
-    notify_new_ticket: true,
+    payment_razorpay_enabled: true,
     social_twitter: '',
     social_instagram: '',
     social_youtube: '',
@@ -507,40 +500,40 @@ const SettingsPage = () => {
                       <CreditCard className="h-4 w-4 text-gray-500" />
                       <h3 className="font-medium text-gray-800 text-sm">Payment Methods</h3>
                     </div>
+                    <p className="text-xs text-gray-400 mb-4">
+                      Toggling a method off removes it from the checkout page. If all are off, checkout shows a "payment unavailable" notice.
+                    </p>
                     <div className="space-y-4">
                       <ToggleRow
                         label="Stripe"
-                        description="Credit / debit cards via Stripe Checkout"
+                        description="Credit / debit cards · USD"
                         checked={settings.payment_stripe_enabled}
                         onChange={(v) => set('payment_stripe_enabled', v)}
                       />
                       <ToggleRow
-                        label="Cashfree"
-                        description="UPI, net banking, cards (INR)"
-                        checked={settings.payment_cashfree_enabled}
-                        onChange={(v) => set('payment_cashfree_enabled', v)}
-                      />
-                      <ToggleRow
-                        label="Cryptomus"
-                        description="Cryptocurrency payments"
-                        checked={settings.payment_cryptomus_enabled}
-                        onChange={(v) => set('payment_cryptomus_enabled', v)}
-                      />
-                      <ToggleRow
-                        label="Payeer"
-                        description="Payeer wallet payments"
-                        checked={settings.payment_payeer_enabled}
-                        onChange={(v) => set('payment_payeer_enabled', v)}
+                        label="Razorpay"
+                        description="UPI, net banking, cards · INR"
+                        checked={settings.payment_razorpay_enabled}
+                        onChange={(v) => set('payment_razorpay_enabled', v)}
                       />
                     </div>
+                    {!settings.payment_stripe_enabled && !settings.payment_razorpay_enabled && (
+                      <div className="mt-4 flex items-center gap-2 px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg">
+                        <Zap className="h-4 w-4 text-red-500 flex-shrink-0" />
+                        <p className="text-xs text-red-700 font-medium">
+                          All payment methods are off — customers cannot check out.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Social Links */}
                   <div className="bg-white border border-gray-200 rounded-xl p-5">
-                    <div className="flex items-center gap-2 mb-4">
+                    <div className="flex items-center gap-2 mb-1">
                       <Globe className="h-4 w-4 text-gray-500" />
                       <h3 className="font-medium text-gray-800 text-sm">Social Links</h3>
                     </div>
+                    <p className="text-xs text-gray-400 mb-4">Filled links appear in the site footer.</p>
                     <div className="space-y-3">
                       {(
                         [
@@ -572,81 +565,24 @@ const SettingsPage = () => {
                   <div className="bg-white border border-gray-200 rounded-xl p-5">
                     <div className="flex items-center gap-2 mb-4">
                       <DollarSign className="h-4 w-4 text-gray-500" />
-                      <h3 className="font-medium text-gray-800 text-sm">Currency</h3>
+                      <h3 className="font-medium text-gray-800 text-sm">Default Currency</h3>
                     </div>
-                    <div className="grid grid-cols-3 gap-3">
-                      {(['USD', 'INR', 'EUR'] as const).map((c) => (
+                    <p className="text-xs text-gray-400 mb-4">Sets the site-wide display currency. Users can change it individually.</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {(['USD', 'INR'] as const).map((c) => (
                         <button
                           key={c}
                           type="button"
                           onClick={() => set('currency', c)}
-                          className={`py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                          className={`py-3 rounded-lg border text-sm font-medium transition-colors ${
                             settings.currency === c
                               ? 'border-teal-500 bg-teal-50 text-teal-700'
                               : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
                           }`}
                         >
-                          {c === 'USD' && '$ USD'}
-                          {c === 'INR' && '₹ INR'}
-                          {c === 'EUR' && '€ EUR'}
+                          {c === 'USD' ? '$ USD' : '₹ INR'}
                         </button>
                       ))}
-                    </div>
-                  </div>
-
-                  {/* Order Limits */}
-                  <div className="bg-white border border-gray-200 rounded-xl p-5">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Layers className="h-4 w-4 text-gray-500" />
-                      <h3 className="font-medium text-gray-800 text-sm">Order Limits</h3>
-                    </div>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Minimum Quantity</label>
-                        <input
-                          type="number"
-                          min={1}
-                          className={inputCls}
-                          placeholder="100"
-                          value={settings.min_order_quantity}
-                          onChange={(e) => set('min_order_quantity', Number(e.target.value))}
-                        />
-                        <p className="text-xs text-gray-400 mt-1">Smallest order a customer can place.</p>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Maximum Quantity</label>
-                        <input
-                          type="number"
-                          min={1}
-                          className={inputCls}
-                          placeholder="100000"
-                          value={settings.max_order_quantity}
-                          onChange={(e) => set('max_order_quantity', Number(e.target.value))}
-                        />
-                        <p className="text-xs text-gray-400 mt-1">Largest order a customer can place.</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Notifications */}
-                  <div className="bg-white border border-gray-200 rounded-xl p-5">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Bell className="h-4 w-4 text-gray-500" />
-                      <h3 className="font-medium text-gray-800 text-sm">Email Notifications</h3>
-                    </div>
-                    <div className="space-y-4">
-                      <ToggleRow
-                        label="New Order"
-                        description="Send admin an email when a new order is placed"
-                        checked={settings.notify_new_order}
-                        onChange={(v) => set('notify_new_order', v)}
-                      />
-                      <ToggleRow
-                        label="New Support Ticket"
-                        description="Send admin an email when a ticket is opened"
-                        checked={settings.notify_new_ticket}
-                        onChange={(v) => set('notify_new_ticket', v)}
-                      />
                     </div>
                   </div>
 
@@ -660,7 +596,7 @@ const SettingsPage = () => {
                         <div>
                           <p className="font-medium text-gray-800 text-sm">Maintenance Mode</p>
                           <p className="text-xs text-gray-400 mt-0.5">
-                            When enabled, customers see a maintenance message instead of the site.
+                            Non-admin users are redirected to a maintenance page. Admins can still access everything.
                           </p>
                         </div>
                       </div>
@@ -682,7 +618,7 @@ const SettingsPage = () => {
                       <div className="mt-4 flex items-center gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-lg">
                         <ShieldAlert className="h-4 w-4 text-amber-500 flex-shrink-0" />
                         <p className="text-xs text-amber-700 font-medium">
-                          Maintenance mode is ON. Customers cannot access the site.
+                          Maintenance mode is ON — all non-admin users see the maintenance page.
                         </p>
                       </div>
                     )}
@@ -719,10 +655,12 @@ const SettingsPage = () => {
                 Connect providers that supply services. Their service lists and balances are fetched live.
               </p>
             </div>
-            <button className={primaryCls} onClick={() => setShowAddProvider(true)}>
-              <Plus className="h-4 w-4" />
-              Add Provider
-            </button>
+            {canManageProviders && (
+              <button className={primaryCls} onClick={() => setShowAddProvider(true)}>
+                <Plus className="h-4 w-4" />
+                Add Provider
+              </button>
+            )}
           </div>
 
           {loadingProviders ? (
@@ -736,13 +674,15 @@ const SettingsPage = () => {
               <p className="text-xs text-gray-400 mt-1">
                 Add your first SMM provider to start syncing services.
               </p>
-              <button
-                className={`${primaryCls} mx-auto mt-4`}
-                onClick={() => setShowAddProvider(true)}
-              >
-                <Plus className="h-4 w-4" />
-                Add Provider
-              </button>
+              {canManageProviders && (
+                <button
+                  className={`${primaryCls} mx-auto mt-4`}
+                  onClick={() => setShowAddProvider(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Provider
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -752,6 +692,7 @@ const SettingsPage = () => {
                   provider={p}
                   onEdit={() => setEditProvider(p)}
                   onDelete={() => setDeleteProvider(p)}
+                  canManage={canManageProviders}
                 />
               ))}
             </div>

@@ -8,6 +8,7 @@ from app.admin.users.schemas import (
     AdminSetPasswordRequest,
     AdminStatsResponse,
     AdminToggleSuspendRequest,
+    AdminUpdateRoleRequest,
     AdminUpdateUserRequest,
     AdminUserResponse,
     AdminUsersListResponse,
@@ -15,8 +16,9 @@ from app.admin.users.schemas import (
 )
 from app.user_management.repositories.sign_in_log_repository import SignInLogRepository
 from app.user_management.repositories.user_repository import UserRepository
-from app.user_management.utils.dependencies import get_current_admin
+from app.user_management.utils.dependencies import require_admin_role, require_permission
 from app.user_management.utils.password import hash_password
+from app.user_management.utils.permissions import PERM_USERS, ROLE_ADMIN, ROLE_USER
 
 router = APIRouter()
 
@@ -42,13 +44,16 @@ def _user_to_response(user: dict) -> AdminUserResponse:
         is_admin=user.get("is_admin", False),
         is_suspended=user.get("is_suspended", False),
         personal_discount=user.get("personal_discount", 0.0),
+        role=user.get("role", ROLE_USER),
+        extra_permissions=user.get("extra_permissions", []) or [],
         created_at=created_str,
+        total_spent=float(user.get("total_spent", 0.0) or 0.0),
     )
 
 
 @router.get("/stats", response_model=AdminStatsResponse)
 async def get_stats(
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_USERS)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> AdminStatsResponse:
     """Return user count stats for the admin dashboard cards."""
@@ -58,7 +63,7 @@ async def get_stats(
 
 @router.get("/export")
 async def export_users(
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_USERS)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> list[AdminUserResponse]:
     """Return all users as a flat list for CSV export."""
@@ -72,12 +77,15 @@ async def list_users(
     page_size: int = Query(20, ge=1, le=100),
     search: str = Query(""),
     filter_by: str = Query("all"),
-    _: dict = Depends(get_current_admin),
+    sort_by: str = Query("created_at"),
+    sort_order: str = Query("desc"),
+    _: dict = Depends(require_permission(PERM_USERS)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> AdminUsersListResponse:
-    """Return a paginated list of users with optional search and filter."""
+    """Return a paginated list of users with optional search, filter, and sort."""
     users, total = await UserRepository(db).admin_list_users(
-        page=page, page_size=page_size, search=search, filter_by=filter_by
+        page=page, page_size=page_size, search=search, filter_by=filter_by,
+        sort_by=sort_by, sort_order=sort_order,
     )
     total_pages = max(1, (total + page_size - 1) // page_size)
     return AdminUsersListResponse(
@@ -92,7 +100,7 @@ async def list_users(
 @router.post("", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     body: AdminCreateUserRequest,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_USERS)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> AdminUserResponse:
     """Create a new user directly (no OTP step, immediately verified)."""
@@ -109,7 +117,9 @@ async def create_user(
         "email": body.email.lower(),
         "hashed_password": hash_password(body.password),
         "is_verified": True,
-        "is_admin": body.is_admin,
+        "is_admin": body.role == ROLE_ADMIN,
+        "role": body.role,
+        "extra_permissions": body.extra_permissions,
         "is_suspended": False,
         "personal_discount": 0.0,
         "otp": None,
@@ -123,7 +133,7 @@ async def create_user(
 @router.get("/{user_id}", response_model=AdminUserResponse)
 async def get_user(
     user_id: str,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_USERS)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> AdminUserResponse:
     user = await UserRepository(db).find_by_id(user_id)
@@ -136,7 +146,7 @@ async def get_user(
 async def update_user(
     user_id: str,
     body: AdminUpdateUserRequest,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_USERS)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> AdminUserResponse:
     """Update mutable user fields. Only supplied fields are changed."""
@@ -167,7 +177,7 @@ async def update_user(
 async def set_password(
     user_id: str,
     body: AdminSetPasswordRequest,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_USERS)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> dict:
     """Admin resets any user's password without needing the current password."""
@@ -182,7 +192,7 @@ async def set_password(
 async def toggle_suspend(
     user_id: str,
     body: AdminToggleSuspendRequest,
-    admin: dict = Depends(get_current_admin),
+    admin: dict = Depends(require_permission(PERM_USERS)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> dict:
     """Suspend or unsuspend a user. Admins cannot suspend themselves."""
@@ -196,10 +206,37 @@ async def toggle_suspend(
     return {"message": f"User {action}"}
 
 
+@router.patch("/{user_id}/role", response_model=AdminUserResponse)
+async def update_user_role(
+    user_id: str,
+    body: AdminUpdateRoleRequest,
+    admin: dict = Depends(require_admin_role),
+    db: AsyncIOMotorDatabase = Depends(_get_db),
+) -> AdminUserResponse:
+    """Set a user's role and extra page permissions. Full administrator only.
+
+    Admins cannot change their own role, preventing accidental self-lockout.
+    is_admin is kept in sync so legacy checks keep working.
+    """
+    if str(admin["_id"]) == user_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "You cannot change your own role")
+    repo = UserRepository(db)
+    if not await repo.find_by_id(user_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    await repo.update_role(
+        user_id,
+        role=body.role,
+        extra_permissions=body.extra_permissions,
+        is_admin=(body.role == ROLE_ADMIN),
+    )
+    refreshed = await repo.find_by_id(user_id)
+    return _user_to_response(refreshed)
+
+
 @router.get("/{user_id}/sign-in-history", response_model=list[SignInLogResponse])
 async def get_sign_in_history(
     user_id: str,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_USERS)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> list[SignInLogResponse]:
     """Return the 20 most recent sign-in events for a user."""

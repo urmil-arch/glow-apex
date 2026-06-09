@@ -9,7 +9,8 @@ from app.admin.provider_config.schemas import (
 )
 from app.admin.providers.repository import ProviderRepository
 from app.admin.services.repository import CategoryRepository, ServiceRepository
-from app.user_management.utils.dependencies import get_current_admin
+from app.user_management.utils.dependencies import require_permission
+from app.user_management.utils.permissions import PERM_ROUTING
 
 router = APIRouter()
 
@@ -61,7 +62,7 @@ async def _config_to_response(cfg: dict, db: AsyncIOMotorDatabase) -> RoutingCon
 
 @router.get("", response_model=list[RoutingConfigResponse])
 async def list_routing_configs(
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_ROUTING)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> list[RoutingConfigResponse]:
     """Return all configured routing rules."""
@@ -72,7 +73,7 @@ async def list_routing_configs(
 @router.get("/{category_id}", response_model=RoutingConfigResponse)
 async def get_routing_config(
     category_id: str,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_ROUTING)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> RoutingConfigResponse:
     """Return the routing config for one category. Returns an empty config if none is set."""
@@ -94,7 +95,7 @@ async def get_routing_config(
 async def upsert_routing_config(
     category_id: str,
     body: UpsertRoutingConfigRequest,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_ROUTING)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> RoutingConfigResponse:
     """Create or replace the routing config for a category."""
@@ -123,7 +124,7 @@ async def upsert_routing_config(
 @router.delete("/{category_id}", status_code=status.HTTP_200_OK)
 async def delete_routing_config(
     category_id: str,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_ROUTING)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> dict:
     """Remove the routing config for a category. Order routing reverts to auto-select by provider_service_id."""

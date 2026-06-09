@@ -12,7 +12,8 @@ from app.admin.providers.schemas import (
     ProviderServiceItem,
     UpdateProviderRequest,
 )
-from app.user_management.utils.dependencies import get_current_admin
+from app.user_management.utils.dependencies import require_admin_role, require_permission
+from app.user_management.utils.permissions import PERM_SETTINGS
 
 router = APIRouter()
 
@@ -35,7 +36,7 @@ def _provider_to_response(doc: dict) -> ProviderResponse:
 
 @router.get("", response_model=list[ProviderResponse])
 async def list_providers(
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_SETTINGS)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> list[ProviderResponse]:
     """Return all configured providers."""
@@ -46,7 +47,7 @@ async def list_providers(
 @router.post("", response_model=ProviderResponse, status_code=status.HTTP_201_CREATED)
 async def create_provider(
     body: CreateProviderRequest,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_admin_role),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> ProviderResponse:
     """Add a new SMM provider."""
@@ -67,7 +68,7 @@ async def create_provider(
 @router.get("/{provider_id}", response_model=ProviderResponse)
 async def get_provider(
     provider_id: str,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_SETTINGS)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> ProviderResponse:
     doc = await ProviderRepository(db).find_by_id(provider_id)
@@ -80,7 +81,7 @@ async def get_provider(
 async def update_provider(
     provider_id: str,
     body: UpdateProviderRequest,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_admin_role),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> ProviderResponse:
     """Update provider fields. Only supplied fields are changed."""
@@ -109,7 +110,7 @@ async def update_provider(
 @router.delete("/{provider_id}", status_code=status.HTTP_200_OK)
 async def delete_provider(
     provider_id: str,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_admin_role),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> dict:
     """Delete a provider by ID."""
@@ -122,7 +123,7 @@ async def delete_provider(
 @router.get("/{provider_id}/balance", response_model=ProviderBalanceResponse)
 async def get_provider_balance(
     provider_id: str,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_SETTINGS)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> ProviderBalanceResponse:
     """Proxy a balance check to the provider API."""
@@ -150,7 +151,7 @@ async def get_provider_balance(
 @router.get("/{provider_id}/services", response_model=list[ProviderServiceItem])
 async def get_provider_services(
     provider_id: str,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_SETTINGS)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> list[ProviderServiceItem]:
     """Fetch the live service list from a provider's API."""

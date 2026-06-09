@@ -39,6 +39,11 @@ interface PackageOption {
   discountLabel?: string;
 }
 
+interface PublicSettings {
+  payment_stripe_enabled: boolean;
+  payment_razorpay_enabled: boolean;
+}
+
 type PaymentMethod = "stripe" | "razorpay";
 
 const CATEGORY_TO_SERVICE_TYPE: Record<string, string> = {
@@ -91,6 +96,10 @@ const CheckoutPage = () => {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("stripe");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [publicSettings, setPublicSettings] = useState<PublicSettings>({
+    payment_stripe_enabled: true,
+    payment_razorpay_enabled: true,
+  });
 
   // ── Pricing ───────────────────────────────────────────────────────────────────
   const serviceTypeKey = isCategoryFlow
@@ -132,6 +141,21 @@ const CheckoutPage = () => {
       navigate("/services", { replace: true });
     }
   }, [serviceOrder, categoryOrder, navigate]);
+
+  useEffect(() => {
+    api.get<PublicSettings>(API_ENDPOINTS.PUBLIC_SETTINGS)
+      .then((res) => setPublicSettings(res.data))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const available: PaymentMethod[] = [];
+    if (publicSettings.payment_stripe_enabled) available.push("stripe");
+    if (publicSettings.payment_razorpay_enabled) available.push("razorpay");
+    if (available.length > 0 && !available.includes(paymentMethod)) {
+      setPaymentMethod(available[0]);
+    }
+  }, [publicSettings.payment_stripe_enabled, publicSettings.payment_razorpay_enabled]);
 
   if (!authLoading && !isAuthenticated) return <Navigate to="/sign-in" replace />;
   if (!serviceOrder && !categoryOrder) return null;
@@ -373,85 +397,108 @@ const CheckoutPage = () => {
             {/* Step 3 — Payment method */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <StepHeader num={3} label="Choose Payment Method" />
-              <div className="grid grid-cols-2 gap-3">
-                {/* Stripe */}
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod("stripe")}
-                  className={`flex flex-col items-start gap-2 p-4 rounded-xl border-2 text-left transition-all ${
-                    paymentMethod === "stripe"
-                      ? "border-teal-500 bg-teal-50"
-                      : "border-gray-200 bg-white hover:border-gray-300"
-                  }`}
-                >
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                    paymentMethod === "stripe" ? "bg-teal-100" : "bg-gray-100"
-                  }`}>
-                    <CreditCard className={`w-5 h-5 ${paymentMethod === "stripe" ? "text-teal-600" : "text-gray-500"}`} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">Stripe</p>
-                    <p className="text-xs text-gray-400">Card · USD</p>
-                  </div>
-                  {paymentMethod === "stripe" && (
-                    <span className="absolute top-3 right-3 w-4 h-4 bg-teal-500 rounded-full flex items-center justify-center">
-                      <Check className="w-2.5 h-2.5 text-white" />
-                    </span>
-                  )}
-                </button>
 
-                {/* Razorpay */}
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod("razorpay")}
-                  className={`flex flex-col items-start gap-2 p-4 rounded-xl border-2 text-left transition-all ${
-                    paymentMethod === "razorpay"
-                      ? "border-amber-500 bg-amber-50"
-                      : "border-gray-200 bg-white hover:border-gray-300"
-                  }`}
-                >
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                    paymentMethod === "razorpay" ? "bg-amber-100" : "bg-gray-100"
-                  }`}>
-                    <Zap className={`w-5 h-5 ${paymentMethod === "razorpay" ? "text-amber-600" : "text-gray-500"}`} />
+              {!publicSettings.payment_stripe_enabled && !publicSettings.payment_razorpay_enabled ? (
+                <div className="flex flex-col items-center gap-3 py-6 text-center">
+                  <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
+                    <Lock className="w-5 h-5 text-red-400" />
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">Razorpay</p>
-                    <p className="text-xs text-gray-400">UPI · INR</p>
-                  </div>
-                  {paymentMethod === "razorpay" && (
-                    <span className="absolute top-3 right-3 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center">
-                      <Check className="w-2.5 h-2.5 text-white" />
-                    </span>
-                  )}
-                </button>
-              </div>
-
-              {/* Error message */}
-              {error && (
-                <div className="mt-4 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
-                  {error}
+                  <p className="text-sm font-semibold text-gray-800">Payment Temporarily Unavailable</p>
+                  <p className="text-xs text-gray-400 max-w-xs">
+                    We're not accepting payments at this time. Please check back shortly or contact support.
+                  </p>
                 </div>
-              )}
+              ) : (
+                <>
+                  <div className={`grid gap-3 ${
+                    publicSettings.payment_stripe_enabled && publicSettings.payment_razorpay_enabled
+                      ? "grid-cols-2"
+                      : "grid-cols-1"
+                  }`}>
+                    {/* Stripe */}
+                    {publicSettings.payment_stripe_enabled && (
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod("stripe")}
+                        className={`relative flex flex-col items-start gap-2 p-4 rounded-xl border-2 text-left transition-all ${
+                          paymentMethod === "stripe"
+                            ? "border-teal-500 bg-teal-50"
+                            : "border-gray-200 bg-white hover:border-gray-300"
+                        }`}
+                      >
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                          paymentMethod === "stripe" ? "bg-teal-100" : "bg-gray-100"
+                        }`}>
+                          <CreditCard className={`w-5 h-5 ${paymentMethod === "stripe" ? "text-teal-600" : "text-gray-500"}`} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Stripe</p>
+                          <p className="text-xs text-gray-400">Card · USD</p>
+                        </div>
+                        {paymentMethod === "stripe" && (
+                          <span className="absolute top-3 right-3 w-4 h-4 bg-teal-500 rounded-full flex items-center justify-center">
+                            <Check className="w-2.5 h-2.5 text-white" />
+                          </span>
+                        )}
+                      </button>
+                    )}
 
-              {/* Pay button */}
-              <button
-                onClick={handlePlaceOrder}
-                disabled={!isValid || loading}
-                className="mt-5 w-full bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-teal-200"
-              >
-                {loading ? (
-                  <>
-                    <Loader className="w-4 h-4 animate-spin" />
-                    {paymentMethod === "razorpay" ? "Opening Payment…" : "Redirecting…"}
-                  </>
-                ) : (
-                  <>
-                    <Lock className="w-4 h-4" />
-                    Pay {fmt(finalCharge)} — {paymentMethod === "razorpay" ? "Razorpay" : "Stripe"}
-                  </>
-                )}
-              </button>
+                    {/* Razorpay */}
+                    {publicSettings.payment_razorpay_enabled && (
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod("razorpay")}
+                        className={`relative flex flex-col items-start gap-2 p-4 rounded-xl border-2 text-left transition-all ${
+                          paymentMethod === "razorpay"
+                            ? "border-amber-500 bg-amber-50"
+                            : "border-gray-200 bg-white hover:border-gray-300"
+                        }`}
+                      >
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                          paymentMethod === "razorpay" ? "bg-amber-100" : "bg-gray-100"
+                        }`}>
+                          <Zap className={`w-5 h-5 ${paymentMethod === "razorpay" ? "text-amber-600" : "text-gray-500"}`} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Razorpay</p>
+                          <p className="text-xs text-gray-400">UPI · INR</p>
+                        </div>
+                        {paymentMethod === "razorpay" && (
+                          <span className="absolute top-3 right-3 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center">
+                            <Check className="w-2.5 h-2.5 text-white" />
+                          </span>
+                        )}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Error message */}
+                  {error && (
+                    <div className="mt-4 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                      {error}
+                    </div>
+                  )}
+
+                  {/* Pay button */}
+                  <button
+                    onClick={handlePlaceOrder}
+                    disabled={!isValid || loading}
+                    className="mt-5 w-full bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-teal-200"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader className="w-4 h-4 animate-spin" />
+                        {paymentMethod === "razorpay" ? "Opening Payment…" : "Redirecting…"}
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-4 h-4" />
+                        Pay {fmt(finalCharge)} — {paymentMethod === "razorpay" ? "Razorpay" : "Stripe"}
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
             </div>
           </div>
 

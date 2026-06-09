@@ -15,6 +15,7 @@ import {
   ListTodo,
   CreditCard,
   DollarSign,
+  Newspaper,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
@@ -24,30 +25,35 @@ interface NavItem {
   to: string;
   icon: React.ReactNode;
   label: string;
+  perm: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { to: '/admin', icon: <LayoutDashboard className="h-5 w-5" />, label: 'Dashboard' },
-  { to: '/admin/users', icon: <Users className="h-5 w-5" />, label: 'Users' },
-  { to: '/admin/orders', icon: <ClipboardList className="h-5 w-5" />, label: 'Orders' },
-  { to: '/admin/tasks', icon: <ListTodo className="h-5 w-5" />, label: 'Tasks' },
-  { to: '/admin/payments', icon: <CreditCard className="h-5 w-5" />, label: 'Payments' },
-  { to: '/admin/services', icon: <Package className="h-5 w-5" />, label: 'Services' },
-  { to: '/admin/routing', icon: <GitBranch className="h-5 w-5" />, label: 'Routing' },
-  { to: '/admin/support', icon: <HeadphonesIcon className="h-5 w-5" />, label: 'Support' },
-  { to: '/admin/pricing', icon: <DollarSign className="h-5 w-5" />, label: 'Pricing' },
-  { to: '/admin/settings', icon: <Settings className="h-5 w-5" />, label: 'Settings' },
+  { to: '/admin', icon: <LayoutDashboard className="h-5 w-5" />, label: 'Dashboard', perm: 'dashboard' },
+  { to: '/admin/users', icon: <Users className="h-5 w-5" />, label: 'Users', perm: 'users' },
+  { to: '/admin/orders', icon: <ClipboardList className="h-5 w-5" />, label: 'Orders', perm: 'orders' },
+  { to: '/admin/tasks', icon: <ListTodo className="h-5 w-5" />, label: 'Tasks', perm: 'tasks' },
+  { to: '/admin/payments', icon: <CreditCard className="h-5 w-5" />, label: 'Payments', perm: 'payments' },
+  { to: '/admin/services', icon: <Package className="h-5 w-5" />, label: 'Services', perm: 'services' },
+  { to: '/admin/routing', icon: <GitBranch className="h-5 w-5" />, label: 'Routing', perm: 'routing' },
+  { to: '/admin/support', icon: <HeadphonesIcon className="h-5 w-5" />, label: 'Support', perm: 'support' },
+  { to: '/admin/pricing', icon: <DollarSign className="h-5 w-5" />, label: 'Pricing', perm: 'pricing' },
+  { to: '/admin/blogs', icon: <Newspaper className="h-5 w-5" />, label: 'Blogs', perm: 'blogs' },
+  { to: '/admin/settings', icon: <Settings className="h-5 w-5" />, label: 'Settings', perm: 'settings' },
 ];
 
 const AdminLayout = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, hasPermission } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [hasUnreadTicket, setHasUnreadTicket] = useState(false);
   const [unreadTasks, setUnreadTasks] = useState(0);
 
+  const visibleNav = NAV_ITEMS.filter((item) => hasPermission(item.perm));
+
   useEffect(() => {
+    if (!hasPermission('support')) return;
     Promise.all([
       api.get(API_ENDPOINTS.ADMIN_SUPPORT_TICKETS, { params: { page_size: 50 } }),
       api.get(API_ENDPOINTS.ADMIN_SUPPORT_MESSAGES),
@@ -59,10 +65,11 @@ const AdminLayout = () => {
         messages.some((m) => !m.is_read)
       );
     }).catch(() => {/* non-critical, silent */});
-  }, [location.pathname]);
+  }, [location.pathname, hasPermission]);
 
   // Poll unread task count every 60s; reset immediately when admin opens tasks page
   useEffect(() => {
+    if (!hasPermission('tasks')) return;
     const fetchUnread = () => {
       api.get<{ count: number }>(API_ENDPOINTS.ADMIN_TASKS_UNREAD)
         .then(res => setUnreadTasks(res.data.count ?? 0))
@@ -71,7 +78,7 @@ const AdminLayout = () => {
     fetchUnread();
     const interval = setInterval(fetchUnread, 60_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [hasPermission]);
 
   useEffect(() => {
     if (location.pathname === '/admin/tasks') setUnreadTasks(0);
@@ -103,7 +110,7 @@ const AdminLayout = () => {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {NAV_ITEMS.map((item) => {
+        {visibleNav.map((item) => {
           const showSupportDot = item.to === '/admin/support' && hasUnreadTicket;
           const taskBadge = item.to === '/admin/tasks' && unreadTasks > 0 ? unreadTasks : 0;
           return (

@@ -19,6 +19,7 @@ from app.common.config import settings
 from app.admin.providers.repository import ProviderRepository
 from app.admin.services.repository import CategoryRepository, ServiceRepository
 from app.admin.tasks.repository import TaskRepository
+from app.blog.repository import BlogRepository
 from app.contact.repository import ContactMessageRepository
 from app.orders.repository import OrderRepository
 from app.payments.ledger_repository import PaymentLedgerRepository
@@ -43,6 +44,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     repo = UserRepository(db)
     await repo.create_indexes()
+    await repo.backfill_roles()
     await SignInLogRepository(db).create_index()
     await ProviderRepository(db).create_index()
     await CategoryRepository(db).create_index()
@@ -53,6 +55,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await TicketRepository(db).create_index()
     await PricingRepository(db).create_index()
     await TaskRepository(db).create_indexes()
+    await BlogRepository(db).create_indexes()
 
     yield
 

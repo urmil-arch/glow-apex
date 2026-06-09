@@ -88,6 +88,15 @@ export const API_ENDPOINTS = {
   ADMIN_TASKS: `${API_BASE_URL}/admin/tasks`,
   ADMIN_TASKS_UNREAD: `${API_BASE_URL}/admin/tasks/unread-count`,
 
+  // Admin — Blogs
+  ADMIN_BLOGS: `${API_BASE_URL}/admin/blogs`,
+
+  // Public — Blogs
+  PUBLIC_BLOGS: `${API_BASE_URL}/blogs`,
+
+  // Public — Site settings (no auth)
+  PUBLIC_SETTINGS: `${API_BASE_URL}/settings`,
+
   // Pricing
   ADMIN_PRICING: `${API_BASE_URL}/admin/pricing`,
   PUBLIC_PRICING: `${API_BASE_URL}/pricing`,

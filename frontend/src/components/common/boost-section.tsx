@@ -206,20 +206,7 @@ const BoostSection = () => {
                 ))}
               </div>
 
-              <div className="mt-5 relative">
-                <button
-                  onClick={() => handleSectionClick((activeIndex - 1 + sections.length) % sections.length)}
-                  className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-20 w-10 h-10 rounded-full bg-white shadow-md border border-gray-100 flex items-center justify-center text-gray-600 hover:text-emerald-600 hover:border-emerald-200 transition-all"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => handleSectionClick((activeIndex + 1) % sections.length)}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-20 w-10 h-10 rounded-full bg-white shadow-md border border-gray-100 flex items-center justify-center text-gray-600 hover:text-emerald-600 hover:border-emerald-200 transition-all"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-
+              <div className="mt-5">
               <div
                 key={selectedSection.id}
                 className="w-full text-black rounded-3xl relative overflow-hidden min-h-[430px]"
@@ -293,11 +280,25 @@ const BoostSection = () => {
                   </div>
                 </div>
 
+                {/* Navigation arrows — inside card, no background, gradient-colored */}
+                <button
+                  onClick={() => handleSectionClick((activeIndex - 1 + sections.length) % sections.length)}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 z-20 text-emerald-400/70 hover:text-emerald-600 transition-colors"
+                >
+                  <ChevronLeft className="w-9 h-9" />
+                </button>
+                <button
+                  onClick={() => handleSectionClick((activeIndex + 1) % sections.length)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 z-20 text-emerald-400/70 hover:text-emerald-600 transition-colors"
+                >
+                  <ChevronRight className="w-9 h-9" />
+                </button>
+
                 {/* Decorative elements */}
                 <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500 opacity-10 rounded-full -mr-10 -mt-10"></div>
                 <div className="absolute bottom-0 left-0 w-24 h-24 bg-emerald-600 opacity-10 rounded-full -ml-10 -mb-10"></div>
               </div>
-              </div>{/* end arrow wrapper */}
+              </div>
 
               {/* Progress indicators */}
               {/* <div className="sm:flex hidden justify-center mt-8 space-x-2">

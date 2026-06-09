@@ -4,11 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.admin.pricing.repository import PricingRepository
 from app.admin.pricing.schemas import ServicePricingRequest, ServicePricingResponse
-from app.user_management.utils.dependencies import get_current_admin
+from app.user_management.utils.dependencies import require_permission
+from app.user_management.utils.permissions import PERM_PRICING
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(dependencies=[Depends(get_current_admin)])
+router = APIRouter(dependencies=[Depends(require_permission(PERM_PRICING))])
 
 SERVICE_TYPES = [
     "youtube_views",

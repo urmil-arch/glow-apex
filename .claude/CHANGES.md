@@ -441,3 +441,97 @@
 [2026-06-08 18:00] | fix | frontend/src/pages/dashboard/orders/OrderPage.tsx | Cancelled orders now show a distinct grey 'Cancelled' badge instead of 'In Progress'. Added 'cancelled' to StatusKey type and mapOrderStatus handler. Added XCircle grey badge in getStatusBadge. Cancel button hidden when order.status === 'cancelled'. Added Cancelled filter option to status dropdown.
 
 [2026-06-08 19:00] | fix | backend/app/orders/router.py, frontend/src/pages/dashboard/orders/OrderPage.tsx | User-side cancel flow: (1) mapOrderStatus now handles both 'Canceled' (provider spelling, one l) and 'Cancelled' (two l). Cancel button also hidden for 'canceled'. (2) get_order skips live provider sync when DB status is already cancelled/canceled/completed — prevents provider lag overwriting our confirmed cancel. Admin-side get_order unchanged (always live-syncs).
+
+[2026-06-09 00:00] | fix | frontend/src/pages/admin/users/UsersPage.tsx | Login history timestamps were displaying in local time instead of IST. Root cause: Python datetime.isoformat() omits Z suffix — browser parsed as local time. Fix: added toUtc() helper (appends Z when no timezone indicator present); applied to fmt() date formatter and sign-in log timestamp display.
+
+[2026-06-09 00:10] | modify | frontend/src/pages/contact/ContactPage.tsx | "Start Chat" button now navigates to /dashboard/tickets via Link component instead of dead href="#".
+
+[2026-06-09 00:20] | modify | frontend/src/components/common/faq-section.tsx | "Live Support 24x7" button in FAQ section now navigates to /dashboard/tickets instead of "#".
+
+[2026-06-09 01:00] | add | backend/app/blog/ (__init__.py, schemas.py, repository.py, router.py) | New dynamic blog module. BlogRepository stores posts in blog_posts MongoDB collection with indexes on slug (unique), (published, created_at), (category, published). public_router (no auth): GET /blogs (paginated, filter by category/search), GET /blogs/{slug}, GET /blogs/{slug}/related. admin_router (admin JWT): GET /admin/blogs, POST /admin/blogs, PATCH /admin/blogs/{id}, DELETE /admin/blogs/{id}. PATCH uses exclude_unset=True so only sent fields are updated.
+
+[2026-06-09 01:10] | modify | backend/app/admin/router.py | Registered blog_admin_router at /admin/blogs prefix.
+
+[2026-06-09 01:20] | modify | backend/app/app_components.py | Registered blog_public_router at /blogs prefix.
+
+[2026-06-09 01:30] | modify | backend/app/main.py | Imported BlogRepository and added create_indexes() call in lifespan.
+
+[2026-06-09 01:40] | modify | frontend/src/config.ts | Added ADMIN_BLOGS and PUBLIC_BLOGS endpoint constants.
+
+[2026-06-09 02:00] | add | frontend/src/pages/admin/blogs/BlogsPage.tsx | Admin blog management page. Table lists all posts (title, slug, category, date, published/draft badge). "New Post" button opens a right-side form panel (drawer). Form fields: title, slug (auto-generated from title, editable), excerpt, content (large textarea), category, tags (comma-separated), author, read time, image URL, date, published toggle. Edit action re-opens form pre-filled. Delete action shows confirmation modal. Pagination for large lists. Calls PATCH with exclude_unset-compatible payload.
+
+[2026-06-09 02:10] | modify | frontend/src/pages/blogs/AllBlogsPage.tsx | Replaced static blogPosts/blogCategories import with live API fetch from PUBLIC_BLOGS endpoint. Categories derived dynamically from fetched posts. Loading spinner shown while fetching. Same grid UI preserved. Handles empty state.
+
+[2026-06-09 02:20] | modify | frontend/src/pages/blogs/BlogSlugPage.tsx | Replaced static getBlogPostBySlug/getRelatedPosts with API fetch: GET /blogs/{slug} for post, GET /blogs/{slug}/related for related posts. Loading and not-found states handled. Field names updated to match API (image_url, author_name, read_time vs old camelCase). Related posts use separate RelatedPost interface.
+
+[2026-06-09 02:30] | modify | frontend/src/pages/admin/AdminLayout.tsx | Added Newspaper icon import and Blogs nav item at /admin/blogs between Pricing and Settings.
+
+[2026-06-09 02:40] | modify | frontend/src/App.tsx | Imported AdminBlogsPage and registered /admin/blogs route inside the admin guard.
+
+[2026-06-09 04:00] | add | backend/app/user_management/utils/permissions.py | New RBAC permission module. Page permission keys (dashboard, users, orders, tasks, payments, services, routing, support, pricing, blogs, settings) and 6 roles (admin, user, operations_manager [SOM], support, accounts_manager, seo_manager). ROLE_PERMISSIONS matrix: admin + operations_manager get all pages (differ only in capabilities); support=orders/payments/support; accounts_manager=dashboard/orders/payments; seo_manager=blogs; user=none. effective_permissions(user) = role defaults UNION extra_permissions. is_full_admin(user) gates the two reserved capabilities (change roles, manage providers) to role==admin only.
+
+[2026-06-09 04:05] | modify | backend/app/user_management/utils/dependencies.py | Added require_permission(key) dependency factory (403 if key not in effective_permissions) and require_admin_role (403 unless role==admin). get_current_admin retained for the admin health check. Since get_current_user re-fetches the user doc from Mongo every request, role/permission changes take effect immediately with no re-login.
+
+[2026-06-09 04:10] | modify | backend/app/admin/{reports,orders,tasks,pricing,provider_config,support,services,settings,payments}/router.py, backend/app/blog/router.py | Replaced blanket get_current_admin guard with page-specific require_permission(...) on every admin sub-router (reports->dashboard, orders->orders, tasks->tasks, pricing->pricing, provider_config->routing, support->support, services->services, settings->settings, payments->payments, blog admin->blogs). Router-level guards swapped in the APIRouter(dependencies=[...]) call; endpoint-level guards swapped per endpoint.
+
+[2026-06-09 04:15] | modify | backend/app/admin/providers/router.py | Provider GET endpoints (list/get/balance/services) require the settings permission (shown on the Settings page); create/update/delete require require_admin_role. This is how 'SOM can view but not change SMM providers' is enforced server-side.
+
+[2026-06-09 04:20] | modify | backend/app/admin/users/router.py, backend/app/admin/users/schemas.py | Users router guarded by require_permission(users). Added PATCH /admin/users/{id}/role (require_admin_role): sets role + extra_permissions, keeps is_admin synced (role==admin), blocks self role change. AdminUserResponse now includes role + extra_permissions. New AdminUpdateRoleRequest validates role in ALL_ROLES and extra_permissions subset of ALL_PERMISSIONS. create_user now stores role (admin if is_admin else user) + extra_permissions.
+
+[2026-06-09 04:25] | modify | backend/app/user_management/schemas/auth_schemas.py, backend/app/user_management/services/auth_service.py, backend/app/user_management/services/profile_service.py | UserPublic and ProfileResponse now carry role + effective permissions list. login/verify_otp/get_profile/update_profile populate them via effective_permissions(). register insert sets role=user, extra_permissions=[].
+
+[2026-06-09 04:30] | modify | backend/app/user_management/repositories/user_repository.py, backend/app/main.py | Added update_role() and idempotent backfill_roles() (existing is_admin:true -> admin, else user; only touches docs missing a role). Lifespan calls backfill_roles() once on startup after create_indexes.
+
+[2026-06-09 05:00] | add | frontend/src/config/permissions.ts | RBAC mirror of the backend: PERMISSIONS keys, ROLES, ROLE_LABELS, PERMISSION_LABELS, ROLE_DEFAULT_PERMISSIONS, ASSIGNABLE_ROLES, ADMIN_NAV_ORDER, and firstAllowedAdminPath(perms) which returns the landing path for a user's first held permission. Drives nav/route gating and the role UI only; backend remains the enforcement authority.
+
+[2026-06-09 05:05] | modify | frontend/src/context/AuthContext.tsx | User interface gains role + permissions. Added hasPermission(key) to context (checks user.permissions). Login/verifyOtp/auth-me already persist the richer user object, so permissions flow through automatically.
+
+[2026-06-09 05:10] | modify | frontend/src/components/admin/AdminGuard.tsx | Admin panel entry now allows any staff member (>=1 permission) instead of is_admin only. Per-page access is enforced by RequirePermission.
+
+[2026-06-09 05:15] | add | frontend/src/components/admin/RequirePermission.tsx | Route wrapper that redirects users lacking a page permission to their first allowed admin page (firstAllowedAdminPath), or home if none.
+
+[2026-06-09 05:20] | modify | frontend/src/App.tsx | Each /admin sub-route wrapped in RequirePermission with its page key. The index (dashboard) route redirects roles without dashboard access (support, seo) to their first allowed page.
+
+[2026-06-09 05:25] | modify | frontend/src/pages/admin/AdminLayout.tsx | NAV_ITEMS tagged with perm keys; sidebar renders only items the user has permission for (visibleNav). Support-ticket and task-badge polling now gated by hasPermission so non-permitted roles do not fire 403 requests.
+
+[2026-06-09 05:30] | modify | frontend/src/pages/auth/SignInPage.tsx | Post-login and post-OTP redirect now sends any staff (permissions.length > 0) to /admin, customers to /dashboard (was is_admin only, which excluded the new non-admin staff roles).
+
+[2026-06-09 05:35] | modify | frontend/src/pages/admin/users/UsersPage.tsx | AdminUser gains role + extra_permissions. Status cell shows a role badge (teal for admin, indigo for other staff roles). New 'Change Role' action (visible only when the logged-in user's role is admin) opens RoleModal: role dropdown (ASSIGNABLE_ROLES) + page-access checkboxes where role-default pages are locked-on and extra grants are toggleable. Saves PATCH /admin/users/{id}/role with extra_permissions = checked pages beyond the role defaults.
+
+[2026-06-09 05:40] | modify | frontend/src/pages/admin/settings/SettingsPage.tsx | Provider add/edit/delete controls gated behind canManageProviders (user.role === 'admin'). SOM and other staff with settings access can view providers and check balances but cannot mutate them; ProviderCard takes a canManage prop hiding its edit/delete buttons. Mirrors backend require_admin_role on provider mutations.
+
+[2026-06-09 03:10] | modify | frontend/src/pages/blogs/AllBlogsPage.tsx, frontend/src/pages/blogs/BlogSlugPage.tsx | Blog cover images now fill their containers. Changed all three (list card header, detail hero, related cards) from h-XX w-auto object-contain (image sat small on a colored box) to w-full h-full object-cover. Containers already have fixed heights + overflow-hidden, so images cover-crop cleanly.
+
+[2026-06-09 03:00] | fix | frontend/src/pages/blogs/BlogSlugPage.tsx, backend/app/blog/router.py, backend/app/blog/repository.py | BlogSlugPage crashed with "Cannot read properties of undefined (reading 'length')". Root cause: /blogs/{slug}/related returns a bare array (response_model=list[BlogResponse]) but the frontend read res.data.posts (undefined), so setRelated(undefined) made related.length throw. Fix: frontend reads relRes.data directly. Second bug: find_related filtered by a category query param the frontend never sent, so related posts were always empty — made the endpoint self-contained by deriving the post's category from the slug internally (dropped the category param in router + repository). Third: related fetch is now fire-and-forget with its own catch so a related-fetch failure no longer marks the post as Not Found. Pattern scan: AllBlogsPage and admin BlogsPage call list endpoints that genuinely return {posts,total,...} — res.data.posts correct there, no change.
+
+[2026-06-09 06:00] | modify | frontend/src/components/common/boost-section.tsx | Moved carousel navigation arrows inside the card. Removed old absolute-outside positioning (-translate-x-4/translate-x-4) and white bg/shadow/border styling. Arrows now sit at left-4/right-4 top-1/2 inside the card's relative container, styled with text-emerald-400/70 hover:text-emerald-600 — no background, gradient-colored.
+
+[2026-06-09 06:30] | modify | backend/app/user_management/repositories/user_repository.py | Added _TOTAL_SPENT_LOOKUP pipeline stages (shared constant). admin_list_users switched from find() cursor to $facet aggregation; $lookup joins payments where user_id matches and status="paid", $group sums amount → total_spent on each user doc. Added "paid" filter: pre-fetches distinct user_ids from payments.distinct("user_id", {status:"paid"}), converts to ObjectIds, restricts the users query — efficient index-backed lookup. admin_export_users also uses the lookup pipeline for CSV export.
+
+[2026-06-09 06:30] | modify | backend/app/admin/users/schemas.py | Added total_spent: float = 0.0 to AdminUserResponse.
+
+[2026-06-09 06:30] | modify | backend/app/admin/users/router.py | _user_to_response reads total_spent from user doc with float cast and 0.0 fallback.
+
+[2026-06-09 06:30] | modify | frontend/src/pages/admin/users/UsersPage.tsx | Added total_spent: number to AdminUser interface. Added "Spent" column header and cell (shows $X.XX or — if zero). Added "paid" filter tab. toCSV includes total_spent_usd column. colspan updated 6→7 on loading/empty rows.
+
+[2026-06-09 06:45] | modify | backend/app/user_management/repositories/user_repository.py, backend/app/admin/users/router.py, frontend/src/pages/admin/users/UsersPage.tsx | Replaced "paid" filter tab with ascending/descending sort on the Spent column. Backend admin_list_users accepts sort_by and sort_order params; when sort_by="total_spent" the spend lookup runs on all matching users before pagination for accurate cross-page ordering; otherwise lookup runs only on the current page. Router exposes sort_by/sort_order query params. Frontend: removed "paid" from FILTERS, added sortBy/sortOrder state, handleSpentSort toggles asc/desc, Spent column header is a clickable button showing a teal arrow when active or a faint arrow otherwise.
+
+[2026-06-09 07:00] | modify | backend/app/admin/users/schemas.py, backend/app/admin/users/router.py, frontend/src/pages/admin/users/UsersPage.tsx | Add User form now includes role selector and page-access permissions. Backend: AdminCreateUserRequest replaces is_admin bool with role (validated against ALL_ROLES) + extra_permissions (validated against ALL_PERMISSIONS); create_user derives is_admin from role=="admin". Frontend: AddForm interface drops is_admin, adds role + extra_permissions; add modal replaces checkbox with role dropdown + permission checkboxes grid matching the Change Role modal UX; extra_permissions resets when role changes.
+
+[2026-06-09 09:00] | modify | backend/app/admin/settings/schemas.py, backend/app/admin/settings/router.py | Settings overhaul: removed EUR currency option (now USD/INR only via Literal), removed order limits fields (min_order_quantity, max_order_quantity), removed email notification fields (notify_new_order, notify_new_ticket), removed Cashfree/Cryptomus/Payeer payment flags, added payment_razorpay_enabled, added social_twitter/instagram/youtube/facebook string fields. _merge_defaults updated to match new schema.
+
+[2026-06-09 09:00] | add | backend/app/public_settings/__init__.py, backend/app/public_settings/router.py | New unauthenticated GET /settings endpoint returning maintenance_mode, payment_stripe_enabled, payment_razorpay_enabled, and social link fields. Used by frontend footer (social links) and checkout (payment method gating) without requiring auth.
+
+[2026-06-09 09:00] | modify | backend/app/app_components.py | Registered public_settings_router at prefix /settings.
+
+[2026-06-09 09:00] | modify | frontend/src/config.ts | Added PUBLIC_SETTINGS endpoint constant.
+
+[2026-06-09 09:00] | add | frontend/src/pages/MaintenancePage.tsx | Full-screen maintenance page: amber Wrench icon, pulsing status dot, site logo, copy explaining downtime. No navigation links.
+
+[2026-06-09 09:00] | modify | frontend/src/pages/admin/settings/SettingsPage.tsx | General tab overhauled: removed Order Limits card, removed Email Notifications card. Currency card now 2-button grid (USD/INR only). Payment Methods card shows only Stripe + Razorpay toggles with a "all methods off" warning banner when both are disabled. Social Links card subtitle updated. Maintenance Mode description updated to clarify admins bypass.
+
+[2026-06-09 09:00] | modify | frontend/src/pages/checkout/CheckoutPage.tsx | Fetches public settings on mount. Payment method buttons are conditionally rendered based on payment_stripe_enabled / payment_razorpay_enabled flags. If a single method is active the grid becomes single-column. If both are off the entire payment step shows a "payment unavailable" banner instead of buttons. Auto-selects first available method when settings load and current selection is disabled.
+
+[2026-06-09 09:00] | modify | frontend/src/components/footer.tsx | Fetches public settings on mount. Renders a social links row (Twitter/X, Instagram, YouTube, Facebook) below the footer grid if any social_* field is non-empty. Icons are inline SVGs to avoid deprecated lucide-react brand icon imports.
+
+[2026-06-09 09:00] | modify | frontend/src/App.tsx | Added MaintenancePage import. Added MaintenanceGuard component: fetches public settings once on mount, redirects non-admin users to /maintenance if maintenance_mode is true; exempt paths: /maintenance, /sign-in, /sign-up, /suspended. Added /maintenance route. MaintenanceGuard wraps SuspensionGuard inside AuthProvider so both guards share the same auth context.

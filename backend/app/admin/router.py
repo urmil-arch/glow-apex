@@ -10,6 +10,7 @@ from app.admin.settings.router import router as settings_router
 from app.admin.support.router import router as support_router
 from app.admin.tasks.router import router as tasks_router
 from app.admin.users.router import router as users_router
+from app.blog.router import admin_router as blog_admin_router
 from app.user_management.utils.dependencies import get_current_admin
 
 router = APIRouter()
@@ -24,6 +25,7 @@ router.include_router(provider_config_router, prefix="/routing", tags=["Admin Ro
 router.include_router(support_router,  prefix="/support",  tags=["Admin Support"])
 router.include_router(reports_router,  prefix="/reports",  tags=["Admin Reports"])
 router.include_router(tasks_router,    prefix="/tasks",    tags=["Admin Tasks"])
+router.include_router(blog_admin_router, prefix="/blogs", tags=["Admin Blogs"])
 
 
 @router.get("/health")

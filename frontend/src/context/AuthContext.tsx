@@ -12,12 +12,15 @@ export interface User {
   is_admin?: boolean;
   is_suspended?: boolean;
   personal_discount?: number;
+  role?: string;
+  permissions?: string[];
 }
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  hasPermission: (permission: string) => boolean;
   login: (identifier: string, password: string) => Promise<User>;
   register: (full_name: string, username: string, email: string, password: string) => Promise<void>;
   verifyOtp: (email: string, otp: string) => Promise<User>;
@@ -32,6 +35,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   isLoading: true,
   isAuthenticated: false,
+  hasPermission: () => false,
   login: async () => ({} as User),
   register: async () => {},
   verifyOtp: async () => ({} as User),
@@ -126,9 +130,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem("user", JSON.stringify(updated));
   };
 
+  const hasPermission = (permission: string): boolean =>
+    !!user && (user.permissions ?? []).includes(permission);
+
   return (
     <AuthContext.Provider
-      value={{ user, isLoading, isAuthenticated: !!user, login, register, verifyOtp, resendOtp, logout, updateUser, updateProfile, changePassword }}
+      value={{ user, isLoading, isAuthenticated: !!user, hasPermission, login, register, verifyOtp, resendOtp, logout, updateUser, updateProfile, changePassword }}
     >
       {children}
     </AuthContext.Provider>

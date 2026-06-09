@@ -10,7 +10,8 @@ from app.contact.repository import ContactMessageRepository
 from app.tickets.repository import TicketRepository
 from app.tickets.router import _serialize as _serialize_ticket
 from app.tickets.schemas import TicketListResponse, TicketResponse
-from app.user_management.utils.dependencies import get_current_admin
+from app.user_management.utils.dependencies import require_permission
+from app.user_management.utils.permissions import PERM_SUPPORT
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -73,7 +74,7 @@ async def list_contact_messages(
     page_size: int = Query(20, ge=1, le=100),
     is_read: str = Query(""),
     type: str = Query(""),
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_SUPPORT)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> ContactMessagesListResponse:
     """Return paginated contact form messages for the admin panel."""
@@ -93,7 +94,7 @@ async def list_contact_messages(
 @router.post("/messages/{message_id}/read", status_code=status.HTTP_200_OK)
 async def mark_message_read(
     message_id: str,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_SUPPORT)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> dict:
     """Mark a contact form message as read."""
@@ -109,7 +110,7 @@ async def list_tickets(
     page_size: int = Query(20, ge=1, le=100),
     status_filter: str = Query(""),
     type_filter: str = Query(""),
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_SUPPORT)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> TicketListResponse:
     """Return paginated tickets across all users."""
@@ -129,7 +130,7 @@ async def list_tickets(
 @router.get("/tickets/{ticket_id}", response_model=TicketResponse)
 async def get_ticket(
     ticket_id: str,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_SUPPORT)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> TicketResponse:
     """Return a single ticket by ID and clear the admin unread flag."""
@@ -147,7 +148,7 @@ async def get_ticket(
 async def admin_reply(
     ticket_id: str,
     body: AdminReplyRequest,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_SUPPORT)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> TicketResponse:
     """Append an admin reply to a ticket. Auto-transitions open tickets to in_progress."""
@@ -170,7 +171,7 @@ async def admin_reply(
 async def change_ticket_status(
     ticket_id: str,
     body: AdminChangeStatusRequest,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_SUPPORT)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> dict:
     """Change the status of a ticket."""

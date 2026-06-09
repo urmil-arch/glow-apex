@@ -6,7 +6,9 @@ const AdminGuard = () => {
 
   if (isLoading) return null;
   if (!isAuthenticated) return <Navigate to="/sign-in" replace />;
-  if (!user?.is_admin) return <Navigate to="/" replace />;
+  // Any staff member (one or more admin-page permissions) may enter the panel;
+  // per-page access is enforced by RequirePermission on each route.
+  if ((user?.permissions ?? []).length === 0) return <Navigate to="/" replace />;
 
   return <Outlet />;
 };

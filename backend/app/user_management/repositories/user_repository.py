@@ -4,6 +4,40 @@ from typing import Optional
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+# Appended to any user aggregation pipeline to compute total_spent from the
+# payments collection.  Sums amount where status="paid" and user_id matches.
+_TOTAL_SPENT_LOOKUP: list[dict] = [
+    {"$addFields": {"_id_str": {"$toString": "$_id"}}},
+    {
+        "$lookup": {
+            "from": "payments",
+            "let": {"uid": "$_id_str"},
+            "pipeline": [
+                {
+                    "$match": {
+                        "$expr": {
+                            "$and": [
+                                {"$eq": ["$user_id", "$$uid"]},
+                                {"$eq": ["$status", "paid"]},
+                            ]
+                        }
+                    }
+                },
+                {"$group": {"_id": None, "total": {"$sum": "$amount"}}},
+            ],
+            "as": "_spent",
+        }
+    },
+    {
+        "$addFields": {
+            "total_spent": {
+                "$ifNull": [{"$arrayElemAt": ["$_spent.total", 0]}, 0.0]
+            }
+        }
+    },
+    {"$project": {"_id_str": 0, "_spent": 0}},
+]
+
 
 class UserRepository:
     def __init__(self, db: AsyncIOMotorDatabase) -> None:
@@ -66,10 +100,18 @@ class UserRepository:
         page_size: int,
         search: str = "",
         filter_by: str = "all",
+        sort_by: str = "created_at",
+        sort_order: str = "desc",
     ) -> tuple[list[dict], int]:
         """
-        Return a paginated slice of users and the total matching count.
+        Return a paginated slice of users with total_spent and the total matching count.
+
         filter_by: all | verified | unverified | suspended
+        sort_by: created_at | total_spent
+        sort_order: asc | desc
+
+        When sort_by is "total_spent" the spend lookup runs on all matching users
+        before pagination so the sort is global across pages, not per-page.
         """
         query: dict = {}
         if search:
@@ -86,11 +128,45 @@ class UserRepository:
         elif filter_by == "suspended":
             query["is_suspended"] = True
 
-        total = await self._col.count_documents(query)
+        sort_dir = 1 if sort_order == "asc" else -1
         skip = (page - 1) * page_size
-        cursor = self._col.find(query).sort("created_at", -1).skip(skip).limit(page_size)
-        users = await cursor.to_list(length=page_size)
-        return users, total
+
+        if sort_by == "total_spent":
+            # Compute total_spent for every matching user first, then sort globally,
+            # then paginate. More work per request but required for cross-page ordering.
+            pipeline: list[dict] = [
+                {"$match": query},
+                *_TOTAL_SPENT_LOOKUP,
+                {"$sort": {"total_spent": sort_dir, "created_at": -1}},
+                {
+                    "$facet": {
+                        "data": [{"$skip": skip}, {"$limit": page_size}],
+                        "total": [{"$count": "n"}],
+                    }
+                },
+            ]
+        else:
+            # Default: sort by created_at; compute total_spent only for the current page.
+            pipeline = [
+                {"$match": query},
+                {"$sort": {"created_at": sort_dir}},
+                {
+                    "$facet": {
+                        "data": [
+                            {"$skip": skip},
+                            {"$limit": page_size},
+                            *_TOTAL_SPENT_LOOKUP,
+                        ],
+                        "total": [{"$count": "n"}],
+                    }
+                },
+            ]
+
+        result = await self._col.aggregate(pipeline).to_list(length=1)
+        if not result:
+            return [], 0
+        bucket = result[0]
+        return bucket["data"], (bucket["total"][0]["n"] if bucket["total"] else 0)
 
     async def admin_get_stats(self) -> dict:
         """Return user counts for the admin stats cards."""
@@ -102,14 +178,47 @@ class UserRepository:
         return {"total": total, "verified": verified, "suspended": suspended}
 
     async def admin_export_users(self) -> list[dict]:
-        """Return all user documents (no pagination) for CSV export."""
-        cursor = self._col.find({}).sort("created_at", -1)
-        return await cursor.to_list(length=None)
+        """Return all user documents with total_spent for CSV export."""
+        pipeline: list[dict] = [
+            {"$sort": {"created_at": -1}},
+            *_TOTAL_SPENT_LOOKUP,
+        ]
+        return await self._col.aggregate(pipeline).to_list(length=None)
 
     async def admin_suspend_user(self, user_id: str, suspended: bool) -> None:
         """Set or clear the is_suspended flag on a user."""
         await self._col.update_one(
             {"_id": ObjectId(user_id)},
             {"$set": {"is_suspended": suspended}},
+        )
+
+    async def update_role(
+        self, user_id: str, role: str, extra_permissions: list[str], is_admin: bool
+    ) -> None:
+        """Set a user's role, extra page permissions, and synced is_admin flag."""
+        await self._col.update_one(
+            {"_id": ObjectId(user_id)},
+            {
+                "$set": {
+                    "role": role,
+                    "extra_permissions": extra_permissions,
+                    "is_admin": is_admin,
+                }
+            },
+        )
+
+    async def backfill_roles(self) -> None:
+        """One-time backfill: assign a role to any user document missing one.
+
+        Existing admins (is_admin true) become 'admin'; everyone else 'user'.
+        Idempotent — only touches documents without a role field.
+        """
+        await self._col.update_many(
+            {"role": {"$exists": False}, "is_admin": True},
+            {"$set": {"role": "admin", "extra_permissions": []}},
+        )
+        await self._col.update_many(
+            {"role": {"$exists": False}},
+            {"$set": {"role": "user", "extra_permissions": []}},
         )
 

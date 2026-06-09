@@ -11,11 +11,12 @@ from app.admin.tasks.schemas import (
     TaskUpdate,
     UnreadCountResponse,
 )
-from app.user_management.utils.dependencies import get_current_admin
+from app.user_management.utils.dependencies import require_permission
+from app.user_management.utils.permissions import PERM_TASKS
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(dependencies=[Depends(get_current_admin)])
+router = APIRouter(dependencies=[Depends(require_permission(PERM_TASKS))])
 
 
 def _serialize(doc: dict) -> TaskResponse:

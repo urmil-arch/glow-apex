@@ -1,33 +1,66 @@
-import React from "react";
+import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { blogPosts, type BlogPost } from "@/config/data";
 import { motion } from "framer-motion";
-import { Calendar, User, Clock, Share2, ArrowLeft } from "lucide-react";
+import { Calendar, User, Clock, Share2, ArrowLeft, Loader2 } from "lucide-react";
+import { api } from "@/lib/api";
+import { API_ENDPOINTS } from "@/config";
 
-const getBlogPostBySlug = (slug: string): BlogPost | undefined => {
-  return blogPosts.find((post) => post.slug === slug) as BlogPost | undefined;
-};
+interface BlogPost {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  content: string;
+  category: string;
+  tags: string[];
+  author_name: string;
+  read_time: string;
+  image_url: string;
+  date: string;
+}
 
-const getRelatedPosts = (currentPost: BlogPost, allPosts: BlogPost[], limit = 3): BlogPost[] => {
-  let related = allPosts.filter((p) => p.id !== currentPost.id && p.category === currentPost.category) as BlogPost[];
-  if (related.length < limit) {
-    const currentTags = currentPost.tags.map((t) => t.toLowerCase());
-    const tagMatches = (allPosts as BlogPost[]).filter((p) => {
-      if (p.id === currentPost.id || related.some((r) => r.id === p.id)) return false;
-      return p.tags.some((t) => currentTags.includes(t.toLowerCase()));
-    });
-    related = [...related, ...tagMatches];
-  }
-  if (related.length < limit) {
-    const rest = (allPosts as BlogPost[]).filter((p) => p.id !== currentPost.id && !related.some((r) => r.id === p.id));
-    related = [...related, ...rest];
-  }
-  return related.slice(0, limit);
-};
+interface RelatedPost {
+  id: string;
+  title: string;
+  slug: string;
+  category: string;
+  image_url: string;
+  date: string;
+}
 
-const BlogSlugPage: React.FC = () => {
+const BlogSlugPage = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+
+  const [post, setPost] = useState<BlogPost | null>(null);
+  const [related, setRelated] = useState<RelatedPost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+
+  useEffect(() => {
+    if (!slug) return;
+    let cancelled = false;
+    setLoading(true);
+    setNotFound(false);
+
+    api.get<BlogPost>(`${API_ENDPOINTS.PUBLIC_BLOGS}/${slug}`)
+      .then(res => {
+        if (cancelled) return;
+        setPost(res.data);
+        // Related posts are non-critical — a failure here must not hide the post.
+        api.get<RelatedPost[]>(`${API_ENDPOINTS.PUBLIC_BLOGS}/${slug}/related`)
+          .then(relRes => { if (!cancelled) setRelated(relRes.data); })
+          .catch(() => { if (!cancelled) setRelated([]); });
+      })
+      .catch(() => {
+        if (!cancelled) setNotFound(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [slug]);
 
   if (!slug) {
     return (
@@ -40,9 +73,15 @@ const BlogSlugPage: React.FC = () => {
     );
   }
 
-  const post = getBlogPostBySlug(slug);
+  if (loading) {
+    return (
+      <div className="container pt-44 pb-24 flex justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+      </div>
+    );
+  }
 
-  if (!post) {
+  if (notFound || !post) {
     return (
       <div className="container pt-44 pb-24 text-center">
         <h1 className="text-2xl font-bold text-gray-800 mb-4">Post Not Found</h1>
@@ -55,8 +94,6 @@ const BlogSlugPage: React.FC = () => {
     );
   }
 
-  const relatedPosts = getRelatedPosts(post, blogPosts as BlogPost[]);
-
   return (
     <div className="pt-32 pb-24">
       <div className="container max-w-4xl mx-auto">
@@ -67,8 +104,14 @@ const BlogSlugPage: React.FC = () => {
           </Link>
 
           {/* Hero Image */}
-          <div className="rounded-2xl overflow-hidden mb-8 bg-emerald-50 flex items-center justify-center h-64">
-            <img src={post.imageUrl} alt={post.title} className="h-52 w-auto object-contain" />
+          <div className="rounded-2xl overflow-hidden mb-8 bg-emerald-50 flex items-center justify-center h-128">
+            {post.image_url ? (
+              <img src={post.image_url} alt={post.title} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-20 h-20 rounded-2xl bg-emerald-200 flex items-center justify-center text-emerald-700 text-4xl font-bold">
+                {post.title.charAt(0)}
+              </div>
+            )}
           </div>
 
           {/* Header */}
@@ -80,9 +123,9 @@ const BlogSlugPage: React.FC = () => {
 
           {/* Meta */}
           <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground border-y py-4 mb-8">
-            <span className="flex items-center gap-1"><User className="h-4 w-4" />{post.author.name}</span>
+            <span className="flex items-center gap-1"><User className="h-4 w-4" />{post.author_name}</span>
             <span className="flex items-center gap-1"><Calendar className="h-4 w-4" />{post.date}</span>
-            <span className="flex items-center gap-1"><Clock className="h-4 w-4" />{post.readTime}</span>
+            <span className="flex items-center gap-1"><Clock className="h-4 w-4" />{post.read_time}</span>
             <button
               onClick={() => navigator.clipboard.writeText(window.location.href)}
               className="flex items-center gap-1 ml-auto hover:text-emerald-600 transition-colors"
@@ -103,30 +146,34 @@ const BlogSlugPage: React.FC = () => {
           </div>
 
           {/* Tags */}
-          {post.tags.length > 0 && (
+          {(post.tags ?? []).length > 0 && (
             <div className="flex flex-wrap gap-2 mb-12">
-              {post.tags.map((tag) => (
-                <span key={tag} className="bg-gray-100 text-gray-700 text-sm px-3 py-1 rounded-full">
-                  #{tag}
-                </span>
+              {(post.tags ?? []).map(tag => (
+                <span key={tag} className="bg-gray-100 text-gray-700 text-sm px-3 py-1 rounded-full">#{tag}</span>
               ))}
             </div>
           )}
 
           {/* Related Posts */}
-          {relatedPosts.length > 0 && (
+          {related.length > 0 && (
             <div>
               <h2 className="text-2xl font-bold mb-6">Related Posts</h2>
               <div className="grid md:grid-cols-3 gap-6">
-                {relatedPosts.map((related) => (
-                  <Link key={related.id} to={`/blogs/${related.slug}`} className="group rounded-xl overflow-hidden border hover:shadow-md transition-shadow">
+                {related.map(rel => (
+                  <Link key={rel.id} to={`/blogs/${rel.slug}`} className="group rounded-xl overflow-hidden border hover:shadow-md transition-shadow">
                     <div className="h-36 bg-emerald-50 flex items-center justify-center overflow-hidden">
-                      <img src={related.imageUrl} alt={related.title} className="h-28 w-auto object-contain group-hover:scale-105 transition-transform duration-300" />
+                      {rel.image_url ? (
+                        <img src={rel.image_url} alt={rel.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      ) : (
+                        <div className="w-12 h-12 rounded-xl bg-emerald-200 flex items-center justify-center text-emerald-700 text-xl font-bold">
+                          {rel.title.charAt(0)}
+                        </div>
+                      )}
                     </div>
                     <div className="p-4">
-                      <span className="text-xs text-emerald-600 font-medium">{related.category}</span>
-                      <h3 className="font-semibold mt-1 group-hover:text-emerald-600 transition-colors line-clamp-2">{related.title}</h3>
-                      <p className="text-sm text-muted-foreground mt-1">{related.date}</p>
+                      <span className="text-xs text-emerald-600 font-medium">{rel.category}</span>
+                      <h3 className="font-semibold mt-1 group-hover:text-emerald-600 transition-colors line-clamp-2">{rel.title}</h3>
+                      <p className="text-sm text-muted-foreground mt-1">{rel.date}</p>
                     </div>
                   </Link>
                 ))}

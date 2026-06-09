@@ -10,7 +10,8 @@ from app.admin.payments.schemas import (
 )
 from app.user_management.repositories.user_repository import UserRepository
 from app.payments.ledger_repository import PaymentLedgerRepository
-from app.user_management.utils.dependencies import get_current_admin
+from app.user_management.utils.dependencies import require_permission
+from app.user_management.utils.permissions import PERM_PAYMENTS
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -55,7 +56,7 @@ async def list_payments(
     method_filter: str = Query(""),
     status_filter: str = Query(""),
     search: str = Query(""),
-    _admin: dict = Depends(get_current_admin),
+    _admin: dict = Depends(require_permission(PERM_PAYMENTS)),
 ) -> PaymentListResponse:
     """Return all payment records with optional filtering. Admin only."""
     db = request.app.state.db
@@ -79,7 +80,7 @@ async def list_payments(
 async def create_manual_payment(
     body: CreateManualPaymentRequest,
     request: Request,
-    _admin: dict = Depends(get_current_admin),
+    _admin: dict = Depends(require_permission(PERM_PAYMENTS)),
 ) -> dict:
     """Manually add a payment record to a user's account. Admin only."""
     db = request.app.state.db
@@ -115,7 +116,7 @@ async def create_manual_payment(
 async def delete_payment(
     payment_id: str,
     request: Request,
-    _admin: dict = Depends(get_current_admin),
+    _admin: dict = Depends(require_permission(PERM_PAYMENTS)),
 ) -> dict:
     """Delete a payment record. Admin only."""
     db = request.app.state.db

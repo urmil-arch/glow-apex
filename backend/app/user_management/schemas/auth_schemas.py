@@ -56,6 +56,8 @@ class UserPublic(BaseModel):
     is_admin: bool = False
     is_suspended: bool = False
     personal_discount: float = 0.0
+    role: str = "user"
+    permissions: list[str] = []
 
 
 class AuthResponse(BaseModel):
@@ -72,6 +74,8 @@ class ProfileResponse(BaseModel):
     is_admin: bool = False
     is_suspended: bool = False
     personal_discount: float = 0.0
+    role: str = "user"
+    permissions: list[str] = []
 
 
 class UpdateProfileRequest(BaseModel):

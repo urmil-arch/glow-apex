@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Routes, Route, Outlet, Navigate, useLocation } from 'react-router-dom'
 import { ThemeProvider } from 'next-themes'
 import { AuthProvider, useAuth } from './context/AuthContext'
@@ -6,6 +6,8 @@ import { ServicesProvider } from './context/ServicesContext'
 import { CurrencyProvider } from './context/CurrencyContext'
 import Navbar from './components/navbar'
 import Footer from './components/footer'
+import { api } from './lib/api'
+import { API_ENDPOINTS } from './config'
 
 // Pages
 import HomePage from './pages/Home'
@@ -32,6 +34,7 @@ import OrderPage from './pages/dashboard/orders/OrderPage'
 import PaymentsPage from './pages/dashboard/payments/PaymentsPage'
 import ProfilePage from './pages/dashboard/profile/ProfilePage'
 import AdminGuard from './components/admin/AdminGuard'
+import RequirePermission from './components/admin/RequirePermission'
 import AdminLayout from './pages/admin/AdminLayout'
 import UsersPage from './pages/admin/users/UsersPage'
 import ServicesPage from './pages/admin/services/ServicesPage'
@@ -43,17 +46,55 @@ import AdminPaymentsPage from './pages/admin/payments/PaymentsPage'
 import AdminReportsPage from './pages/admin/reports/ReportsPage'
 import AdminSupportPage from './pages/admin/support/SupportPage'
 import PricingPage from './pages/admin/pricing/PricingPage'
+import AdminBlogsPage from './pages/admin/blogs/BlogsPage'
 import TicketsPage from './pages/dashboard/tickets/TicketsPage'
 import TicketThreadPage from './pages/dashboard/tickets/TicketThreadPage'
 import RouteScrollReset from './components/common/route-scroll-reset'
 import SuspendedPage from './pages/auth/SuspendedPage'
+import MaintenancePage from './pages/MaintenancePage'
+
+const AUTH_EXEMPT = ['/sign-in', '/sign-up', '/suspended']
+
+const MaintenanceGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, isLoading: authLoading } = useAuth()
+  const location = useLocation()
+  const [maintenanceMode, setMaintenanceMode] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    api.get<{ maintenance_mode: boolean }>(API_ENDPOINTS.PUBLIC_SETTINGS)
+      .then((res) => setMaintenanceMode(res.data.maintenance_mode))
+      .catch(() => setMaintenanceMode(false))
+  }, [])
+
+  const isAuthExempt = AUTH_EXEMPT.some(
+    (p) => location.pathname === p || location.pathname.startsWith(p + '/')
+  )
+  if (isAuthExempt) return <>{children}</>
+  if (maintenanceMode === null || authLoading) return null
+
+  const onMaintenancePage = location.pathname === '/maintenance'
+  const isAdmin = user?.is_admin === true
+
+  if (maintenanceMode && !isAdmin) {
+    return onMaintenancePage ? <>{children}</> : <Navigate to="/maintenance" replace />
+  }
+  if (onMaintenancePage) return <Navigate to="/" replace />
+  return <>{children}</>
+}
 
 const SuspensionGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isLoading } = useAuth()
   const location = useLocation()
-  if (!isLoading && user?.is_suspended && location.pathname !== '/suspended') {
-    return <Navigate to="/suspended" replace />
+  const onSuspendedPage = location.pathname === '/suspended'
+
+  if (isLoading) return onSuspendedPage ? null : <>{children}</>
+
+  if (user?.is_suspended) {
+    return onSuspendedPage ? <>{children}</> : <Navigate to="/suspended" replace />
   }
+
+  if (onSuspendedPage) return <Navigate to="/" replace />
+
   return <>{children}</>
 }
 
@@ -72,8 +113,10 @@ const App: React.FC = () => {
       <AuthProvider>
         <ServicesProvider>
           <RouteScrollReset />
+          <MaintenanceGuard>
           <SuspensionGuard>
           <Routes>
+            <Route path="/maintenance" element={<MaintenancePage />} />
             {/* Public routes with Navbar + Footer */}
             <Route element={<PublicLayout />}>
               <Route path="/" element={<HomePage />} />
@@ -117,20 +160,22 @@ const App: React.FC = () => {
             {/* Admin routes — requires is_admin */}
             <Route element={<AdminGuard />}>
               <Route path="/admin" element={<AdminLayout />}>
-                <Route index element={<AdminReportsPage />} />
-                <Route path="users" element={<UsersPage />} />
-                <Route path="orders" element={<AdminOrdersPage />} />
-                <Route path="tasks" element={<AdminTasksPage />} />
-                <Route path="payments" element={<AdminPaymentsPage />} />
-                <Route path="services" element={<ServicesPage />} />
-                <Route path="settings" element={<SettingsPage />} />
-                <Route path="routing" element={<ProviderConfigPage />} />
-                <Route path="support" element={<AdminSupportPage />} />
-                <Route path="pricing" element={<PricingPage />} />
+                <Route index element={<RequirePermission permission="dashboard"><AdminReportsPage /></RequirePermission>} />
+                <Route path="users" element={<RequirePermission permission="users"><UsersPage /></RequirePermission>} />
+                <Route path="orders" element={<RequirePermission permission="orders"><AdminOrdersPage /></RequirePermission>} />
+                <Route path="tasks" element={<RequirePermission permission="tasks"><AdminTasksPage /></RequirePermission>} />
+                <Route path="payments" element={<RequirePermission permission="payments"><AdminPaymentsPage /></RequirePermission>} />
+                <Route path="services" element={<RequirePermission permission="services"><ServicesPage /></RequirePermission>} />
+                <Route path="settings" element={<RequirePermission permission="settings"><SettingsPage /></RequirePermission>} />
+                <Route path="routing" element={<RequirePermission permission="routing"><ProviderConfigPage /></RequirePermission>} />
+                <Route path="support" element={<RequirePermission permission="support"><AdminSupportPage /></RequirePermission>} />
+                <Route path="pricing" element={<RequirePermission permission="pricing"><PricingPage /></RequirePermission>} />
+                <Route path="blogs" element={<RequirePermission permission="blogs"><AdminBlogsPage /></RequirePermission>} />
               </Route>
             </Route>
           </Routes>
           </SuspensionGuard>
+          </MaintenanceGuard>
         </ServicesProvider>
       </AuthProvider>
       </CurrencyProvider>

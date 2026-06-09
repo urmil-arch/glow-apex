@@ -12,7 +12,8 @@ from app.admin.services.schemas import (
     ServiceResponse,
     UpdateServiceRequest,
 )
-from app.user_management.utils.dependencies import get_current_admin
+from app.user_management.utils.dependencies import require_permission
+from app.user_management.utils.permissions import PERM_SERVICES
 
 router = APIRouter()
 
@@ -79,7 +80,7 @@ async def _service_to_response(
 
 @router.get("/categories", response_model=list[CategoryResponse])
 async def list_categories(
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_SERVICES)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> list[CategoryResponse]:
     """Return all service categories."""
@@ -90,7 +91,7 @@ async def list_categories(
 @router.post("/categories", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED)
 async def create_category(
     body: CreateCategoryRequest,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_SERVICES)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> CategoryResponse:
     """Create a new service category."""
@@ -105,7 +106,7 @@ async def create_category(
 @router.delete("/categories/{category_id}", status_code=status.HTTP_200_OK)
 async def delete_category(
     category_id: str,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_SERVICES)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> dict:
     """Delete a category by ID."""
@@ -119,7 +120,7 @@ async def delete_category(
 
 @router.get("", response_model=list[ServiceResponse])
 async def list_services(
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_SERVICES)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> list[ServiceResponse]:
     """Return all admin-managed services."""
@@ -130,7 +131,7 @@ async def list_services(
 @router.post("", response_model=ServiceResponse, status_code=status.HTTP_201_CREATED)
 async def create_service(
     body: CreateServiceRequest,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_SERVICES)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> ServiceResponse:
     """Create a new admin-managed service."""
@@ -169,7 +170,7 @@ async def create_service(
 @router.get("/{service_id}", response_model=ServiceResponse)
 async def get_service(
     service_id: str,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_SERVICES)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> ServiceResponse:
     doc = await ServiceRepository(db).find_by_id(service_id)
@@ -182,7 +183,7 @@ async def get_service(
 async def update_service(
     service_id: str,
     body: UpdateServiceRequest,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_SERVICES)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> ServiceResponse:
     """Update service fields. Only supplied fields are changed."""
@@ -246,7 +247,7 @@ async def update_service(
 @router.delete("/{service_id}", status_code=status.HTTP_200_OK)
 async def delete_service(
     service_id: str,
-    _: dict = Depends(get_current_admin),
+    _: dict = Depends(require_permission(PERM_SERVICES)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> dict:
     """Delete a service by ID."""

@@ -1,12 +1,17 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Users, UserPlus, Download, Search, MoreVertical,
-  Edit2, KeyRound, Clock, Ban, CheckCircle, ShieldCheck,
-  X, Eye, EyeOff, ChevronLeft, ChevronRight,
+  Edit2, KeyRound, Clock, Ban, CheckCircle, ShieldCheck, UserCog,
+  X, Eye, EyeOff, ChevronLeft, ChevronRight, ArrowUp, ArrowDown,
 } from 'lucide-react';
 import axios from 'axios';
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config';
+import { useAuth } from '@/context/AuthContext';
+import {
+  ASSIGNABLE_ROLES, ROLE_LABELS, ALL_PERMISSION_KEYS,
+  PERMISSION_LABELS, ROLE_DEFAULT_PERMISSIONS, type PermissionKey,
+} from '@/config/permissions';
 
 interface AdminUser {
   id: string;
@@ -17,7 +22,10 @@ interface AdminUser {
   is_admin: boolean;
   is_suspended: boolean;
   personal_discount: number;
+  role: string;
+  extra_permissions: string[];
   created_at: string;
+  total_spent: number;
 }
 
 interface Stats {
@@ -37,7 +45,8 @@ interface AddForm {
   username: string;
   email: string;
   password: string;
-  is_admin: boolean;
+  role: string;
+  extra_permissions: string[];
 }
 
 interface EditForm {
@@ -48,7 +57,12 @@ interface EditForm {
 
 const PAGE_SIZE = 20;
 
+const toUtc = (d: string) => d && !d.endsWith('Z') && !d.includes('+') ? `${d}Z` : d;
+
 const UsersPage = () => {
+  const { user: currentUser } = useAuth();
+  const isFullAdmin = currentUser?.role === 'admin';
+
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [stats, setStats] = useState<Stats>({ total: 0, verified: 0, suspended: 0 });
   const [isLoading, setIsLoading] = useState(true);
@@ -58,16 +72,19 @@ const UsersPage = () => {
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [filterBy, setFilterBy] = useState('all');
+  const [sortBy, setSortBy] = useState('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const [addModal, setAddModal] = useState(false);
   const [editTarget, setEditTarget] = useState<AdminUser | null>(null);
   const [passwordTarget, setPasswordTarget] = useState<AdminUser | null>(null);
   const [historyTarget, setHistoryTarget] = useState<AdminUser | null>(null);
   const [suspendTarget, setSuspendTarget] = useState<AdminUser | null>(null);
+  const [roleTarget, setRoleTarget] = useState<AdminUser | null>(null);
   const [menuState, setMenuState] = useState<{ id: string; top: number; right: number } | null>(null);
 
   const [addForm, setAddForm] = useState<AddForm>({
-    full_name: '', username: '', email: '', password: '', is_admin: false,
+    full_name: '', username: '', email: '', password: '', role: 'user', extra_permissions: [],
   });
   const [editForm, setEditForm] = useState<EditForm>({
     full_name: '', username: '', personal_discount: '0',
@@ -82,7 +99,7 @@ const UsersPage = () => {
     setIsLoading(true);
     try {
       const { data } = await api.get(API_ENDPOINTS.ADMIN_USERS, {
-        params: { page, page_size: PAGE_SIZE, search, filter_by: filterBy },
+        params: { page, page_size: PAGE_SIZE, search, filter_by: filterBy, sort_by: sortBy, sort_order: sortOrder },
       });
       setUsers(data.users);
       setTotal(data.total);
@@ -92,7 +109,7 @@ const UsersPage = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [page, search, filterBy]);
+  }, [page, search, filterBy, sortBy, sortOrder]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -112,11 +129,21 @@ const UsersPage = () => {
 
   const handleFilterChange = (f: string) => { setFilterBy(f); setPage(1); };
 
+  const handleSpentSort = () => {
+    if (sortBy === 'total_spent') {
+      setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'));
+    } else {
+      setSortBy('total_spent');
+      setSortOrder('desc');
+    }
+    setPage(1);
+  };
+
   const toCSV = (rows: AdminUser[], emailsOnly = false): string => {
     if (emailsOnly) return ['email', ...rows.map((u) => u.email)].join('\n');
-    const headers = ['id', 'full_name', 'username', 'email', 'verified', 'admin', 'suspended', 'discount', 'created_at'];
+    const headers = ['id', 'full_name', 'username', 'email', 'verified', 'admin', 'suspended', 'discount', 'total_spent_usd', 'created_at'];
     const lines = rows.map((u) =>
-      [u.id, u.full_name, u.username, u.email, u.is_verified, u.is_admin, u.is_suspended, u.personal_discount, u.created_at].join(',')
+      [u.id, u.full_name, u.username, u.email, u.is_verified, u.is_admin, u.is_suspended, u.personal_discount, u.total_spent.toFixed(2), u.created_at].join(',')
     );
     return [headers.join(','), ...lines].join('\n');
   };
@@ -141,7 +168,7 @@ const UsersPage = () => {
     try {
       await api.post(API_ENDPOINTS.ADMIN_USERS, { ...addForm, personal_discount: 0 });
       setAddModal(false);
-      setAddForm({ full_name: '', username: '', email: '', password: '', is_admin: false });
+      setAddForm({ full_name: '', username: '', email: '', password: '', role: 'user', extra_permissions: [] });
       fetchUsers(); fetchStats();
     } catch (err: unknown) {
       setModalError(axios.isAxiosError(err) ? (err.response?.data?.detail ?? 'Failed to create user') : 'Failed to create user');
@@ -196,7 +223,7 @@ const UsersPage = () => {
     } catch { /* silent */ } finally { setModalLoading(false); }
   };
 
-  const fmt = (iso: string) => iso ? new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+  const fmt = (iso: string) => iso ? new Date(toUtc(iso)).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
   const FILTERS = ['all', 'verified', 'unverified', 'suspended'] as const;
 
@@ -280,15 +307,28 @@ const UsersPage = () => {
               <th className="px-4 py-3 text-left font-medium">Username</th>
               <th className="px-4 py-3 text-left font-medium">Status</th>
               <th className="px-4 py-3 text-left font-medium">Discount</th>
+              <th className="px-4 py-3 text-left font-medium">
+                <button
+                  onClick={handleSpentSort}
+                  className="flex items-center gap-1 hover:text-gray-700 transition-colors"
+                >
+                  Spent
+                  {sortBy === 'total_spent' ? (
+                    sortOrder === 'desc' ? <ArrowDown className="h-3.5 w-3.5 text-teal-600" /> : <ArrowUp className="h-3.5 w-3.5 text-teal-600" />
+                  ) : (
+                    <ArrowDown className="h-3.5 w-3.5 text-gray-300" />
+                  )}
+                </button>
+              </th>
               <th className="px-4 py-3 text-left font-medium">Created</th>
               <th className="px-4 py-3 text-right font-medium">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {isLoading ? (
-              <tr><td colSpan={6} className="px-4 py-12 text-center text-gray-400">Loading…</td></tr>
+              <tr><td colSpan={7} className="px-4 py-12 text-center text-gray-400">Loading…</td></tr>
             ) : users.length === 0 ? (
-              <tr><td colSpan={6} className="px-4 py-12 text-center text-gray-400">No users found</td></tr>
+              <tr><td colSpan={7} className="px-4 py-12 text-center text-gray-400">No users found</td></tr>
             ) : (
               users.map((user) => (
                 <tr key={user.id} className="hover:bg-gray-50 transition-colors">
@@ -308,15 +348,22 @@ const UsersPage = () => {
                       ) : (
                         <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 text-xs font-medium border border-amber-100">Unverified</span>
                       )}
-                      {user.is_admin && (
-                        <span className="px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 text-xs font-medium border border-teal-100 flex items-center gap-1">
-                          <ShieldCheck className="h-3 w-3" /> Admin
+                      {user.role && user.role !== 'user' && (
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium border flex items-center gap-1 ${
+                          user.role === 'admin'
+                            ? 'bg-teal-50 text-teal-700 border-teal-100'
+                            : 'bg-indigo-50 text-indigo-700 border-indigo-100'
+                        }`}>
+                          <ShieldCheck className="h-3 w-3" /> {ROLE_LABELS[user.role] ?? user.role}
                         </span>
                       )}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-gray-600">
                     {user.personal_discount > 0 ? `${user.personal_discount}%` : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-gray-700 font-medium">
+                    {user.total_spent > 0 ? `$${user.total_spent.toFixed(2)}` : '—'}
                   </td>
                   <td className="px-4 py-3 text-gray-500">{fmt(user.created_at)}</td>
                   <td className="px-4 py-3 text-right">
@@ -365,6 +412,9 @@ const UsersPage = () => {
             {users.filter((u) => u.id === menuState.id).map((user) => (
               <div key={user.id}>
                 <ActionItem icon={<Edit2 className="h-4 w-4" />} label="Edit User" onClick={() => { openEdit(user); setMenuState(null); }} />
+                {isFullAdmin && (
+                  <ActionItem icon={<UserCog className="h-4 w-4" />} label="Change Role" onClick={() => { setRoleTarget(user); setMenuState(null); }} />
+                )}
                 <ActionItem icon={<KeyRound className="h-4 w-4" />} label="Set Password" onClick={() => { setPasswordTarget(user); setModalError(''); setMenuState(null); }} />
                 <ActionItem icon={<Clock className="h-4 w-4" />} label="Sign-in History" onClick={() => { openHistory(user); setMenuState(null); }} />
                 <div className="border-t border-gray-100 my-1" />
@@ -396,10 +446,53 @@ const UsersPage = () => {
                 </button>
               </div>
             </Field>
-            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-              <input type="checkbox" checked={addForm.is_admin} onChange={(e) => setAddForm({ ...addForm, is_admin: e.target.checked })} className="rounded border-gray-300 text-teal-600" />
-              Grant admin access
-            </label>
+            <Field label="Role">
+              <select
+                value={addForm.role}
+                onChange={(e) => setAddForm({ ...addForm, role: e.target.value, extra_permissions: [] })}
+                className={inputCls}
+              >
+                {ASSIGNABLE_ROLES.map((r) => (
+                  <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                ))}
+              </select>
+            </Field>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Page Access</label>
+              <p className="text-xs text-gray-400 mb-2">
+                Pages granted by the role are locked on. Tick extra pages to grant additional access.
+              </p>
+              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                {ALL_PERMISSION_KEYS.map((perm) => {
+                  const lockedByRole = (ROLE_DEFAULT_PERMISSIONS[addForm.role] ?? []).includes(perm);
+                  const checked = lockedByRole || addForm.extra_permissions.includes(perm);
+                  return (
+                    <label
+                      key={perm}
+                      className={`flex items-center gap-2 text-sm px-2 py-1.5 rounded-lg border ${
+                        checked ? 'bg-teal-50 border-teal-100 text-teal-800' : 'bg-white border-gray-200 text-gray-600'
+                      } ${lockedByRole ? 'opacity-70' : 'cursor-pointer'}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={lockedByRole}
+                        onChange={() =>
+                          setAddForm((prev) => ({
+                            ...prev,
+                            extra_permissions: prev.extra_permissions.includes(perm)
+                              ? prev.extra_permissions.filter((p) => p !== perm)
+                              : [...prev.extra_permissions, perm],
+                          }))
+                        }
+                        className="rounded border-gray-300 text-teal-600"
+                      />
+                      {PERMISSION_LABELS[perm]}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
             {modalError && <p className="text-red-500 text-sm">{modalError}</p>}
             <div className="flex justify-end gap-2 pt-2">
               <button onClick={() => setAddModal(false)} className={cancelCls}>Cancel</button>
@@ -457,7 +550,7 @@ const UsersPage = () => {
                 <div key={i} className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="text-teal-600 font-mono font-medium">{log.ip_address}</span>
-                    <span className="text-gray-400 text-xs">{new Date(log.timestamp).toLocaleString('en-IN')}</span>
+                    <span className="text-gray-400 text-xs">{new Date(toUtc(log.timestamp)).toLocaleString('en-IN')}</span>
                   </div>
                   <p className="text-gray-400 text-xs mt-0.5 truncate">{log.user_agent || '—'}</p>
                 </div>
@@ -490,7 +583,96 @@ const UsersPage = () => {
           </div>
         </Modal>
       )}
+
+      {/* ── Change Role Modal ── */}
+      {roleTarget && (
+        <RoleModal
+          target={roleTarget}
+          onClose={() => setRoleTarget(null)}
+          onSaved={() => { setRoleTarget(null); fetchUsers(); }}
+        />
+      )}
     </div>
+  );
+};
+
+// ── Change Role Modal ──────────────────────────────
+
+interface RoleModalProps {
+  target: AdminUser;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+const RoleModal = ({ target, onClose, onSaved }: RoleModalProps) => {
+  const [role, setRole] = useState<string>(target.role || 'user');
+  const [extra, setExtra] = useState<string[]>(target.extra_permissions ?? []);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const roleDefaults = ROLE_DEFAULT_PERMISSIONS[role] ?? [];
+
+  const togglePerm = (perm: PermissionKey) =>
+    setExtra((prev) => (prev.includes(perm) ? prev.filter((p) => p !== perm) : [...prev, perm]));
+
+  const save = async () => {
+    setSaving(true); setError('');
+    try {
+      // Only send grants beyond what the role already covers.
+      const cleanedExtra = extra.filter((p) => !roleDefaults.includes(p as PermissionKey));
+      await api.patch(`${API_ENDPOINTS.ADMIN_USERS}/${target.id}/role`, {
+        role, extra_permissions: cleanedExtra,
+      });
+      onSaved();
+    } catch (err: unknown) {
+      setError(axios.isAxiosError(err) ? (err.response?.data?.detail ?? 'Failed to update role') : 'Failed to update role');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <Modal title={`Change Role — ${target.username}`} onClose={onClose}>
+      <div className="space-y-4">
+        <Field label="Role">
+          <select value={role} onChange={(e) => setRole(e.target.value)} className={inputCls}>
+            {ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+          </select>
+        </Field>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1.5">Page Access</label>
+          <p className="text-xs text-gray-400 mb-2">
+            Pages granted by the role are locked on. Tick extra pages to grant access beyond the role.
+          </p>
+          <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+            {ALL_PERMISSION_KEYS.map((perm) => {
+              const lockedByRole = roleDefaults.includes(perm);
+              const checked = lockedByRole || extra.includes(perm);
+              return (
+                <label
+                  key={perm}
+                  className={`flex items-center gap-2 text-sm px-2 py-1.5 rounded-lg border ${
+                    checked ? 'bg-teal-50 border-teal-100 text-teal-800' : 'bg-white border-gray-200 text-gray-600'
+                  } ${lockedByRole ? 'opacity-70' : 'cursor-pointer'}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={lockedByRole}
+                    onChange={() => togglePerm(perm)}
+                    className="rounded border-gray-300 text-teal-600"
+                  />
+                  {PERMISSION_LABELS[perm]}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+        {error && <p className="text-red-500 text-sm">{error}</p>}
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className={cancelCls}>Cancel</button>
+          <button onClick={save} disabled={saving} className={primaryCls}>{saving ? 'Saving…' : 'Save Role'}</button>
+        </div>
+      </div>
+    </Modal>
   );
 };
 

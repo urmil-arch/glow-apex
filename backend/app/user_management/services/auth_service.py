@@ -12,6 +12,7 @@ from app.user_management.schemas.auth_schemas import (
     VerifyOtpRequest,
 )
 from app.user_management.utils.jwt_utils import create_access_token
+from app.user_management.utils.permissions import ROLE_USER, effective_permissions
 from app.user_management.utils.otp import (
     generate_otp,
     hash_otp,
@@ -51,6 +52,8 @@ class AuthService:
             "hashed_password": hash_password(data.password),
             "is_verified": False,
             "is_admin": False,
+            "role": ROLE_USER,
+            "extra_permissions": [],
             "otp": hash_otp(otp),
             "otp_expires_at": expires_at,
             "created_at": datetime.now(timezone.utc),
@@ -99,6 +102,8 @@ class AuthService:
                 email=user["email"],
                 is_admin=user.get("is_admin", False),
                 personal_discount=float(user.get("personal_discount", 0) or 0),
+                role=user.get("role", ROLE_USER),
+                permissions=sorted(effective_permissions(user)),
             ),
         )
 
@@ -148,6 +153,8 @@ class AuthService:
                 is_admin=user.get("is_admin", False),
                 is_suspended=user.get("is_suspended", False),
                 personal_discount=float(user.get("personal_discount", 0) or 0),
+                role=user.get("role", ROLE_USER),
+                permissions=sorted(effective_permissions(user)),
             ),
         )
 

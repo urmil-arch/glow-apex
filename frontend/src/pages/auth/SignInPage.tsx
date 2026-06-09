@@ -55,7 +55,7 @@ const SignInPage = () => {
     try {
       const loggedInUser = await login(form.identifier.trim(), form.password);
       setIsSuccess(true);
-      setTimeout(() => navigate(loggedInUser.is_admin ? "/admin" : "/dashboard"), 1000);
+      setTimeout(() => navigate((loggedInUser.permissions?.length ?? 0) > 0 ? "/admin" : "/dashboard"), 1000);
     } catch (err: unknown) {
       if ((err as { reason?: string })?.reason === "suspended") return;
       if (axios.isAxiosError(err)) {
@@ -99,7 +99,7 @@ const SignInPage = () => {
     try {
       const verifiedUser = await verifyOtp(unverifiedEmail, otp);
       setIsSuccess(true);
-      setTimeout(() => navigate(verifiedUser.is_admin ? "/admin" : "/dashboard"), 1500);
+      setTimeout(() => navigate((verifiedUser.permissions?.length ?? 0) > 0 ? "/admin" : "/dashboard"), 1500);
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
         setOtpError(err.response?.data?.detail ?? "Invalid OTP. Please try again.");

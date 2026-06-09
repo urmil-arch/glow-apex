@@ -196,7 +196,7 @@ const FAQSection: React.FC<FAQSectionProps> = ({
                 </div>
               </div>
             </Link>
-            <Link to="#">
+            <Link to="/dashboard/tickets">
               <div className="mt-8 pt-6 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-center gap-4">
                 <span className="text-gray-500 text-sm">
                   Need immediate assistance?

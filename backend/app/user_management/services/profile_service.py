@@ -7,6 +7,7 @@ from app.user_management.schemas.auth_schemas import (
     UpdateProfileRequest,
 )
 from app.user_management.utils.password import hash_password, verify_password
+from app.user_management.utils.permissions import ROLE_USER, effective_permissions
 
 
 class ProfileService:
@@ -23,6 +24,8 @@ class ProfileService:
             is_admin=user.get("is_admin", False),
             is_suspended=user.get("is_suspended", False),
             personal_discount=float(user.get("personal_discount", 0) or 0),
+            role=user.get("role", ROLE_USER),
+            permissions=sorted(effective_permissions(user)),
         )
 
     async def update_profile(self, user: dict, data: UpdateProfileRequest) -> ProfileResponse:
@@ -54,6 +57,8 @@ class ProfileService:
             is_admin=refreshed.get("is_admin", False),
             is_suspended=refreshed.get("is_suspended", False),
             personal_discount=float(refreshed.get("personal_discount", 0) or 0),
+            role=refreshed.get("role", ROLE_USER),
+            permissions=sorted(effective_permissions(refreshed)),
         )
 
     async def change_password(self, user: dict, data: ChangePasswordRequest) -> dict:
