@@ -52,16 +52,12 @@ const Navbar = () => {
 
   const pollNotifications = useCallback(async () => {
     if (!user) return;
+    const isStaff = user.is_admin || (user.role && user.role !== 'user');
     try {
-      if (user.is_admin) {
-        const [ticketsRes, msgsRes] = await Promise.all([
-          api.get<{ tickets: { id: string; user_username: string; subject: string; updated_at: string; admin_has_unread: boolean }[] }>(
-            API_ENDPOINTS.ADMIN_SUPPORT_TICKETS, { params: { page_size: 50 } }
-          ),
-          api.get<{ messages: { id: string; name: string; subject: string; created_at: string; is_read: boolean }[] }>(
-            API_ENDPOINTS.ADMIN_SUPPORT_MESSAGES
-          ),
-        ]);
+      if (isStaff) {
+        const ticketsRes = await api.get<{ tickets: { id: string; user_username: string; subject: string; updated_at: string; admin_has_unread: boolean }[] }>(
+          API_ENDPOINTS.ADMIN_SUPPORT_TICKETS, { params: { page_size: 50 } }
+        );
 
         const ticketNotifs: NotifItem[] = (ticketsRes.data.tickets ?? [])
           .filter(t => t.admin_has_unread)
@@ -74,16 +70,23 @@ const Navbar = () => {
             created_at: t.updated_at,
           }));
 
-        const msgNotifs: NotifItem[] = (msgsRes.data.messages ?? [])
-          .filter(m => !m.is_read)
-          .map(m => ({
-            id: `msg-${m.id}`,
-            type: 'new_message' as const,
-            title: `New message from ${m.name}`,
-            body: m.subject,
-            href: '/admin/support',
-            created_at: m.created_at,
-          }));
+        // Contact-form messages — only admins may have access; ignore 403 for other staff
+        let msgNotifs: NotifItem[] = [];
+        try {
+          const msgsRes = await api.get<{ messages: { id: string; name: string; subject: string; created_at: string; is_read: boolean }[] }>(
+            API_ENDPOINTS.ADMIN_SUPPORT_MESSAGES
+          );
+          msgNotifs = (msgsRes.data.messages ?? [])
+            .filter(m => !m.is_read)
+            .map(m => ({
+              id: `msg-${m.id}`,
+              type: 'new_message' as const,
+              title: `New message from ${m.name}`,
+              body: m.subject,
+              href: '/admin/support',
+              created_at: m.created_at,
+            }));
+        } catch { /* no permission for messages — silently skip */ }
 
         setNotifications([...ticketNotifs, ...msgNotifs]);
       } else {

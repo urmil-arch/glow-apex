@@ -598,7 +598,7 @@ async def initiate_stripe_order(
                 "customer_email": user.get("email", ""),
                 "customer_phone": user.get("phone", "0000000000"),
             },
-            order_description=f"{service.get('name', 'Order')} × {body.quantity:,}",
+            order_description=f"{category_name_val or service.get('name', 'Order')} × {body.quantity:,}",
             return_url=f"{frontend_origin}/checkout/success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{frontend_origin}/checkout/cancel?session_id={{CHECKOUT_SESSION_ID}}",
         )

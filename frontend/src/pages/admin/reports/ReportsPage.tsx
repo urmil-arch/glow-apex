@@ -283,7 +283,10 @@ const ReportsPage = () => {
       setRows(res.data.rows ?? []);
       setOrderRows(res.data.order_rows ?? []);
       setPaymentRows(res.data.payment_rows ?? []);
-      setCollapsedPeriods(new Set());
+      setCollapsedPeriods(new Set<string>([
+        ...(res.data.order_rows ?? []).map((r) => r.period),
+        ...(res.data.payment_rows ?? []).map((r) => r.period),
+      ]));
       setRefreshSuccess(true);
       setTimeout(() => setRefreshSuccess(false), 2500);
     } catch {

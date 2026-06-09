@@ -279,11 +279,14 @@ const CheckoutPage = () => {
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-teal-50/30">
-      <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
+      <div className="max-w-5xl mx-auto px-4 pt-24 pb-12">
 
         {/* Back button */}
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => {
+            if (window.history.state?.idx > 0) navigate(-1);
+            else navigate('/services');
+          }}
           className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 transition-colors mb-6 group"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />

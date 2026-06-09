@@ -18,7 +18,7 @@ const TestimonialSection = () => {
               name="Emma Thompson"
               role="Fashion Influencer"
               rating={5}
-              image="/assets/images/users/user1.jpg"
+              image="/assets/images/users/user7.jpg"
               accentColor="#0eca6d"
             />
             <TestimonialCard
@@ -26,7 +26,7 @@ const TestimonialSection = () => {
               name="Michael Rodriguez"
               role="Fitness Coach"
               rating={5}
-              image="/assets/images/users/user2.jpg"
+              image="/assets/images/users/user14.jpg"
               accentColor="#12b76a"
             />
             <TestimonialCard
@@ -42,7 +42,7 @@ const TestimonialSection = () => {
               name="David Kim"
               role="Content Creator"
               rating={5}
-              image="/assets/images/users/user4.jpg"
+              image="/assets/images/users/user19.jpg"
               accentColor="#0eca6d"
             />
           </div>
@@ -52,7 +52,7 @@ const TestimonialSection = () => {
               name="Jessica Martinez"
               role="Boutique Owner"
               rating={5}
-              image="/assets/images/users/user1.jpg"
+              image="/assets/images/users/user11.jpg"
               accentColor="#15c39a"
             />
             <TestimonialCard
@@ -60,7 +60,7 @@ const TestimonialSection = () => {
               name="Robert Chen"
               role="Travel Blogger"
               rating={4}
-              image="/assets/images/users/user2.jpg"
+              image="/assets/images/users/user5.jpg"
               accentColor="#0eca6d"
             />
             <TestimonialCard
@@ -68,7 +68,7 @@ const TestimonialSection = () => {
               name="Amanda Wilson"
               role="Photographer"
               rating={5}
-              image="/assets/images/users/user3.jpg"
+              image="/assets/images/users/user17.jpg"
               accentColor="#12b76a"
             />
             <TestimonialCard
@@ -76,7 +76,7 @@ const TestimonialSection = () => {
               name="John Davis"
               role="E-commerce Entrepreneur"
               rating={5}
-              image="/assets/images/users/user4.jpg"
+              image="/assets/images/users/user2.jpg"
               accentColor="#15c39a"
             />
           </div>
@@ -86,7 +86,7 @@ const TestimonialSection = () => {
               name="Olivia Taylor"
               role="Lifestyle Blogger"
               rating={5}
-              image="/assets/images/users/user1.jpg"
+              image="/assets/images/users/user9.jpg"
               accentColor="#0eca6d"
             />
             <TestimonialCard
@@ -94,7 +94,7 @@ const TestimonialSection = () => {
               name="Ryan Patel"
               role="Influencer"
               rating={4}
-              image="/assets/images/users/user2.jpg"
+              image="/assets/images/users/user16.jpg"
               accentColor="#15c39a"
             />
             <TestimonialCard
@@ -102,7 +102,7 @@ const TestimonialSection = () => {
               name="Sophia Lee"
               role="Beauty Vlogger"
               rating={5}
-              image="/assets/images/users/user3.jpg"
+              image="/assets/images/users/user1.jpg"
               accentColor="#12b76a"
             />
             <TestimonialCard
@@ -110,7 +110,7 @@ const TestimonialSection = () => {
               name="Marcus Johnson"
               role="Marketing Director"
               rating={5}
-              image="/assets/images/users/user4.jpg"
+              image="/assets/images/users/user13.jpg"
               accentColor="#0eca6d"
             />
           </div>
@@ -120,7 +120,7 @@ const TestimonialSection = () => {
               name="Elena Vasquez"
               role="Artist"
               rating={5}
-              image="/assets/images/users/user1.jpg"
+              image="/assets/images/users/user20.jpg"
               accentColor="#12b76a"
             />
             <TestimonialCard
@@ -128,7 +128,7 @@ const TestimonialSection = () => {
               name="Thomas Wright"
               role="Gaming Streamer"
               rating={4}
-              image="/assets/images/users/user2.jpg"
+              image="/assets/images/users/user6.jpg"
               accentColor="#0eca6d"
             />
             <TestimonialCard
@@ -136,7 +136,7 @@ const TestimonialSection = () => {
               name="Aisha Patel"
               role="Startup Founder"
               rating={5}
-              image="/assets/images/users/user3.jpg"
+              image="/assets/images/users/user12.jpg"
               accentColor="#15c39a"
             />
             <TestimonialCard
@@ -144,7 +144,7 @@ const TestimonialSection = () => {
               name="Kyle Sanders"
               role="Sports Influencer"
               rating={5}
-              image="/assets/images/users/user4.jpg"
+              image="/assets/images/users/user8.jpg"
               accentColor="#12b76a"
             />
           </div>
