@@ -22,6 +22,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   hasPermission: (permission: string) => boolean;
   login: (identifier: string, password: string) => Promise<User>;
+  googleAuth: (credential: string) => Promise<User>;
   register: (full_name: string, username: string, email: string, password: string) => Promise<void>;
   verifyOtp: (email: string, otp: string) => Promise<User>;
   resendOtp: (email: string) => Promise<void>;
@@ -37,6 +38,7 @@ const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   hasPermission: () => false,
   login: async () => ({} as User),
+  googleAuth: async () => ({} as User),
   register: async () => {},
   verifyOtp: async () => ({} as User),
   resendOtp: async () => {},
@@ -78,6 +80,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (identifier: string, password: string): Promise<User> => {
     const { data } = await axios.post(API_ENDPOINTS.AUTH_LOGIN, { identifier, password });
+    localStorage.setItem("auth_token", data.access_token);
+    localStorage.setItem("user", JSON.stringify(data.user));
+    setUser(data.user);
+    return data.user as User;
+  };
+
+  const googleAuth = async (credential: string): Promise<User> => {
+    const { data } = await axios.post(API_ENDPOINTS.AUTH_GOOGLE, { credential });
     localStorage.setItem("auth_token", data.access_token);
     localStorage.setItem("user", JSON.stringify(data.user));
     setUser(data.user);
@@ -135,7 +145,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthContext.Provider
-      value={{ user, isLoading, isAuthenticated: !!user, hasPermission, login, register, verifyOtp, resendOtp, logout, updateUser, updateProfile, changePassword }}
+      value={{ user, isLoading, isAuthenticated: !!user, hasPermission, login, googleAuth, register, verifyOtp, resendOtp, logout, updateUser, updateProfile, changePassword }}
     >
       {children}
     </AuthContext.Provider>

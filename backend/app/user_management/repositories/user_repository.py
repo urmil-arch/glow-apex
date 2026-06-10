@@ -51,6 +51,13 @@ class UserRepository:
     async def find_by_email(self, email: str) -> Optional[dict]:
         return await self._col.find_one({"email": email.lower()})
 
+    async def find_by_google_id(self, google_id: str) -> Optional[dict]:
+        return await self._col.find_one({"google_id": google_id})
+
+    async def insert_google_user(self, document: dict) -> str:
+        result = await self._col.insert_one(document)
+        return str(result.inserted_id)
+
     async def find_by_username(self, username: str) -> Optional[dict]:
         return await self._col.find_one({"username": username.lower()})
 

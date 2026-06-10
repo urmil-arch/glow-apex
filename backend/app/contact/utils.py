@@ -1,7 +1,9 @@
 import asyncio
 import html as html_lib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
-import resend
+import aiosmtplib
 
 from app.common.config import settings
 
@@ -96,6 +98,19 @@ def _build_user_confirmation_html(name: str, subject: str) -> str:
     """
 
 
+async def _smtp_send(msg: MIMEMultipart) -> None:
+    """Send a single MIME message via SMTP."""
+    await aiosmtplib.send(
+        msg,
+        hostname=settings.SMTP_HOST,
+        port=settings.SMTP_PORT,
+        username=settings.SMTP_USER,
+        password=settings.SMTP_PASSWORD,
+        start_tls=True,
+        timeout=30,
+    )
+
+
 async def send_contact_emails(
     name: str,
     email: str,
@@ -103,31 +118,26 @@ async def send_contact_emails(
     message: str,
     contact_type: str,
 ) -> None:
-    """Send the owner notification and user confirmation emails in parallel via Resend."""
-    resend.api_key = settings.RESEND_API_KEY
-    owner_to = settings.CONTACT_OWNER_EMAIL or settings.RESEND_FROM
+    """Send the owner notification and user confirmation emails in parallel via SMTP."""
+    owner_to = settings.CONTACT_OWNER_EMAIL or settings.SMTP_FROM
 
-    owner_params: resend.Emails.SendParams = {
-        "from": settings.RESEND_FROM,
-        "to": [owner_to],
-        "reply_to": email,
-        "subject": f"[Glow-Apex] {'Customer Support' if contact_type == 'support' else 'Business Inquiry'} from {html_lib.escape(name)}: {html_lib.escape(subject)}",
-        "html": _build_owner_notification_html(name, email, subject, message, contact_type),
-    }
-    user_params: resend.Emails.SendParams = {
-        "from": settings.RESEND_FROM,
-        "to": [email],
-        "subject": "We received your message — Glow-Apex",
-        "html": _build_user_confirmation_html(name, subject),
-    }
-    await asyncio.gather(
-        asyncio.to_thread(resend.Emails.send, owner_params),
-        asyncio.to_thread(resend.Emails.send, user_params),
+    owner_msg = MIMEMultipart("alternative")
+    owner_msg["Subject"] = (
+        f"[Glow-Apex] {'Customer Support' if contact_type == 'support' else 'Business Inquiry'} "
+        f"from {html_lib.escape(name)}: {html_lib.escape(subject)}"
     )
+    owner_msg["From"] = settings.SMTP_FROM
+    owner_msg["To"] = owner_to
+    owner_msg["Reply-To"] = email
+    owner_msg.attach(MIMEText(_build_owner_notification_html(name, email, subject, message, contact_type), "html"))
 
+    user_msg = MIMEMultipart("alternative")
+    user_msg["Subject"] = "We received your message — Glow-Apex"
+    user_msg["From"] = settings.SMTP_FROM
+    user_msg["To"] = email
+    user_msg.attach(MIMEText(_build_user_confirmation_html(name, subject), "html"))
 
-# --- SMTP alternative (aiosmtplib) — see git history or otp.py comments for the original
-#     _build_owner_notification / _build_user_confirmation / _send implementations.
-#     To switch back: restore aiosmtplib import, restore MIMEMultipart builders,
-#     replace asyncio.gather calls with the original _send() pattern,
-#     and restore aiosmtplib in requirements.txt.
+    await asyncio.gather(
+        _smtp_send(owner_msg),
+        _smtp_send(user_msg),
+    )

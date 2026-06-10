@@ -6,6 +6,7 @@ export const API_ENDPOINTS = {
   AUTH_VERIFY_OTP: `${API_BASE_URL}/auth/verify-otp`,
   AUTH_RESEND_OTP: `${API_BASE_URL}/auth/resend-otp`,
   AUTH_LOGIN: `${API_BASE_URL}/auth/login`,
+  AUTH_GOOGLE: `${API_BASE_URL}/auth/google`,
   AUTH_ME: `${API_BASE_URL}/auth/me`,
   AUTH_CHANGE_PASSWORD: `${API_BASE_URL}/auth/change-password`,
 

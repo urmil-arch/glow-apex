@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, LogIn, CheckCircle, Mail, RotateCcw } from "lucide-react";
 import axios from "axios";
+import { GoogleLogin } from "@react-oauth/google";
 import { useAuth } from "@/context/AuthContext";
 
 interface SignInForm {
@@ -13,7 +14,7 @@ type Step = "login" | "verify";
 
 const SignInPage = () => {
   const navigate = useNavigate();
-  const { login, verifyOtp, resendOtp } = useAuth();
+  const { login, googleAuth, verifyOtp, resendOtp } = useAuth();
 
   const [step, setStep] = useState<Step>("login");
   const [unverifiedEmail, setUnverifiedEmail] = useState("");
@@ -24,6 +25,8 @@ const SignInPage = () => {
   const [serverError, setServerError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const [otp, setOtp] = useState("");
   const [otpError, setOtpError] = useState("");
@@ -65,6 +68,8 @@ const SignInPage = () => {
           const email = typeof detail === "object" ? detail?.email : null;
           if (reason === "suspended") {
             navigate("/suspended");
+          } else if (reason === "google_login_required") {
+            setServerError("This account was created with Google Sign-In. Please use the 'Sign in with Google' button below.");
           } else if (email) {
             setUnverifiedEmail(email);
             setStep("verify");
@@ -80,6 +85,32 @@ const SignInPage = () => {
       }
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleGoogleSuccess = async (credential: string): Promise<void> => {
+    setIsGoogleLoading(true);
+    setServerError("");
+    try {
+      const loggedInUser = await googleAuth(credential);
+      setIsSuccess(true);
+      setTimeout(() => navigate((loggedInUser.permissions?.length ?? 0) > 0 ? "/admin" : "/dashboard"), 1000);
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        const detail = err.response?.data?.detail;
+        const reason = typeof detail === "object" ? detail?.reason : null;
+        if (reason === "suspended") {
+          navigate("/suspended");
+        } else if (reason === "password_login_required") {
+          setServerError("An account with this email already exists. Please sign in with your password.");
+        } else {
+          setServerError(typeof detail === "string" ? detail : "Google sign in failed. Please try again.");
+        }
+      } else {
+        setServerError("Google sign in failed. Please try again.");
+      }
+    } finally {
+      setIsGoogleLoading(false);
     }
   };
 
@@ -247,6 +278,29 @@ const SignInPage = () => {
                       </>
                     )}
                   </button>
+
+                  <div className="relative my-2">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-200" />
+                    </div>
+                    <div className="relative flex justify-center text-sm">
+                      <span className="bg-white px-3 text-gray-500">or continue with</span>
+                    </div>
+                  </div>
+
+                  <div className={`flex justify-center transition-opacity ${isGoogleLoading ? "opacity-50 pointer-events-none" : ""}`}>
+                    <GoogleLogin
+                      onSuccess={(response) => {
+                        if (response.credential) handleGoogleSuccess(response.credential);
+                      }}
+                      onError={() => setServerError("Google sign in failed. Please try again.")}
+                      theme="outline"
+                      size="large"
+                      width="368"
+                      text="signin_with"
+                      shape="rectangular"
+                    />
+                  </div>
 
                   <div className="mt-4 text-center">
                     <p className="text-sm text-gray-600">

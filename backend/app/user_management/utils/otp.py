@@ -1,8 +1,10 @@
 import asyncio
 import hashlib
 import random
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
-import resend
+import aiosmtplib
 
 from app.common.config import settings
 
@@ -42,36 +44,18 @@ def _build_otp_html(full_name: str, otp: str) -> str:
 
 
 async def send_otp_email(to_email: str, full_name: str, otp: str) -> None:
-    """Send OTP verification email via Resend."""
-    resend.api_key = settings.RESEND_API_KEY
-    params: resend.Emails.SendParams = {
-        "from": settings.RESEND_FROM,
-        "to": [to_email],
-        "subject": "Verify your Glow-Apex account",
-        "html": _build_otp_html(full_name, otp),
-    }
-    await asyncio.to_thread(resend.Emails.send, params)
-
-
-# --- SMTP alternative (aiosmtplib) — uncomment below and comment out the Resend block above
-#     to switch back to SMTP. Also restore aiosmtplib in requirements.txt.
-#
-# import aiosmtplib
-# from email.mime.multipart import MIMEMultipart
-# from email.mime.text import MIMEText
-#
-# async def send_otp_email(to_email: str, full_name: str, otp: str) -> None:
-#     msg = MIMEMultipart("alternative")
-#     msg["Subject"] = "Verify your Glow-Apex account"
-#     msg["From"] = settings.SMTP_FROM
-#     msg["To"] = to_email
-#     msg.attach(MIMEText(_build_otp_html(full_name, otp), "html"))
-#     await aiosmtplib.send(
-#         msg,
-#         hostname=settings.SMTP_HOST,
-#         port=settings.SMTP_PORT,
-#         username=settings.SMTP_USER,
-#         password=settings.SMTP_PASSWORD,
-#         start_tls=True,
-#         timeout=30,
-#     )
+    """Send OTP verification email via SMTP."""
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "Verify your Glow-Apex account"
+    msg["From"] = settings.SMTP_FROM
+    msg["To"] = to_email
+    msg.attach(MIMEText(_build_otp_html(full_name, otp), "html"))
+    await aiosmtplib.send(
+        msg,
+        hostname=settings.SMTP_HOST,
+        port=settings.SMTP_PORT,
+        username=settings.SMTP_USER,
+        password=settings.SMTP_PASSWORD,
+        start_tls=True,
+        timeout=30,
+    )

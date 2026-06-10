@@ -535,3 +535,29 @@
 [2026-06-09 09:00] | modify | frontend/src/components/footer.tsx | Fetches public settings on mount. Renders a social links row (Twitter/X, Instagram, YouTube, Facebook) below the footer grid if any social_* field is non-empty. Icons are inline SVGs to avoid deprecated lucide-react brand icon imports.
 
 [2026-06-09 09:00] | modify | frontend/src/App.tsx | Added MaintenancePage import. Added MaintenanceGuard component: fetches public settings once on mount, redirects non-admin users to /maintenance if maintenance_mode is true; exempt paths: /maintenance, /sign-in, /sign-up, /suspended. Added /maintenance route. MaintenanceGuard wraps SuspensionGuard inside AuthProvider so both guards share the same auth context.
+
+[2026-06-10 00:00] | add | backend/app/user_management/schemas/auth_schemas.py | Added GoogleAuthRequest schema with a single `credential` field (Google id_token).
+
+[2026-06-10 00:00] | modify | backend/app/user_management/repositories/user_repository.py | Added find_by_google_id() and insert_google_user() methods for Google OAuth user storage.
+
+[2026-06-10 00:00] | modify | backend/app/user_management/services/auth_service.py | Added google_auth() method: verifies Google id_token via Google tokeninfo API, creates verified user on first login (auth_provider="google", is_verified=True, no password), finds returning user by google_id. Added _verify_google_token() helper and _generate_unique_username() helper. Updated login() to detect google-only accounts (auth_provider="google") and raise 403 with reason="google_login_required" before attempting password verification.
+
+[2026-06-10 00:00] | modify | backend/app/user_management/routers/auth_router.py | Added POST /auth/google endpoint that calls service.google_auth().
+
+[2026-06-10 00:00] | modify | backend/app/common/config.py | Added GOOGLE_CLIENT_ID setting.
+
+[2026-06-10 00:00] | modify | frontend/src/config.ts | Added AUTH_GOOGLE endpoint constant.
+
+[2026-06-10 00:00] | modify | frontend/src/main.tsx | Wrapped app with GoogleOAuthProvider using VITE_GOOGLE_CLIENT_ID.
+
+[2026-06-10 00:00] | modify | frontend/src/context/AuthContext.tsx | Added googleAuth(credential) function: POSTs id_token to /auth/google, stores JWT and user in localStorage, returns User.
+
+[2026-06-10 00:00] | modify | frontend/src/pages/auth/SignInPage.tsx | Added Google Sign-In button (GoogleLogin component from @react-oauth/google) below the submit button with an "or continue with" divider. Added handleGoogleSuccess() which calls googleAuth() and redirects. Added error handling for reason="google_login_required" (show inline message) and reason="password_login_required" (show inline message).
+
+[2026-06-10 00:01] | modify | backend/requirements.txt | Replaced resend>=2.0.0 with aiosmtplib>=3.0.0.
+
+[2026-06-10 00:01] | modify | backend/app/user_management/utils/otp.py | Switched send_otp_email() from Resend to aiosmtplib SMTP (was previously the commented-out fallback). Removed resend import.
+
+[2026-06-10 00:01] | modify | backend/app/contact/utils.py | Rewrote send_contact_emails() to use aiosmtplib SMTP instead of Resend. Added _smtp_send() helper to avoid duplicating connection params. CONTACT_OWNER_EMAIL fallback now uses SMTP_FROM instead of RESEND_FROM. Removed resend import.
+
+[2026-06-10 00:01] | modify | backend/app/common/config.py | Removed RESEND_API_KEY and RESEND_FROM fields (dead code). Updated CONTACT_OWNER_EMAIL comment to reference SMTP_FROM.

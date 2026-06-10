@@ -5,6 +5,7 @@ from app.user_management.repositories.sign_in_log_repository import SignInLogRep
 from app.user_management.repositories.user_repository import UserRepository
 from app.user_management.schemas.auth_schemas import (
     AuthResponse,
+    GoogleAuthRequest,
     LoginRequest,
     RegisterRequest,
     ResendOtpRequest,
@@ -28,6 +29,14 @@ def _get_client_ip(request: Request) -> str:
     if forwarded_for:
         return forwarded_for.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
+
+
+@router.post("/google", response_model=AuthResponse)
+async def google_auth(
+    body: GoogleAuthRequest,
+    service: AuthService = Depends(_get_service),
+) -> AuthResponse:
+    return await service.google_auth(body)
 
 
 @router.post("/register", status_code=200)

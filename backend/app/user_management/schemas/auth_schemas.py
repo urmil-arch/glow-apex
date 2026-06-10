@@ -48,6 +48,10 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class GoogleAuthRequest(BaseModel):
+    credential: str  # Google id_token returned by Google Identity Services
+
+
 class UserPublic(BaseModel):
     id: str
     full_name: str
