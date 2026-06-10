@@ -561,3 +561,7 @@
 [2026-06-10 00:01] | modify | backend/app/contact/utils.py | Rewrote send_contact_emails() to use aiosmtplib SMTP instead of Resend. Added _smtp_send() helper to avoid duplicating connection params. CONTACT_OWNER_EMAIL fallback now uses SMTP_FROM instead of RESEND_FROM. Removed resend import.
 
 [2026-06-10 00:01] | modify | backend/app/common/config.py | Removed RESEND_API_KEY and RESEND_FROM fields (dead code). Updated CONTACT_OWNER_EMAIL comment to reference SMTP_FROM.
+
+[2026-06-10 13:00] | modify | backend/app/admin/users/router.py | Restricted Senior Operations Manager (operations_manager role) from mutating user records. Changed Depends from require_permission(PERM_USERS) to require_admin_role on: export_users, create_user, update_user, set_password, toggle_suspend. Read-only endpoints (list_users, get_user, get_stats, get_sign_in_history) still use require_permission(PERM_USERS) so SOM can view the list and sign-in history.
+
+[2026-06-10 13:00] | modify | frontend/src/pages/admin/users/UsersPage.tsx | Added isSOM flag (role === 'operations_manager'). When isSOM: toolbar hides Export Emails, Export Users, and Add User buttons; per-row action menu shows only Sign-in History (Edit, Set Password, Change Role, and Suspend/Unsuspend are hidden). Non-SOM behavior unchanged.

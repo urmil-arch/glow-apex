@@ -63,7 +63,7 @@ async def get_stats(
 
 @router.get("/export")
 async def export_users(
-    _: dict = Depends(require_permission(PERM_USERS)),
+    _: dict = Depends(require_admin_role),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> list[AdminUserResponse]:
     """Return all users as a flat list for CSV export."""
@@ -100,7 +100,7 @@ async def list_users(
 @router.post("", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     body: AdminCreateUserRequest,
-    _: dict = Depends(require_permission(PERM_USERS)),
+    _: dict = Depends(require_admin_role),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> AdminUserResponse:
     """Create a new user directly (no OTP step, immediately verified)."""
@@ -146,7 +146,7 @@ async def get_user(
 async def update_user(
     user_id: str,
     body: AdminUpdateUserRequest,
-    _: dict = Depends(require_permission(PERM_USERS)),
+    _: dict = Depends(require_admin_role),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> AdminUserResponse:
     """Update mutable user fields. Only supplied fields are changed."""
@@ -177,7 +177,7 @@ async def update_user(
 async def set_password(
     user_id: str,
     body: AdminSetPasswordRequest,
-    _: dict = Depends(require_permission(PERM_USERS)),
+    _: dict = Depends(require_admin_role),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> dict:
     """Admin resets any user's password without needing the current password."""
@@ -192,7 +192,7 @@ async def set_password(
 async def toggle_suspend(
     user_id: str,
     body: AdminToggleSuspendRequest,
-    admin: dict = Depends(require_permission(PERM_USERS)),
+    admin: dict = Depends(require_admin_role),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> dict:
     """Suspend or unsuspend a user. Admins cannot suspend themselves."""

@@ -62,6 +62,7 @@ const toUtc = (d: string) => d && !d.endsWith('Z') && !d.includes('+') ? `${d}Z`
 const UsersPage = () => {
   const { user: currentUser } = useAuth();
   const isFullAdmin = currentUser?.role === 'admin';
+  const isSOM = currentUser?.role === 'operations_manager';
 
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [stats, setStats] = useState<Stats>({ total: 0, verified: 0, suspended: 0 });
@@ -235,17 +236,19 @@ const UsersPage = () => {
           <h1 className="text-2xl font-bold text-gray-900">Users</h1>
           <p className="text-gray-500 text-sm mt-0.5">{total} total users</p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => handleExport(true)} className={outlineBtnCls}>
-            <Download className="h-4 w-4" /> Export Emails
-          </button>
-          <button onClick={() => handleExport(false)} className={outlineBtnCls}>
-            <Download className="h-4 w-4" /> Export Users
-          </button>
-          <button onClick={() => { setAddModal(true); setModalError(''); }} className={primaryBtnCls}>
-            <UserPlus className="h-4 w-4" /> Add User
-          </button>
-        </div>
+        {!isSOM && (
+          <div className="flex gap-2">
+            <button onClick={() => handleExport(true)} className={outlineBtnCls}>
+              <Download className="h-4 w-4" /> Export Emails
+            </button>
+            <button onClick={() => handleExport(false)} className={outlineBtnCls}>
+              <Download className="h-4 w-4" /> Export Users
+            </button>
+            <button onClick={() => { setAddModal(true); setModalError(''); }} className={primaryBtnCls}>
+              <UserPlus className="h-4 w-4" /> Add User
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Stats */}
@@ -411,20 +414,26 @@ const UsersPage = () => {
           >
             {users.filter((u) => u.id === menuState.id).map((user) => (
               <div key={user.id}>
-                <ActionItem icon={<Edit2 className="h-4 w-4" />} label="Edit User" onClick={() => { openEdit(user); setMenuState(null); }} />
-                {isFullAdmin && (
-                  <ActionItem icon={<UserCog className="h-4 w-4" />} label="Change Role" onClick={() => { setRoleTarget(user); setMenuState(null); }} />
+                {isSOM ? (
+                  <ActionItem icon={<Clock className="h-4 w-4" />} label="Sign-in History" onClick={() => { openHistory(user); setMenuState(null); }} />
+                ) : (
+                  <>
+                    <ActionItem icon={<Edit2 className="h-4 w-4" />} label="Edit User" onClick={() => { openEdit(user); setMenuState(null); }} />
+                    {isFullAdmin && (
+                      <ActionItem icon={<UserCog className="h-4 w-4" />} label="Change Role" onClick={() => { setRoleTarget(user); setMenuState(null); }} />
+                    )}
+                    <ActionItem icon={<KeyRound className="h-4 w-4" />} label="Set Password" onClick={() => { setPasswordTarget(user); setModalError(''); setMenuState(null); }} />
+                    <ActionItem icon={<Clock className="h-4 w-4" />} label="Sign-in History" onClick={() => { openHistory(user); setMenuState(null); }} />
+                    <div className="border-t border-gray-100 my-1" />
+                    <button
+                      onClick={() => { setSuspendTarget(user); setMenuState(null); }}
+                      className={`flex items-center gap-2 w-full px-3 py-2 text-sm transition-colors ${user.is_suspended ? 'text-emerald-600 hover:bg-emerald-50' : 'text-red-500 hover:bg-red-50'}`}
+                    >
+                      <Ban className="h-4 w-4" />
+                      {user.is_suspended ? 'Unsuspend' : 'Suspend'}
+                    </button>
+                  </>
                 )}
-                <ActionItem icon={<KeyRound className="h-4 w-4" />} label="Set Password" onClick={() => { setPasswordTarget(user); setModalError(''); setMenuState(null); }} />
-                <ActionItem icon={<Clock className="h-4 w-4" />} label="Sign-in History" onClick={() => { openHistory(user); setMenuState(null); }} />
-                <div className="border-t border-gray-100 my-1" />
-                <button
-                  onClick={() => { setSuspendTarget(user); setMenuState(null); }}
-                  className={`flex items-center gap-2 w-full px-3 py-2 text-sm transition-colors ${user.is_suspended ? 'text-emerald-600 hover:bg-emerald-50' : 'text-red-500 hover:bg-red-50'}`}
-                >
-                  <Ban className="h-4 w-4" />
-                  {user.is_suspended ? 'Unsuspend' : 'Suspend'}
-                </button>
               </div>
             ))}
           </div>
