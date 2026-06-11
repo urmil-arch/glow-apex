@@ -21,8 +21,6 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  useEffect(() => { setMobileOpen(false) }, [location.pathname])
-
   return (
     <>
       <nav
@@ -121,6 +119,7 @@ export default function Navbar() {
                     <Link
                       key={link.href}
                       to={link.href}
+                      onClick={() => setMobileOpen(false)}
                       className={`px-4 py-3 rounded-xl text-sm font-medium transition-all ${
                         active
                           ? 'bg-white/[0.07] text-white'

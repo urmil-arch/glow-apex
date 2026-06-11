@@ -115,7 +115,7 @@ function ContactBody() {
     formState: { errors },
   } = useForm<FormData>({ resolver: zodResolver(schema) })
 
-  const onSubmit = async (_data: FormData) => {
+  const onSubmit = async () => {
     setSubmitState('loading')
     await new Promise((r) => setTimeout(r, 1600))
     setSubmitState('success')

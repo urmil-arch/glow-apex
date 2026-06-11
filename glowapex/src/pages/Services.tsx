@@ -27,7 +27,7 @@ function SectionReveal({ children, className = '' }: { children: React.ReactNode
 }
 
 /* ─── SERVICE DATA ──────────────────────────────────────────────── */
-export const ALL_SERVICES = [
+const ALL_SERVICES = [
   {
     icon: <Calendar className="w-5 h-5" />,
     title: 'Special Events',
