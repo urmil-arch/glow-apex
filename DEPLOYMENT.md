@@ -100,7 +100,7 @@ Set `VITE_API_BASE_URL=http://YOUR_SERVER_IP/api` and fill in `VITE_STRIPE_PUBLI
 ## 4. Build and Start
 
 ```bash
-cd /opt/buyrealviews
+cd ~/buyrealviews
 
 # Build all images (takes 3–5 minutes on first run)
 docker compose -f docker-compose.prod.yml build
