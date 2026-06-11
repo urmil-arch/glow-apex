@@ -1,35 +1,69 @@
 services:
+
+  # ── MongoDB ─────────────────────────────────────────────────────────────────
   mongo:
     image: mongo:7
     volumes:
       - mongo_data:/data/db
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping').ok", "--quiet"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
 
+  # ── Redis ────────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
+    volumes:
+      - redis_data:/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
+  # ── Backend (FastAPI) ─────────────────────────────────────────────────────────
   backend:
-    build: ./backend
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    build:
+      context: ./backend
     env_file:
       - ./backend/.env
     environment:
+      # These override whatever is in backend/.env so Docker service names resolve
       MONGODB_URI: mongodb://mongo:27017
       REDIS_URL: redis://redis:6379
-      BACKEND_BASE_URL: http://100.79.26.55/api
-      FRONTEND_ORIGIN: http://100.79.26.55
     depends_on:
-      - mongo
-      - redis
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/openapi.json').read()"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 40s
 
+  # ── Frontend (React SPA via nginx) ─────────────────────────────────────────
   frontend:
     build:
       context: ./frontend
       target: prod
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
+  # ── Nginx reverse proxy ───────────────────────────────────────────────────
   nginx:
     image: nginx:alpine
     ports:
@@ -37,9 +71,12 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - backend
-      - frontend
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
   mongo_data:
+  redis_data:

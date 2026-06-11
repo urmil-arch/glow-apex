@@ -579,3 +579,17 @@
 [2026-06-11 00:00] | modify | backend/app/public_services/router.py | Added Redis read-through cache (TTL 2 min). Cache is invalidated by the admin services and routing routers when data changes — no write operations in this router itself.
 
 [2026-06-11 00:00] | modify | backend/app/contact/router.py | Replaced per-request Redis connection (get_redis generator + aioredis.from_url per call) with app.state.redis from the shared pool. Removed AsyncGenerator import and settings import (no longer needed). Rate limiting behaviour unchanged.
+
+[2026-06-11 00:00] | modify | backend/Dockerfile | Production-ready: removed --reload dev flag, switched to uvicorn with --workers 2, added non-root appuser for container security.
+
+[2026-06-11 00:00] | modify | frontend/nginx.conf | Added gzip compression for JS/CSS/JSON/SVG/fonts. Added Cache-Control: immutable for /assets/ (Vite-fingerprinted). Added no-cache for index.html so browsers revalidate on deploy. SPA try_files fallback preserved.
+
+[2026-06-11 00:00] | modify | nginx/nginx.conf | Full production rewrite: proxy_buffer sizes for large API responses, /api/ location strips prefix and proxies to backend:8000 with X-Forwarded headers, 120s read timeout for payment/SMM calls, proxy_request_buffering off (required for Stripe/Razorpay webhook raw body). / proxies to frontend:80. HTTP only (Cloudflare handles SSL).
+
+[2026-06-11 00:00] | modify | docker-compose.prod.yml | Removed hardcoded IP 100.79.26.55. Added healthchecks on all 4 services (mongo/redis/backend/frontend). backend/frontend health conditions used in depends_on. Added redis_data named volume for persistence. MONGODB_URI/REDIS_URL overridden in environment section; BACKEND_BASE_URL/FRONTEND_ORIGIN come from backend/.env.
+
+[2026-06-11 00:00] | add | backend/.env.example | All backend env vars with placeholder values and inline documentation. Covers app URLs, infrastructure, JWT, encryption, SMTP, Google OAuth, SMM panel, and all 5 payment gateways.
+
+[2026-06-11 00:00] | add | frontend/.env.production.example | Production frontend env template: VITE_API_BASE_URL, VITE_STRIPE_PUBLISHABLE_KEY, VITE_GOOGLE_CLIENT_ID. Includes commented Cloudflare domain variant.
+
+[2026-06-11 00:00] | add | DEPLOYMENT.md | Complete deployment guide: Docker install, env file setup, build commands, health verification, webhook URLs for all 5 gateways, Cloudflare migration steps (3 var changes + 1 rebuild command), rollback procedure, common issues.
