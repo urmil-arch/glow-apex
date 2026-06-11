@@ -1,9 +1,17 @@
 import logging
 
+import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.admin.pricing.repository import PricingRepository
 from app.admin.pricing.schemas import ServicePricingRequest, ServicePricingResponse
+from app.common.redis_cache import (
+    CACHE_PRICING,
+    TTL_PRICING,
+    cache_delete,
+    cache_get,
+    cache_set,
+)
 from app.user_management.utils.dependencies import require_permission
 from app.user_management.utils.permissions import PERM_PRICING
 
@@ -33,12 +41,23 @@ def _serialize(doc: dict) -> ServicePricingResponse:
     )
 
 
+def _get_redis(request: Request) -> aioredis.Redis:
+    return request.app.state.redis
+
+
 @router.get("", response_model=list[ServicePricingResponse])
 async def list_pricing(request: Request) -> list[ServicePricingResponse]:
     """Return pricing config for all service types."""
+    redis = _get_redis(request)
+    cached = await cache_get(redis, CACHE_PRICING)
+    if cached is not None:
+        return cached
+
     db = request.app.state.db
     docs = await PricingRepository(db).find_all()
-    return [_serialize(d) for d in docs]
+    result = [_serialize(d) for d in docs]
+    await cache_set(redis, CACHE_PRICING, [r.model_dump() for r in result], TTL_PRICING)
+    return result
 
 
 @router.get("/{service_type}", response_model=ServicePricingResponse)
@@ -73,4 +92,5 @@ async def upsert_pricing(
     }
     doc = await PricingRepository(db).upsert(service_type, data)
     logger.info("Pricing updated for service_type=%s", service_type)
+    await cache_delete(_get_redis(request), CACHE_PRICING)
     return _serialize(doc)

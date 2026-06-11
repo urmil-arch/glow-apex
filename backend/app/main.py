@@ -10,6 +10,7 @@ logging.basicConfig(
 )
 logging.getLogger("app").setLevel(logging.INFO)
 
+import redis.asyncio as aioredis
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -42,6 +43,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     db = client[settings.MONGODB_DB_NAME]
     app.state.db = db
 
+    redis_client = aioredis.from_url(
+        settings.REDIS_URL,
+        decode_responses=True,
+        max_connections=20,
+    )
+    app.state.redis = redis_client
+
     repo = UserRepository(db)
     await repo.create_indexes()
     await repo.backfill_roles()
@@ -59,6 +67,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     yield
 
+    await redis_client.aclose()
     client.close()
 
 

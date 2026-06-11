@@ -1,22 +1,16 @@
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import AsyncGenerator
 
 import redis.asyncio as aioredis
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
-from app.common.config import settings
 from app.contact.repository import ContactMessageRepository
 from app.contact.schemas import ContactRequest
 from app.contact.utils import send_contact_emails
 
 logger = logging.getLogger(__name__)
-
-
-def _get_db(request: Request) -> AsyncIOMotorDatabase:
-    return request.app.state.db
 
 router = APIRouter()
 
@@ -24,13 +18,12 @@ RATE_LIMIT_TTL = 3600  # 1 hour window
 RATE_LIMIT_MAX = 2    # messages allowed per window
 
 
-async def get_redis() -> AsyncGenerator[aioredis.Redis, None]:
-    """Yield a Redis client and close it after the request."""
-    client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
-    try:
-        yield client
-    finally:
-        await client.aclose()
+def _get_db(request: Request) -> AsyncIOMotorDatabase:
+    return request.app.state.db
+
+
+def _get_redis(request: Request) -> aioredis.Redis:
+    return request.app.state.redis
 
 
 def _get_client_ip(request: Request) -> str:
@@ -45,8 +38,6 @@ def _get_client_ip(request: Request) -> str:
 async def send_contact_message(
     payload: ContactRequest,
     request: Request,
-    redis: aioredis.Redis = Depends(get_redis),
-    db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> dict:
     """
     Accept a contact form submission.
@@ -56,6 +47,8 @@ async def send_contact_message(
     If Redis is unreachable the rate check is skipped with a warning so the
     contact form still works.
     """
+    redis = _get_redis(request)
+    db = _get_db(request)
     client_ip = _get_client_ip(request)
     rate_key = f"contact_ratelimit:{client_ip}"
 

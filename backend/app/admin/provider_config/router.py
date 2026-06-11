@@ -1,3 +1,4 @@
+import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
@@ -9,6 +10,14 @@ from app.admin.provider_config.schemas import (
 )
 from app.admin.providers.repository import ProviderRepository
 from app.admin.services.repository import CategoryRepository, ServiceRepository
+from app.common.redis_cache import (
+    CACHE_PUBLIC_SERVICES,
+    CACHE_ROUTING,
+    TTL_ROUTING,
+    cache_delete,
+    cache_get,
+    cache_set,
+)
 from app.user_management.utils.dependencies import require_permission
 from app.user_management.utils.permissions import PERM_ROUTING
 
@@ -17,6 +26,10 @@ router = APIRouter()
 
 def _get_db(request: Request) -> AsyncIOMotorDatabase:
     return request.app.state.db
+
+
+def _get_redis(request: Request) -> aioredis.Redis:
+    return request.app.state.redis
 
 
 async def _resolve_service_info(
@@ -62,12 +75,20 @@ async def _config_to_response(cfg: dict, db: AsyncIOMotorDatabase) -> RoutingCon
 
 @router.get("", response_model=list[RoutingConfigResponse])
 async def list_routing_configs(
+    request: Request,
     _: dict = Depends(require_permission(PERM_ROUTING)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> list[RoutingConfigResponse]:
     """Return all configured routing rules."""
+    redis = _get_redis(request)
+    cached = await cache_get(redis, CACHE_ROUTING)
+    if cached is not None:
+        return cached
+
     configs = await RoutingConfigRepository(db).find_all()
-    return [await _config_to_response(cfg, db) for cfg in configs]
+    result = [await _config_to_response(cfg, db) for cfg in configs]
+    await cache_set(redis, CACHE_ROUTING, [r.model_dump() for r in result], TTL_ROUTING)
+    return result
 
 
 @router.get("/{category_id}", response_model=RoutingConfigResponse)
@@ -95,6 +116,7 @@ async def get_routing_config(
 async def upsert_routing_config(
     category_id: str,
     body: UpsertRoutingConfigRequest,
+    request: Request,
     _: dict = Depends(require_permission(PERM_ROUTING)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> RoutingConfigResponse:
@@ -118,15 +140,18 @@ async def upsert_routing_config(
     )
 
     cfg = await RoutingConfigRepository(db).find_by_category_id(category_id)
+    await cache_delete(_get_redis(request), CACHE_ROUTING, CACHE_PUBLIC_SERVICES)
     return await _config_to_response(cfg, db)
 
 
 @router.delete("/{category_id}", status_code=status.HTTP_200_OK)
 async def delete_routing_config(
     category_id: str,
+    request: Request,
     _: dict = Depends(require_permission(PERM_ROUTING)),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> dict:
     """Remove the routing config for a category. Order routing reverts to auto-select by provider_service_id."""
     await RoutingConfigRepository(db).delete(category_id)
+    await cache_delete(_get_redis(request), CACHE_ROUTING, CACHE_PUBLIC_SERVICES)
     return {"message": "Routing config removed"}

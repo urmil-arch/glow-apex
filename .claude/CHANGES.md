@@ -565,3 +565,17 @@
 [2026-06-10 13:00] | modify | backend/app/admin/users/router.py | Restricted Senior Operations Manager (operations_manager role) from mutating user records. Changed Depends from require_permission(PERM_USERS) to require_admin_role on: export_users, create_user, update_user, set_password, toggle_suspend. Read-only endpoints (list_users, get_user, get_stats, get_sign_in_history) still use require_permission(PERM_USERS) so SOM can view the list and sign-in history.
 
 [2026-06-10 13:00] | modify | frontend/src/pages/admin/users/UsersPage.tsx | Added isSOM flag (role === 'operations_manager'). When isSOM: toolbar hides Export Emails, Export Users, and Add User buttons; per-row action menu shows only Sign-in History (Edit, Set Password, Change Role, and Suspend/Unsuspend are hidden). Non-SOM behavior unchanged.
+
+[2026-06-11 00:00] | add | backend/app/common/redis_cache.py | New shared Redis cache utility. Defines cache key constants (CACHE_SERVICES, CACHE_CATEGORIES, CACHE_PRICING, CACHE_ROUTING, CACHE_PUBLIC_SERVICES) with TTLs (2–10 min) and three helpers: cache_get (read-through, fail-open), cache_set, cache_delete. All errors are caught and logged as warnings so cache failures never break the app.
+
+[2026-06-11 00:00] | modify | backend/app/main.py | Added shared aioredis connection pool (max_connections=20) initialised in lifespan and stored as app.state.redis. Pool is cleanly closed on shutdown before MongoDB client.
+
+[2026-06-11 00:00] | modify | backend/app/admin/services/router.py | Two improvements: (1) Eliminated N+1 query problem in list_services — new _build_service_responses fetches all providers and categories in one query each (3 total vs 2N+1 before). (2) Added Redis read-through cache on list_categories (TTL 10 min) and list_services (TTL 5 min). Cache is invalidated on create/update/delete for both categories and services. CACHE_PUBLIC_SERVICES is also invalidated on service and category mutation.
+
+[2026-06-11 00:00] | modify | backend/app/admin/pricing/router.py | Added Redis read-through cache on list_pricing (TTL 5 min). Cache invalidated on upsert_pricing.
+
+[2026-06-11 00:00] | modify | backend/app/admin/provider_config/router.py | Added Redis read-through cache on list_routing_configs (TTL 5 min). Cache invalidated on upsert_routing_config and delete_routing_config. CACHE_PUBLIC_SERVICES also invalidated on routing changes.
+
+[2026-06-11 00:00] | modify | backend/app/public_services/router.py | Added Redis read-through cache (TTL 2 min). Cache is invalidated by the admin services and routing routers when data changes — no write operations in this router itself.
+
+[2026-06-11 00:00] | modify | backend/app/contact/router.py | Replaced per-request Redis connection (get_redis generator + aioredis.from_url per call) with app.state.redis from the shared pool. Removed AsyncGenerator import and settings import (no longer needed). Rate limiting behaviour unchanged.
