@@ -8,7 +8,6 @@ import {
 
 import AnimatedCounter from '../../components/AnimatedCounter'
 
-/* ─── Shared motion helpers ─────────────────────────────────────── */
 const fadeUp: Variants = {
   hidden: { opacity: 0, y: 32 },
   show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } },
@@ -34,21 +33,18 @@ function SectionReveal({ children, className = '' }: { children: React.ReactNode
   )
 }
 
-/* ─── 1. HERO ────────────────────────────────────────────────────── */
 function HeroSection() {
   const stats = [
     { value: 500, suffix: '+', label: 'Campaigns Executed' },
     { value: 200, suffix: '+', label: 'Clients Served' },
-    { value: 98, suffix: '%', label: 'Client Retention', isFloat: false },
+    { value: 98, suffix: '%', label: 'Client Retention' },
   ]
 
   return (
     <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden pt-20">
-      {/* Background glow */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[600px] bg-blue-500/[0.07] rounded-full blur-[120px]" />
         <div className="absolute bottom-0 left-1/4 w-[400px] h-[400px] bg-blue-500/[0.04] rounded-full blur-[100px]" />
-        {/* Grid pattern */}
         <div
           className="absolute inset-0 opacity-[0.025]"
           style={{
@@ -59,7 +55,6 @@ function HeroSection() {
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-8 text-center">
-        {/* Badge */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -70,7 +65,6 @@ function HeroSection() {
           Full-Service PR & Communications Agency
         </motion.div>
 
-        {/* Headline */}
         <motion.h1
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
@@ -82,7 +76,6 @@ function HeroSection() {
           <span className="gradient-text">Guesswork.</span>
         </motion.h1>
 
-        {/* Subheadline */}
         <motion.p
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -92,7 +85,6 @@ function HeroSection() {
           We help brands, executives, and businesses build credibility, earn media coverage, and communicate with clarity at every stage of growth.
         </motion.p>
 
-        {/* CTAs */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -115,7 +107,6 @@ function HeroSection() {
           </Link>
         </motion.div>
 
-        {/* Stats */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -133,7 +124,6 @@ function HeroSection() {
         </motion.div>
       </div>
 
-      {/* Scroll cue */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -151,7 +141,6 @@ function HeroSection() {
   )
 }
 
-/* ─── 2. WHAT WE DO ──────────────────────────────────────────────── */
 function WhatWeDoSection() {
   const cards = [
     {
@@ -205,64 +194,6 @@ function WhatWeDoSection() {
   )
 }
 
-/* ─── 3. ECOSYSTEM ───────────────────────────────────────────────── */
-// function EcosystemSection() {
-//   const services = [
-//     { icon: <YoutubeIcon />, title: 'YouTube Growth', color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/20' },
-//     { icon: <InstagramIcon />, title: 'Instagram Growth', color: 'text-pink-400', bg: 'bg-pink-500/10 border-pink-500/20' },
-//     { icon: <Zap className="w-5 h-5" />, title: 'TikTok Growth', color: 'text-white', bg: 'bg-white/[0.06] border-white/[0.12]' },
-//     { icon: <FacebookIcon />, title: 'Facebook Growth', color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
-//     { icon: <Music className="w-5 h-5" />, title: 'Spotify Promotion', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
-//     { icon: <CheckCircle className="w-5 h-5" />, title: 'Social Proof Solutions', color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/20' },
-//   ]
-
-//   return (
-//     <section id="ecosystem" className="py-24 md:py-32 relative">
-//       <div className="absolute inset-0 pointer-events-none">
-//         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-blue-500/[0.04] rounded-full blur-[100px]" />
-//       </div>
-
-//       <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
-//         <SectionReveal className="text-center mb-16">
-//           <motion.p variants={fadeUp} className="text-emerald-400 text-sm font-semibold tracking-widest uppercase mb-4">Our Ecosystem</motion.p>
-//           <motion.h2 variants={fadeUp} className="text-4xl md:text-5xl font-bold text-white tracking-tight">
-//             Every platform.<br />One ecosystem.
-//           </motion.h2>
-//           <motion.p variants={fadeUp} className="mt-5 text-zinc-500 text-lg max-w-xl mx-auto">
-//             Growth solutions across all major platforms, delivered through a single unified infrastructure.
-//           </motion.p>
-//         </SectionReveal>
-
-//         {/* Cards grid with connecting lines */}
-//         <SectionReveal className="relative">
-//           {/* Horizontal connector line */}
-//           <div className="hidden md:block absolute top-[88px] left-[16.66%] right-[16.66%] h-px bg-gradient-to-r from-transparent via-white/[0.08] to-transparent" />
-//           <div className="hidden md:block absolute top-[88px] left-1/2 -translate-x-1/2 w-px h-[calc(100%-88px-88px)] bg-gradient-to-b from-white/[0.08] to-transparent" />
-
-//           <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
-//             {services.map((service, i) => (
-//               <motion.div
-//                 key={service.title}
-//                 variants={fadeUp}
-//                 custom={i}
-//                 transition={{ delay: i * 0.07 }}
-//                 className="glass glass-hover rounded-2xl p-6 flex items-center gap-4 group transition-all duration-300 cursor-default"
-//               >
-//                 <div className={`w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0 ${service.bg} ${service.color} transition-transform group-hover:scale-105`}>
-//                   {service.icon}
-//                 </div>
-//                 <span className="text-white font-medium text-sm">{service.title}</span>
-//                 <ArrowRight className="w-4 h-4 text-zinc-700 ml-auto group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all" />
-//               </motion.div>
-//             ))}
-//           </div>
-//         </SectionReveal>
-//       </div>
-//     </section>
-//   )
-// }
-
-/* ─── 3. SERVICES TEASER ────────────────────────────────────────── */
 function ServicesSection() {
   const pills = ['Media Relations', 'Brand Strategy', 'Special Events', 'Crisis Management', 'Thought Leadership', 'Social Media', 'Market Research', 'Influencer Relations']
 
@@ -303,7 +234,6 @@ function ServicesSection() {
   )
 }
 
-/* ─── 4. HOW WE WORK ─────────────────────────────────────────────── */
 function HowWeWorkSection() {
   const steps = [
     {
@@ -344,7 +274,6 @@ function HowWeWorkSection() {
         <SectionReveal className="grid md:grid-cols-3 gap-px bg-white/[0.05] rounded-2xl overflow-hidden border border-white/[0.05]">
           {steps.map((step, i) => (
             <motion.div key={step.title} variants={fadeUp} className="relative bg-[#0A0A0A] p-8 lg:p-10 flex flex-col gap-5 group hover:bg-white/[0.02] transition-colors">
-              {/* Step number */}
               <span className="text-[80px] font-black text-white/[0.04] leading-none absolute top-6 right-6 select-none group-hover:text-white/[0.06] transition-colors">
                 {step.step}
               </span>
@@ -368,7 +297,6 @@ function HowWeWorkSection() {
   )
 }
 
-/* ─── 5. WHY GLOW APEX ───────────────────────────────────────────── */
 function WhySection() {
   const features = [
     { icon: <Rocket className="w-5 h-5" />, title: 'Strategic Approach', desc: 'Every campaign is built on research, positioning, and a clear narrative.' },
@@ -415,21 +343,13 @@ function WhySection() {
   )
 }
 
-/* ─── 6. TRUST SECTION ───────────────────────────────────────────── */
 function TrustSection() {
   const metrics = [
     { value: 10, suffix: 'K+', label: 'Media Placements' },
     { value: 500, suffix: '+', label: 'Campaigns Delivered' },
     { value: 50, suffix: '+', label: 'Countries Served' },
   ]
-  const trustGroups = [
-    'Founders',
-    'Agencies',
-    'Startups',
-    'D2C Brands',
-    'SaaS Teams',
-    'Global Firms',
-  ]
+  const trustGroups = ['Founders', 'Agencies', 'Startups', 'D2C Brands', 'SaaS Teams', 'Global Firms']
 
   return (
     <section className="py-24 md:py-32 relative">
@@ -441,7 +361,6 @@ function TrustSection() {
           </motion.h2>
         </SectionReveal>
 
-        {/* Logo wall */}
         <SectionReveal className="mb-16">
           <motion.div variants={fadeUp} className="flex flex-wrap items-center justify-center gap-4">
             {trustGroups.map((group) => (
@@ -455,7 +374,6 @@ function TrustSection() {
           </motion.div>
         </SectionReveal>
 
-        {/* Metrics */}
         <SectionReveal className="grid sm:grid-cols-3 gap-px bg-white/[0.05] rounded-2xl overflow-hidden border border-white/[0.05]">
           {metrics.map(({ value, suffix, label }) => (
             <motion.div key={label} variants={fadeUp} className="bg-[#0A0A0A] py-10 px-6 text-center">
@@ -471,7 +389,6 @@ function TrustSection() {
   )
 }
 
-/* ─── 7. ABOUT SNIPPET ───────────────────────────────────────────── */
 function AboutSnippetSection() {
   return (
     <section className="py-24 md:py-32">
@@ -499,7 +416,6 @@ function AboutSnippetSection() {
   )
 }
 
-/* ─── 8. CTA SECTION ─────────────────────────────────────────────── */
 function CtaSection() {
   return (
     <section className="py-24 md:py-32">
@@ -509,7 +425,6 @@ function CtaSection() {
             variants={fadeUp}
             className="relative rounded-3xl overflow-hidden border border-white/[0.08] bg-gradient-to-br from-white/[0.04] to-white/[0.01] p-12 md:p-20 text-center"
           >
-            {/* BG glow */}
             <div className="absolute inset-0 pointer-events-none">
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-blue-500/[0.08] rounded-full blur-[80px]" />
             </div>
@@ -536,13 +451,11 @@ function CtaSection() {
   )
 }
 
-/* ─── PAGE EXPORT ─────────────────────────────────────────────────── */
 export default function Home() {
   return (
     <main>
       <HeroSection />
       <WhatWeDoSection />
-      {/* <EcosystemSection /> */}
       <ServicesSection />
       <HowWeWorkSection />
       <WhySection />

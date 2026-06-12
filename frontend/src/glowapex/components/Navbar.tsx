@@ -46,7 +46,7 @@ export default function Navbar() {
             {/* Desktop Links */}
             <div className="hidden md:flex items-center gap-1">
               {navLinks.map((link) => {
-                const active = location.pathname === link.href
+                 const active = location.pathname === link.href
                 return (
                   <Link
                     key={link.href}
@@ -58,7 +58,7 @@ export default function Navbar() {
                     </span>
                     {active && (
                       <motion.div
-                        layoutId="nav-pill"
+                        layoutId="ga-nav-pill"
                         className="absolute inset-0 bg-white/[0.06] rounded-lg"
                         transition={{ type: 'spring', stiffness: 400, damping: 35 }}
                       />
@@ -114,7 +114,7 @@ export default function Navbar() {
 
               <div className="flex flex-col gap-1 flex-1">
                 {navLinks.map((link) => {
-                  const active = location.pathname === link.href
+                   const active = location.pathname === link.href
                   return (
                     <Link
                       key={link.href}

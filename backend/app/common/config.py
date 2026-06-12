@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     # App
     BACKEND_BASE_URL: str = "http://localhost:8000"
     FRONTEND_ORIGIN: str = "http://localhost:5173"
+    GLOWAPEX_ORIGIN: str = "http://localhost:3001"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

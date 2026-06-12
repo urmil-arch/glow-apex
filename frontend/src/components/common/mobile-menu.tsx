@@ -13,12 +13,20 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { useNavigate } from "react-router-dom";
-import { menuitems } from "@/config/menu-items";
+import { useLocation, useNavigate } from "react-router-dom";
+import { getActiveServiceMenuItems, type MenuItem } from "@/config/menu-items";
 
 export const MobileMenu = () => {
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const menuitems: MenuItem[] = [
+    { id: 1, title: "Home", href: "/", type: "link" },
+    ...getActiveServiceMenuItems(location.pathname),
+    { id: 7, title: "Blogs", href: "/blogs", type: "link" },
+    { id: 8, title: "Contact", href: "/contact-us", type: "link" },
+  ];
 
   const handleLinkClick = (href: string) => {
     setIsOpen(false); // Close the mobile menu
@@ -43,7 +51,7 @@ export const MobileMenu = () => {
         </SheetTitle>
         <ul className="grid gap-4 py-4">
           {menuitems.map((item) => {
-            return item.items ? (
+            return item.type === "menu" ? (
               <li key={item.id} className="">
                 <Accordion type="single" collapsible>
                   <AccordionItem value="item-1">

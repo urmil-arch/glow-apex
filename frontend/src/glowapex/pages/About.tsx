@@ -23,7 +23,6 @@ function SectionReveal({ children, className = '' }: { children: React.ReactNode
   )
 }
 
-/* ─── HERO ───────────────────────────────────────────────────────── */
 function AboutHero() {
   return (
     <section className="relative min-h-[60vh] flex items-end pb-20 pt-36 overflow-hidden">
@@ -69,7 +68,6 @@ function AboutHero() {
   )
 }
 
-/* ─── BY THE NUMBERS ─────────────────────────────────────────────── */
 function NumbersSection() {
   const stats = [
     { value: 500, suffix: '+', label: 'Campaigns Delivered' },
@@ -103,7 +101,6 @@ function NumbersSection() {
   )
 }
 
-/* ─── WHO WE ARE ─────────────────────────────────────────────────── */
 function WhoWeAreSection() {
   return (
     <section className="py-24 md:py-32 relative">
@@ -123,7 +120,6 @@ function WhoWeAreSection() {
             </motion.p>
           </SectionReveal>
 
-          {/* Visual block */}
           <SectionReveal>
             <motion.div variants={fadeUp} className="relative">
               <div className="glass rounded-2xl p-8 space-y-4">
@@ -159,7 +155,6 @@ function WhoWeAreSection() {
   )
 }
 
-/* ─── MISSION ────────────────────────────────────────────────────── */
 function MissionSection() {
   return (
     <section className="py-24 md:py-32 relative">
@@ -179,29 +174,12 @@ function MissionSection() {
   )
 }
 
-/* ─── CORE VALUES ────────────────────────────────────────────────── */
 function ValuesSection() {
   const values = [
-    {
-      icon: <Target className="w-5 h-5" />,
-      title: 'Results First',
-      description: 'Everything we build is focused on measurable outcomes. We succeed when you grow.',
-    },
-    {
-      icon: <Lightbulb className="w-5 h-5" />,
-      title: 'Innovation',
-      description: 'We continuously improve our systems and processes to stay ahead of the curve.',
-    },
-    {
-      icon: <Eye className="w-5 h-5" />,
-      title: 'Transparency',
-      description: 'Clear communication and honest expectations — no smoke and mirrors.',
-    },
-    {
-      icon: <Shield className="w-5 h-5" />,
-      title: 'Integrity',
-      description: 'We give honest counsel, even when it\'s not what you want to hear. That\'s what builds trust.',
-    },
+    { icon: <Target className="w-5 h-5" />, title: 'Results First', description: 'Everything we build is focused on measurable outcomes. We succeed when you grow.' },
+    { icon: <Lightbulb className="w-5 h-5" />, title: 'Innovation', description: 'We continuously improve our systems and processes to stay ahead of the curve.' },
+    { icon: <Eye className="w-5 h-5" />, title: 'Transparency', description: 'Clear communication and honest expectations — no smoke and mirrors.' },
+    { icon: <Shield className="w-5 h-5" />, title: 'Integrity', description: "We give honest counsel, even when it's not what you want to hear. That's what builds trust." },
   ]
 
   return (
@@ -240,7 +218,6 @@ function ValuesSection() {
   )
 }
 
-/* ─── CTA ────────────────────────────────────────────────────────── */
 function AboutCta() {
   return (
     <section className="py-24 md:py-32">

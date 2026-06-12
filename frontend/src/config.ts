@@ -1,4 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+const GLOWAPEX_URL = import.meta.env.VITE_GLOWAPEX_URL || 'http://localhost:3001'
 
 export const API_ENDPOINTS = {
   // Auth
@@ -101,4 +102,11 @@ export const API_ENDPOINTS = {
   // Pricing
   ADMIN_PRICING: `${API_BASE_URL}/admin/pricing`,
   PUBLIC_PRICING: `${API_BASE_URL}/pricing`,
+
+  // Cross-domain checkout portal
+  CHECKOUT_INIT: `${API_BASE_URL}/checkout/init`,
+  CHECKOUT_PRE_AUTH: `${API_BASE_URL}/checkout/pre-auth`,
+  CHECKOUT_INIT_WITH_PRE_AUTH: `${API_BASE_URL}/checkout/init-with-pre-auth`,
 }
+
+export const GLOWAPEX_CHECKOUT_URL = `${GLOWAPEX_URL}/checkout`

@@ -340,30 +340,19 @@ const ServicePage = () => {
 
   const handleSubmit = (e: React.FormEvent): void => {
     e.preventDefault();
-
-    if (validateForm()) {
-      const selectedPkg = packageOptions.find(
-        (pkg) => pkg.id === formData.package
-      );
-
-      if (!selectedPkg) {
-        console.error("Selected package not found");
-        return;
-      }
-
-      const orderDataItem: OrderDataItem = {
-        service_id: serviceId,
-        product_id: selectedPkg.id,
-        user_email: formData.email,
-        user_link: formData.link,
-        purchase_type: "single",
-        product_price: selectedPkg.price.toFixed(2),
-      };
-
-      setOrderData([orderDataItem]);
-
-      navigate("/checkout");
-    }
+    if (!validateForm()) return;
+    const selectedPkg = packageOptions.find((pkg) => pkg.id === formData.package);
+    if (!selectedPkg) return;
+    const orderDataItem: OrderDataItem = {
+      service_id: serviceId,
+      product_id: selectedPkg.id,
+      user_email: formData.email,
+      user_link: formData.link,
+      purchase_type: "single",
+      product_price: selectedPkg.price.toFixed(2),
+    };
+    setOrderData([orderDataItem]);
+    navigate("/checkout");
   };
 
   const handlePackageSelect = (packageId: string) => {
@@ -725,10 +714,9 @@ const ServicePage = () => {
                       {/* Submit button */}
                       <button
                         type="submit"
-                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-4 px-6 rounded-xl transition-colors flex items-center justify-center gap-4 mt-4"
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-4 px-6 rounded-xl transition-colors flex items-center justify-center mt-4"
                       >
-                        Continue to checkout{" "}
-                        <ShoppingCart className="ml-2 w-5 h-5" />
+                        Continue to checkout <ShoppingCart className="ml-2 w-5 h-5" />
                       </button>
                     </div>
                   )}

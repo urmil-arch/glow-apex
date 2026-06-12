@@ -74,7 +74,7 @@ export default function Footer() {
               {[
                 { label: 'Home', to: '/' },
                 { label: 'About', to: '/about' },
-                { label: 'Services', to: '/#ecosystem' },
+                { label: 'Services', to: '/services' },
                 { label: 'Contact', to: '/contact' },
               ].map(({ label, to }) => (
                 <Link

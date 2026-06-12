@@ -8,6 +8,7 @@ import Navbar from './components/navbar'
 import Footer from './components/footer'
 import { api } from './lib/api'
 import { API_ENDPOINTS } from './config'
+import CheckoutPage from './pages/checkout/CheckoutPage'
 
 // Pages
 import HomePage from './pages/Home'
@@ -18,9 +19,7 @@ import BuyYoutubeComments from './pages/services/BuyYoutubeComments'
 import BuyYoutubeShortsViews from './pages/services/BuyYoutubeShortsViews'
 import BuyYoutubeShortsLikes from './pages/services/BuyYoutubeShortsLikes'
 import ServiceDetail from './pages/services/ServiceDetail'
-import ServicesListPage from './pages/services/ServicesListPage'
 import TargetedCountry from './pages/services/TargetedCountry'
-import CheckoutPage from './pages/checkout/CheckoutPage'
 import CheckStatus from './pages/checkout/CheckStatus'
 import StripeSuccess from './pages/checkout/StripeSuccess'
 import StripeCancel from './pages/checkout/StripeCancel'
@@ -131,12 +130,12 @@ const App: React.FC = () => {
               <Route path="/blogs" element={<AllBlogsPage />} />
               <Route path="/blogs/:slug" element={<BlogSlugPage />} />
               <Route path="/contact-us" element={<ContactPage />} />
-              <Route path="/services" element={<ServicesListPage />} />
             </Route>
+
+            <Route path="/checkout" element={<CheckoutPage />} />
 
             {/* Checkout routes (no sidebar, but keep Navbar) */}
             <Route element={<><Navbar /><Outlet /></>}>
-              <Route path="/checkout" element={<CheckoutPage />} />
               <Route path="/checkout/success" element={<StripeSuccess />} />
               <Route path="/checkout/cancel" element={<StripeCancel />} />
               <Route path="/checkout/check-status/:orderid" element={<CheckStatus />} />

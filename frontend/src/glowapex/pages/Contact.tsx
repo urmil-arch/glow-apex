@@ -5,7 +5,6 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Mail, MapPin, Globe, CheckCircle, AlertCircle, Loader2, Send } from 'lucide-react'
 
-/* ─── Form schema ──────────────────────────────────────────────── */
 const schema = z.object({
   firstName: z.string().min(1, 'First name is required').max(50),
   lastName: z.string().min(1, 'Last name is required').max(50),
@@ -16,7 +15,6 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>
 
-/* ─── Shared motion ────────────────────────────────────────────── */
 const fadeUp: Variants = {
   hidden: { opacity: 0, y: 28 },
   show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } },
@@ -58,7 +56,6 @@ function LinkedInIcon() {
   )
 }
 
-/* ─── Hero ─────────────────────────────────────────────────────── */
 function ContactHero() {
   return (
     <section className="relative pt-36 pb-16 overflow-hidden">
@@ -74,29 +71,14 @@ function ContactHero() {
       </div>
 
       <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
-        <motion.p
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="text-emerald-400 text-sm font-semibold tracking-widest uppercase mb-5"
-        >
+        <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="text-emerald-400 text-sm font-semibold tracking-widest uppercase mb-5">
           Get In Touch
         </motion.p>
-        <motion.h1
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.7, ease: "easeOut" }}
-          className="text-5xl sm:text-6xl md:text-7xl font-extrabold text-white tracking-tight leading-none mb-6"
-        >
+        <motion.h1 initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.7, ease: "easeOut" }} className="text-5xl sm:text-6xl md:text-7xl font-extrabold text-white tracking-tight leading-none mb-6">
           Let's Talk<br />
           <span className="gradient-text">Growth.</span>
         </motion.h1>
-        <motion.p
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}
-          className="max-w-xl text-lg text-zinc-400 leading-relaxed"
-        >
+        <motion.p initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="max-w-xl text-lg text-zinc-400 leading-relaxed">
           Questions, partnerships, custom requirements, or business inquiries — we'd love to hear from you.
         </motion.p>
       </div>
@@ -104,16 +86,10 @@ function ContactHero() {
   )
 }
 
-/* ─── Contact Body ─────────────────────────────────────────────── */
 function ContactBody() {
   const [submitState, setSubmitState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<FormData>({ resolver: zodResolver(schema) })
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({ resolver: zodResolver(schema) })
 
   const onSubmit = async () => {
     setSubmitState('loading')
@@ -134,16 +110,12 @@ function ContactBody() {
       <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
         <div className="grid lg:grid-cols-[1fr_1.6fr] gap-12 lg:gap-16">
 
-          {/* Info card */}
           <SectionReveal>
             <motion.div variants={fadeUp} className="glass rounded-2xl p-7 h-fit space-y-7">
               <div>
                 <h3 className="text-white font-bold text-lg mb-5">Contact Information</h3>
                 <div className="space-y-4">
-                  <a
-                    href="mailto:hello@glowapex.com"
-                    className="flex items-center gap-3 text-zinc-400 hover:text-white transition-colors group"
-                  >
+                  <a href="mailto:hello@glowapex.com" className="flex items-center gap-3 text-zinc-400 hover:text-white transition-colors group">
                     <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 flex-shrink-0 group-hover:bg-emerald-500/15 transition-colors">
                       <Mail className="w-4 h-4" />
                     </div>
@@ -153,12 +125,7 @@ function ContactBody() {
                     </div>
                   </a>
 
-                  <a
-                    href="https://glowapex.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 text-zinc-400 hover:text-white transition-colors group"
-                  >
+                  <a href="https://glowapex.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-zinc-400 hover:text-white transition-colors group">
                     <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center flex-shrink-0 group-hover:border-white/[0.15] transition-colors">
                       <Globe className="w-4 h-4" />
                     </div>
@@ -180,10 +147,8 @@ function ContactBody() {
                 </div>
               </div>
 
-              {/* Divider */}
               <div className="border-t border-white/[0.06]" />
 
-              {/* Socials */}
               <div>
                 <p className="text-xs text-zinc-600 font-semibold tracking-widest uppercase mb-4">Follow Us</p>
                 <div className="flex items-center gap-3">
@@ -192,14 +157,7 @@ function ContactBody() {
                     { href: 'https://linkedin.com', icon: <LinkedInIcon />, label: 'LinkedIn' },
                     { href: 'https://youtube.com', icon: <YouTubeIcon />, label: 'YouTube' },
                   ].map(({ href, icon, label }) => (
-                    <a
-                      key={label}
-                      href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={label}
-                      className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/[0.04] border border-white/[0.08] text-zinc-500 hover:text-white hover:border-white/[0.2] transition-all"
-                    >
+                    <a key={label} href={href} target="_blank" rel="noopener noreferrer" aria-label={label} className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/[0.04] border border-white/[0.08] text-zinc-500 hover:text-white hover:border-white/[0.2] transition-all">
                       {icon}
                     </a>
                   ))}
@@ -208,7 +166,6 @@ function ContactBody() {
             </motion.div>
           </SectionReveal>
 
-          {/* Form */}
           <SectionReveal>
             <motion.div variants={fadeUp} className="glass rounded-2xl p-7 md:p-9">
               {submitState === 'success' ? (
@@ -224,10 +181,7 @@ function ContactBody() {
                     <h3 className="text-white font-bold text-xl mb-2">Message Sent!</h3>
                     <p className="text-zinc-500 text-sm">We'll get back to you within 24 hours.</p>
                   </div>
-                  <button
-                    onClick={() => setSubmitState('idle')}
-                    className="mt-2 text-sm text-emerald-400 hover:text-emerald-300 transition-colors"
-                  >
+                  <button onClick={() => setSubmitState('idle')} className="mt-2 text-sm text-emerald-400 hover:text-emerald-300 transition-colors">
                     Send another message
                   </button>
                 </motion.div>
@@ -245,52 +199,30 @@ function ContactBody() {
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs text-zinc-500 mb-2 font-medium">First Name *</label>
-                      <input
-                        {...register('firstName')}
-                        placeholder="John"
-                        className={`${inputBase} ${errors.firstName ? 'border-red-500/50' : ''}`}
-                      />
+                      <input {...register('firstName')} placeholder="John" className={`${inputBase} ${errors.firstName ? 'border-red-500/50' : ''}`} />
                       {errors.firstName && <p className="mt-1.5 text-xs text-red-400">{errors.firstName.message}</p>}
                     </div>
                     <div>
                       <label className="block text-xs text-zinc-500 mb-2 font-medium">Last Name *</label>
-                      <input
-                        {...register('lastName')}
-                        placeholder="Doe"
-                        className={`${inputBase} ${errors.lastName ? 'border-red-500/50' : ''}`}
-                      />
+                      <input {...register('lastName')} placeholder="Doe" className={`${inputBase} ${errors.lastName ? 'border-red-500/50' : ''}`} />
                       {errors.lastName && <p className="mt-1.5 text-xs text-red-400">{errors.lastName.message}</p>}
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-xs text-zinc-500 mb-2 font-medium">Email *</label>
-                    <input
-                      {...register('email')}
-                      type="email"
-                      placeholder="john@company.com"
-                      className={`${inputBase} ${errors.email ? 'border-red-500/50' : ''}`}
-                    />
+                    <input {...register('email')} type="email" placeholder="john@company.com" className={`${inputBase} ${errors.email ? 'border-red-500/50' : ''}`} />
                     {errors.email && <p className="mt-1.5 text-xs text-red-400">{errors.email.message}</p>}
                   </div>
 
                   <div>
                     <label className="block text-xs text-zinc-500 mb-2 font-medium">Company <span className="text-zinc-700">(optional)</span></label>
-                    <input
-                      {...register('company')}
-                      placeholder="Your company"
-                      className={inputBase}
-                    />
+                    <input {...register('company')} placeholder="Your company" className={inputBase} />
                   </div>
 
                   <div>
                     <label className="block text-xs text-zinc-500 mb-2 font-medium">Message *</label>
-                    <textarea
-                      {...register('message')}
-                      rows={5}
-                      placeholder="Tell us about your project or inquiry..."
-                      className={`${inputBase} resize-none ${errors.message ? 'border-red-500/50' : ''}`}
-                    />
+                    <textarea {...register('message')} rows={5} placeholder="Tell us about your project or inquiry..." className={`${inputBase} resize-none ${errors.message ? 'border-red-500/50' : ''}`} />
                     {errors.message && <p className="mt-1.5 text-xs text-red-400">{errors.message.message}</p>}
                   </div>
 
@@ -300,15 +232,9 @@ function ContactBody() {
                     className="w-full flex items-center justify-center gap-2.5 py-3.5 bg-emerald-500 hover:bg-emerald-400 disabled:bg-emerald-500/50 text-black font-semibold rounded-xl transition-all duration-200 hover:shadow-lg hover:shadow-emerald-500/20 disabled:cursor-not-allowed"
                   >
                     {submitState === 'loading' ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Sending…
-                      </>
+                      <><Loader2 className="w-4 h-4 animate-spin" />Sending…</>
                     ) : (
-                      <>
-                        Send Message
-                        <Send className="w-4 h-4" />
-                      </>
+                      <>Send Message<Send className="w-4 h-4" /></>
                     )}
                   </button>
                 </form>
@@ -326,7 +252,6 @@ export default function Contact() {
     <main>
       <ContactHero />
       <ContactBody />
-      {/* <ContactBottomCta /> */}
     </main>
   )
 }

@@ -26,127 +26,29 @@ function SectionReveal({ children, className = '' }: { children: React.ReactNode
   )
 }
 
-/* ─── SERVICE DATA ──────────────────────────────────────────────── */
 const ALL_SERVICES = [
-  {
-    icon: <Calendar className="w-5 h-5" />,
-    title: 'Special Events',
-    category: 'Engagement',
-    short: 'High-impact events that generate coverage and brand buzz.',
-    detail: 'From product launches and press conferences to sponsorships and experiential activations, we plan and execute events that put your brand in front of the right audiences. We handle venue coordination, media invitations, on-site logistics, and post-event coverage amplification.',
-  },
-  {
-    icon: <Newspaper className="w-5 h-5" />,
-    title: 'Media Relations',
-    category: 'Media',
-    short: 'Earned coverage in the outlets that matter.',
-    detail: 'Our media relations team maintains deep relationships with journalists, editors, and producers across print, digital, broadcast, and podcast channels. We craft compelling pitches, write press materials, and secure coverage that builds credibility you can\'t buy.',
-  },
-  {
-    icon: <AlertTriangle className="w-5 h-5" />,
-    title: 'Issue Management',
-    category: 'Reputation',
-    short: 'Protect your reputation when it matters most.',
-    detail: 'When a crisis hits, speed and precision are everything. We provide 24/7 monitoring, rapid response planning, spokesperson preparation, and media management to minimize damage and restore stakeholder confidence quickly.',
-  },
-  {
-    icon: <Users className="w-5 h-5" />,
-    title: 'Community Relations',
-    category: 'Engagement',
-    short: 'Building trust where your brand operates.',
-    detail: 'We develop and execute community engagement programs that strengthen relationships with local audiences, advocacy groups, and key stakeholders. From grassroots campaigns to CSR initiatives, we help your brand become a valued community partner.',
-  },
-  {
-    icon: <Layers className="w-5 h-5" />,
-    title: 'Brand Strategy Development',
-    category: 'Strategy',
-    short: 'A coherent identity that resonates and converts.',
-    detail: 'We work with you to define your brand\'s purpose, voice, visual identity guidelines, and narrative pillars. Every touchpoint — from press releases to social bios — flows from a single strategic foundation that makes your brand unmistakable.',
-  },
-  {
-    icon: <FileText className="w-5 h-5" />,
-    title: 'Marketing Plan Development',
-    category: 'Strategy',
-    short: 'A full-funnel roadmap built for your goals.',
-    detail: 'We build integrated marketing plans that connect PR, content, paid, and organic channels into a single cohesive strategy. Each plan includes channel mix, timelines, KPIs, and budget allocation — ready to execute from day one.',
-  },
-  {
-    icon: <Search className="w-5 h-5" />,
-    title: 'Market Research',
-    category: 'Intelligence',
-    short: 'Data-backed insights to guide every decision.',
-    detail: 'We design and execute primary and secondary research to map audience behavior, identify emerging trends, and validate messaging before you commit budget. Our reports translate raw data into clear strategic recommendations.',
-  },
-  {
-    icon: <BarChart3 className="w-5 h-5" />,
-    title: 'Competitive Analysis',
-    category: 'Intelligence',
-    short: 'Deep intelligence on your market rivals.',
-    detail: 'We conduct thorough competitive audits — analyzing messaging, positioning, media presence, and audience sentiment of your key competitors. The result is a clear picture of whitespace opportunities and strategic advantages your brand can own.',
-  },
-  {
-    icon: <Share2 className="w-5 h-5" />,
-    title: 'Social Media',
-    category: 'Digital',
-    short: 'Consistent presence that builds community and credibility.',
-    detail: 'We manage content calendars, creative production, community engagement, and paid amplification across all major platforms. Our social strategies are rooted in brand voice and backed by analytics to drive meaningful, measurable growth.',
-  },
-  {
-    icon: <Lightbulb className="w-5 h-5" />,
-    title: 'Thought Leadership',
-    category: 'Executive',
-    short: 'Position your executives as the voices worth following.',
-    detail: 'We identify speaking opportunities, ghostwrite op-eds, place bylined articles, and prepare executives for high-profile media appearances. Thought leadership programs build long-term authority that no ad spend can replicate.',
-  },
-  {
-    icon: <TrendingUp className="w-5 h-5" />,
-    title: 'Digital PR & SEO',
-    category: 'Digital',
-    short: 'Online visibility that compounds over time.',
-    detail: 'We merge traditional PR with search strategy — earning high-authority backlinks, optimizing press for discovery, and building a digital footprint that drives organic traffic alongside earned media coverage.',
-  },
-  {
-    icon: <Mic className="w-5 h-5" />,
-    title: 'Influencer Relations',
-    category: 'Media',
-    short: 'Authentic voices amplifying your message.',
-    detail: 'We identify, vet, and manage relationships with creators and influencers whose audiences align with yours. From campaign briefs to content approvals and performance reporting, we run end-to-end influencer programs that feel genuine and deliver results.',
-  },
-  {
-    icon: <Globe className="w-5 h-5" />,
-    title: 'Government & Public Affairs',
-    category: 'Strategy',
-    short: 'Navigate policy and shape public perception.',
-    detail: 'We help organizations engage effectively with government stakeholders, regulatory bodies, and the public on policy-sensitive issues. Our public affairs team bridges the gap between your business objectives and the political landscape.',
-  },
-  {
-    icon: <MessageSquare className="w-5 h-5" />,
-    title: 'Internal Communications',
-    category: 'Executive',
-    short: 'Align your team around one clear narrative.',
-    detail: 'Change management, leadership announcements, culture campaigns — we craft internal communication strategies that keep employees informed, engaged, and aligned with your brand direction during every stage of growth.',
-  },
-  {
-    icon: <PieChart className="w-5 h-5" />,
-    title: 'Investor Relations',
-    category: 'Executive',
-    short: 'Build confidence with the stakeholders who fund your vision.',
-    detail: 'We craft investor narratives, prepare earnings communications, manage analyst relationships, and develop materials that present your story compellingly to the financial community — whether you\'re raising a round or preparing for a public offering.',
-  },
-  {
-    icon: <Video className="w-5 h-5" />,
-    title: 'Content Creation',
-    category: 'Digital',
-    short: 'Compelling content built for your brand voice.',
-    detail: 'Press releases, blog posts, whitepapers, video scripts, social copy, and executive messaging — our content team produces everything you need to maintain a consistent, authoritative presence across every channel your audience uses.',
-  },
+  { icon: <Calendar className="w-5 h-5" />, title: 'Special Events', category: 'Engagement', short: 'High-impact events that generate coverage and brand buzz.', detail: 'From product launches and press conferences to sponsorships and experiential activations, we plan and execute events that put your brand in front of the right audiences. We handle venue coordination, media invitations, on-site logistics, and post-event coverage amplification.' },
+  { icon: <Newspaper className="w-5 h-5" />, title: 'Media Relations', category: 'Media', short: 'Earned coverage in the outlets that matter.', detail: "Our media relations team maintains deep relationships with journalists, editors, and producers across print, digital, broadcast, and podcast channels. We craft compelling pitches, write press materials, and secure coverage that builds credibility you can't buy." },
+  { icon: <AlertTriangle className="w-5 h-5" />, title: 'Issue Management', category: 'Reputation', short: 'Protect your reputation when it matters most.', detail: 'When a crisis hits, speed and precision are everything. We provide 24/7 monitoring, rapid response planning, spokesperson preparation, and media management to minimize damage and restore stakeholder confidence quickly.' },
+  { icon: <Users className="w-5 h-5" />, title: 'Community Relations', category: 'Engagement', short: 'Building trust where your brand operates.', detail: 'We develop and execute community engagement programs that strengthen relationships with local audiences, advocacy groups, and key stakeholders. From grassroots campaigns to CSR initiatives, we help your brand become a valued community partner.' },
+  { icon: <Layers className="w-5 h-5" />, title: 'Brand Strategy Development', category: 'Strategy', short: 'A coherent identity that resonates and converts.', detail: "We work with you to define your brand's purpose, voice, visual identity guidelines, and narrative pillars. Every touchpoint — from press releases to social bios — flows from a single strategic foundation that makes your brand unmistakable." },
+  { icon: <FileText className="w-5 h-5" />, title: 'Marketing Plan Development', category: 'Strategy', short: 'A full-funnel roadmap built for your goals.', detail: 'We build integrated marketing plans that connect PR, content, paid, and organic channels into a single cohesive strategy. Each plan includes channel mix, timelines, KPIs, and budget allocation — ready to execute from day one.' },
+  { icon: <Search className="w-5 h-5" />, title: 'Market Research', category: 'Intelligence', short: 'Data-backed insights to guide every decision.', detail: 'We design and execute primary and secondary research to map audience behavior, identify emerging trends, and validate messaging before you commit budget. Our reports translate raw data into clear strategic recommendations.' },
+  { icon: <BarChart3 className="w-5 h-5" />, title: 'Competitive Analysis', category: 'Intelligence', short: 'Deep intelligence on your market rivals.', detail: 'We conduct thorough competitive audits — analyzing messaging, positioning, media presence, and audience sentiment of your key competitors. The result is a clear picture of whitespace opportunities and strategic advantages your brand can own.' },
+  { icon: <Share2 className="w-5 h-5" />, title: 'Social Media', category: 'Digital', short: 'Consistent presence that builds community and credibility.', detail: 'We manage content calendars, creative production, community engagement, and paid amplification across all major platforms. Our social strategies are rooted in brand voice and backed by analytics to drive meaningful, measurable growth.' },
+  { icon: <Lightbulb className="w-5 h-5" />, title: 'Thought Leadership', category: 'Executive', short: 'Position your executives as the voices worth following.', detail: 'We identify speaking opportunities, ghostwrite op-eds, place bylined articles, and prepare executives for high-profile media appearances. Thought leadership programs build long-term authority that no ad spend can replicate.' },
+  { icon: <TrendingUp className="w-5 h-5" />, title: 'Digital PR & SEO', category: 'Digital', short: 'Online visibility that compounds over time.', detail: 'We merge traditional PR with search strategy — earning high-authority backlinks, optimizing press for discovery, and building a digital footprint that drives organic traffic alongside earned media coverage.' },
+  { icon: <Mic className="w-5 h-5" />, title: 'Influencer Relations', category: 'Media', short: 'Authentic voices amplifying your message.', detail: 'We identify, vet, and manage relationships with creators and influencers whose audiences align with yours. From campaign briefs to content approvals and performance reporting, we run end-to-end influencer programs that feel genuine and deliver results.' },
+  { icon: <Globe className="w-5 h-5" />, title: 'Government & Public Affairs', category: 'Strategy', short: 'Navigate policy and shape public perception.', detail: 'We help organizations engage effectively with government stakeholders, regulatory bodies, and the public on policy-sensitive issues. Our public affairs team bridges the gap between your business objectives and the political landscape.' },
+  { icon: <MessageSquare className="w-5 h-5" />, title: 'Internal Communications', category: 'Executive', short: 'Align your team around one clear narrative.', detail: 'Change management, leadership announcements, culture campaigns — we craft internal communication strategies that keep employees informed, engaged, and aligned with your brand direction during every stage of growth.' },
+  { icon: <PieChart className="w-5 h-5" />, title: 'Investor Relations', category: 'Executive', short: 'Build confidence with the stakeholders who fund your vision.', detail: "We craft investor narratives, prepare earnings communications, manage analyst relationships, and develop materials that present your story compellingly to the financial community — whether you're raising a round or preparing for a public offering." },
+  { icon: <Video className="w-5 h-5" />, title: 'Content Creation', category: 'Digital', short: 'Compelling content built for your brand voice.', detail: 'Press releases, blog posts, whitepapers, video scripts, social copy, and executive messaging — our content team produces everything you need to maintain a consistent, authoritative presence across every channel your audience uses.' },
 ]
 
 type Service = (typeof ALL_SERVICES)[number]
 
 const CATEGORIES = ['All', ...Array.from(new Set(ALL_SERVICES.map((s) => s.category)))]
 
-/* ─── MODAL ─────────────────────────────────────────────────────── */
 function ServiceModal({ service, onClose }: { service: Service; onClose: () => void }) {
   return (
     <motion.div
@@ -190,10 +92,7 @@ function ServiceModal({ service, onClose }: { service: Service; onClose: () => v
             Get in Touch
             <ArrowRight className="w-4 h-4" />
           </Link>
-          <button
-            onClick={onClose}
-            className="px-5 py-2.5 text-sm text-zinc-400 hover:text-white transition-colors"
-          >
+          <button onClick={onClose} className="px-5 py-2.5 text-sm text-zinc-400 hover:text-white transition-colors">
             Close
           </button>
         </div>
@@ -202,7 +101,6 @@ function ServiceModal({ service, onClose }: { service: Service; onClose: () => v
   )
 }
 
-/* ─── HERO ──────────────────────────────────────────────────────── */
 function ServicesHero() {
   return (
     <section className="relative min-h-[55vh] flex items-end pb-20 pt-36 overflow-hidden">
@@ -218,29 +116,14 @@ function ServicesHero() {
       </div>
 
       <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
-        <motion.p
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.5 }}
-          className="text-emerald-400 text-sm font-semibold tracking-widest uppercase mb-5"
-        >
+        <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.5 }} className="text-emerald-400 text-sm font-semibold tracking-widest uppercase mb-5">
           What We Offer
         </motion.p>
-        <motion.h1
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.7, ease: 'easeOut' }}
-          className="text-5xl sm:text-6xl md:text-7xl font-extrabold text-white tracking-tight leading-none mb-6"
-        >
+        <motion.h1 initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.7, ease: 'easeOut' }} className="text-5xl sm:text-6xl md:text-7xl font-extrabold text-white tracking-tight leading-none mb-6">
           PR Services<br />
           <span className="gradient-text">Built to Perform.</span>
         </motion.h1>
-        <motion.p
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35, duration: 0.6 }}
-          className="max-w-2xl text-lg md:text-xl text-zinc-400 leading-relaxed"
-        >
+        <motion.p initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, duration: 0.6 }} className="max-w-2xl text-lg md:text-xl text-zinc-400 leading-relaxed">
           Full-spectrum public relations and communications services designed to build credibility, protect reputation, and amplify your brand at every stage.
         </motion.p>
       </div>
@@ -248,7 +131,6 @@ function ServicesHero() {
   )
 }
 
-/* ─── SERVICES GRID ─────────────────────────────────────────────── */
 function ServicesGrid() {
   const [active, setActive] = useState<Service | null>(null)
   const [filter, setFilter] = useState('All')
@@ -258,8 +140,6 @@ function ServicesGrid() {
   return (
     <section className="py-16 md:py-24">
       <div className="max-w-7xl mx-auto px-6 lg:px-8">
-
-        {/* Category filter */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -281,7 +161,6 @@ function ServicesGrid() {
           ))}
         </motion.div>
 
-        {/* Grid */}
         <SectionReveal className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           <AnimatePresence mode="popLayout">
             {filtered.map((service) => (
@@ -320,7 +199,6 @@ function ServicesGrid() {
   )
 }
 
-/* ─── CTA ───────────────────────────────────────────────────────── */
 function ServicesCta() {
   return (
     <section className="py-24 md:py-32">
@@ -355,7 +233,6 @@ function ServicesCta() {
   )
 }
 
-/* ─── PAGE EXPORT ───────────────────────────────────────────────── */
 export default function Services() {
   return (
     <main>

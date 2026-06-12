@@ -427,12 +427,7 @@ const OrderPage = () => {
                   <tr>
                     <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-400">
                       {orders.length === 0 ? (
-                        <span>
-                          No orders yet.{" "}
-                          <Link to="/services" className="text-teal-500 hover:underline">
-                            Place your first order
-                          </Link>
-                        </span>
+                        <span>No orders yet.</span>
                       ) : (
                         "No orders match your search."
                       )}

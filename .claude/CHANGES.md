@@ -593,3 +593,88 @@
 [2026-06-11 00:00] | add | frontend/.env.production.example | Production frontend env template: VITE_API_BASE_URL, VITE_STRIPE_PUBLISHABLE_KEY, VITE_GOOGLE_CLIENT_ID. Includes commented Cloudflare domain variant.
 
 [2026-06-11 00:00] | add | DEPLOYMENT.md | Complete deployment guide: Docker install, env file setup, build commands, health verification, webhook URLs for all 5 gateways, Cloudflare migration steps (3 var changes + 1 rebuild command), rollback procedure, common issues.
+
+[2026-06-12 00:00] | add | backend/app/checkout/schemas.py, backend/app/checkout/router.py | New checkout portal module: POST /checkout/init (JWT-required) creates a pending order + payment session and returns a 15-min signed token; GET /checkout/session/{token} returns session data to D2 without JWT; POST /checkout/verify/razorpay processes Razorpay payment via token instead of JWT and places the SMM order. Token stored in Redis under checkout:portal:{token}.
+
+[2026-06-12 00:00] | modify | backend/app/common/config.py | Added GLOWAPEX_ORIGIN setting (default http://localhost:3001) for cross-domain CORS and Stripe/Razorpay return URL construction.
+
+[2026-06-12 00:00] | modify | backend/app/app_components.py, backend/app/main.py | Registered checkout router at /checkout prefix; added GLOWAPEX_ORIGIN to CORS allow_origins list.
+
+[2026-06-12 00:00] | modify | backend/.env.example | Added GLOWAPEX_ORIGIN placeholder with IP-based and Cloudflare variants.
+
+[2026-06-12 00:00] | modify | frontend/src/config.ts | Added CHECKOUT_INIT constant (POST /checkout/init) and exported GLOWAPEX_CHECKOUT_URL derived from VITE_GLOWAPEX_URL env var.
+
+[2026-06-12 00:00] | modify | frontend/src/pages/checkout/CheckoutPage.tsx | Replaced handleStripe/handleRazorpay direct payment calls with redirectToGlowApex() which calls POST /checkout/init, then redirects to D2/checkout?token=xxx. Removed Razorpay modal from D1 — payment is now handled entirely on D2.
+
+[2026-06-12 00:00] | modify | frontend/.env.production.example | Added VITE_GLOWAPEX_URL placeholder.
+
+[2026-06-12 00:00] | add | glowapex/src/lib/api.ts | Axios instance pointing at VITE_API_BASE_URL (D1 backend).
+
+[2026-06-12 00:00] | add | glowapex/src/pages/Checkout/index.tsx | Payment portal page: reads token from URL, fetches session from D1, shows order summary, handles Stripe redirect and Razorpay modal, calls POST /checkout/verify/razorpay on success.
+
+[2026-06-12 00:00] | add | glowapex/src/pages/CheckoutSuccess.tsx | Post-Stripe payment confirmation page: verifies via GET /payments/stripe/verify, shows success/failure state, redirects to D1 dashboard.
+
+[2026-06-12 00:00] | add | glowapex/src/pages/CheckoutCancel.tsx | Cancelled payment page with link back to D1 store.
+
+[2026-06-12 00:00] | modify | glowapex/src/App.tsx | Restructured into MainLayout (Navbar+Footer) and standalone checkout routes. /checkout, /checkout/success, /checkout/cancel render without Navbar/Footer.
+
+[2026-06-12 00:00] | add | glowapex/.env.production.example | VITE_API_BASE_URL (D1 backend) and VITE_D1_URL (D1 frontend for redirect) with Cloudflare variants.
+
+[2026-06-12 00:00] | add | glowapex/Dockerfile | Multi-stage build (dev/build/prod) identical to frontend/Dockerfile.
+
+[2026-06-12 00:00] | add | glowapex/nginx.conf | SPA nginx config identical to frontend/nginx.conf.
+
+[2026-06-12 00:00] | modify | docker-compose.prod.yml | Added glowapex service on port 3001:80 with healthcheck.
+
+[2026-06-12 00:00] | discovery | backend/app/payments/stripe/router.py, backend/app/payments/razorpay/router.py, backend/app/checkout/router.py | SMM order placement logic (iterate candidates, call_provider, fallback, create failed_order task) is duplicated across 3 files. Should be extracted to a shared utility in a future refactor.
+
+[2026-06-12 01:00] | add | frontend/src/glowapex/ | Merged Glow Apex frontend into frontend/ codebase. Created frontend/src/glowapex/{App.tsx,lib/api.ts,components/{AnimatedCounter,Navbar,Footer}.tsx,pages/{Home/index,About,Services,Contact,Checkout/index,CheckoutSuccess,CheckoutCancel}.tsx}. Hostname detection in main.tsx renders GlowApexApp when port===3001 or hostname===glowapex.com; otherwise renders BuyRealViewsApp. Both brands share one build and one Docker container.
+
+[2026-06-12 01:00] | modify | frontend/src/main.tsx | Added isGlowApex hostname/port detection. BrowserRouter moved to main.tsx so both apps share it. GlowApexApp renders standalone (no GoogleOAuthProvider/PricingProvider); BuyRealViewsApp keeps existing providers.
+
+[2026-06-12 01:00] | modify | frontend/src/index.css | Added Glow Apex shared utilities: .gradient-text, .glass, .glass-hover, .emerald-glow under @layer utilities.
+
+[2026-06-12 01:00] | modify | frontend/package.json | Added @hookform/resolvers, react-hook-form, zod (needed by Glow Apex Contact page). Added dev:glowapex script (vite --port 3001) for local Glow Apex dev.
+
+[2026-06-12 01:00] | modify | docker-compose.prod.yml | Removed separate glowapex service. Added port 3001:3001 to nginx service — nginx now serves Glow Apex on 3001 from the same frontend container.
+
+[2026-06-12 01:00] | modify | nginx/nginx.conf | Added second server block on port 3001 — identical proxy config to port 80, pointing to same frontend:80 container. Browser window.location.port===3001 triggers GlowApexApp in React.
+
+[2026-06-12 01:00] | modify | frontend/.env.production | Added VITE_D1_URL=http://100.69.104.64 — used by Glow Apex checkout pages to link back to BuyRealViews after payment.
+
+[2026-06-12 01:05] | delete | glowapex/ | Removed entire glowapex/ project folder. All source merged into frontend/src/glowapex/. Dockerfile, nginx.conf, package.json, and all source files are no longer needed.
+
+[2026-06-12 02:00] | add | backend/app/checkout/schemas.py | Added PreAuthRequest, PreAuthResponse, PreAuthInfo, InitWithPreAuthRequest schemas to support the cross-domain pre-auth checkout flow.
+
+[2026-06-12 02:00] | refactor | backend/app/checkout/router.py | Extracted _create_checkout_session() helper so /init and /init-with-pre-auth share one implementation. Added POST /checkout/pre-auth (JWT required — creates short-lived Redis token with user+service context), GET /checkout/pre-auth/{token} (no auth — returns service info for GA form), POST /checkout/init-with-pre-auth (no JWT — validates pre-auth token and creates payment session). Pre-auth token is single-use and deleted after session creation.
+
+[2026-06-12 02:00] | modify | frontend/src/config.ts | Added CHECKOUT_PRE_AUTH and CHECKOUT_INIT_WITH_PRE_AUTH endpoint constants.
+
+[2026-06-12 02:00] | modify | frontend/src/pages/services/ServicesListPage.tsx | handleOrderNow now calls POST /checkout/pre-auth (JWT, via BRV api instance) and redirects window.location.href to GLOWAPEX_CHECKOUT_URL?pre_auth=xxx. Removed useOrderStore dependency. Button shows spinner while redirecting.
+
+[2026-06-12 02:00] | modify | frontend/src/pages/services/ServiceDetail.tsx | handleSubmit now calls POST /checkout/pre-auth and redirects to GA checkout with ?pre_auth=xxx&link=url&qty=N URL params so GA can pre-fill the form. Removed setOrderData usage; kept storeSelectedPackage/clearSelectedPackage for pre-selection logic. Removed unused OrderDataItem interface.
+
+[2026-06-12 02:00] | modify | frontend/src/glowapex/pages/Checkout/index.tsx | Replaced minimal payment-card portal with a two-mode checkout: (1) FormMode — reads ?pre_auth=xxx, fetches service info from GET /checkout/pre-auth/{token}, shows quantity input, YouTube link, payment method cards; on submit calls POST /checkout/init-with-pre-auth and transitions to SessionMode. (2) SessionMode (backward compat) — reads ?token=xxx, fetches session data, shows pay button with Stripe redirect or Razorpay modal. Existing verify/razorpay flow unchanged.
+
+[2026-06-12 02:10] | modify | frontend/src/App.tsx | Removed /checkout route and CheckoutPage import. BRV no longer serves the checkout form — all checkout now happens on Glow Apex (port 3001).
+
+[2026-06-12 03:00] | modify | frontend/src/App.tsx | Reverted: restored CheckoutPage import and /checkout route. Architecture returned to: BRV hosts the full checkout form, GA only handles the payment step (?token= portal). Removed CheckoutRedirect component.
+
+[2026-06-12 03:00] | modify | frontend/src/pages/services/ServicesListPage.tsx | Reverted: handleOrderNow uses setServiceOrder + navigate('/checkout') again. Pre-auth API call removed.
+
+[2026-06-12 03:00] | modify | frontend/src/pages/services/ServiceDetail.tsx | Reverted: handleSubmit uses setOrderData + navigate('/checkout') again. OrderDataItem interface restored. Pre-auth API call removed.
+
+[2026-06-12 03:00] | modify | frontend/src/glowapex/pages/Checkout/index.tsx | Reverted: removed FormMode and GuestMode. GA checkout is now the simple token-only payment portal (?token=xxx → fetch session → pay button).
+
+[2026-06-12 04:00] | modify | frontend/src/glowapex/App.tsx | Moved /checkout, /checkout/success, /checkout/cancel routes inside AnimatedRoutes so they render within MainLayout (Navbar + Footer + dotted background). Removed standalone route block.
+
+[2026-06-12 04:00] | modify | frontend/src/glowapex/pages/Checkout/index.tsx | Redesigned as a full page (no standalone full-screen wrapper). Now has a hero section (pt-36), page heading matching Contact/About style, and payment card using the glass class. Removed GlowApexLogo and fixed inset glow overlay (MainLayout owns those). ErrorPage and SessionPage renamed from ErrorScreen/SessionMode to reflect page-level components.
+
+[2026-06-12 04:00] | modify | frontend/src/glowapex/pages/CheckoutSuccess.tsx | Same redesign: removed standalone full-screen wrapper and GA logo. Now a proper page with hero heading and a glass card status display.
+
+[2026-06-12 04:00] | modify | frontend/src/glowapex/pages/CheckoutCancel.tsx | Same redesign: removed standalone full-screen wrapper and GA logo. Now a proper page with hero heading and glass card.
+
+[2026-06-12 00:00] | delete | frontend/src/pages/services/ServicesListPage.tsx | Removed ServicesListPage from BRV site. File deleted.
+[2026-06-12 00:00] | modify | frontend/src/App.tsx | Removed commented-out ServicesListPage import and /services route.
+[2026-06-12 00:00] | modify | frontend/src/pages/checkout/CheckoutPage.tsx | Removed redirect guard useEffect that navigated to /services when no order data; simplified back button to always navigate(-1) instead of falling back to /services.
+[2026-06-12 00:00] | modify | frontend/src/pages/dashboard/orders/OrderPage.tsx | Removed Link to /services in the empty-orders state; replaced with plain "No orders yet." text.

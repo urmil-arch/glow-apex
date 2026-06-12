@@ -1,8 +1,8 @@
-# Deployment Guide — BuyRealViews
+# Deployment Guide
 
-This guide deploys the app to an Ubuntu server using Docker and Nginx.
-The site runs over HTTP on your server IP. When you configure Cloudflare later,
-SSL is handled by Cloudflare — no changes needed on the server.
+This guide deploys the project to a remote Ubuntu server using Docker.
+Both sites run over HTTP on the server IP. When you point a domain via Cloudflare,
+SSL is handled at Cloudflare's edge — no changes needed on the server itself.
 
 ---
 
@@ -11,29 +11,31 @@ SSL is handled by Cloudflare — no changes needed on the server.
 ```
 Browser
   │
-  ▼
-Nginx  :80  (reverse proxy)
-  ├── /api/*  →  backend:8000  (FastAPI)
-  └── /*      →  frontend:80   (React SPA / nginx)
+  ├── :80   → Nginx → BRV frontend (React SPA)
+  │              └── /api/* → backend:8000 (FastAPI)
+  │
+  └── :3001 → Nginx → GA  frontend (same React build, different app)
+                 └── /api/* → backend:8000 (FastAPI)
 
 backend ──► mongo:27017
         ──► redis:6379
 ```
 
+| Site | Dev | Production |
+|---|---|---|
+| BRV (BuyRealViews) | `http://localhost:5173` | `http://SERVER_IP` |
+| GA (Glow Apex) | `http://localhost:3001` | `http://SERVER_IP:3001` |
+| Backend API | `http://localhost:8000` | `http://SERVER_IP/api/` |
+
 ---
 
-## 1. Prerequisites
-
-On your Ubuntu server:
+## 1. Prerequisites — on the server
 
 ```bash
 # Install Docker
 curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker $USER
 newgrp docker
-
-# Install Docker Compose plugin
-sudo apt-get install -y docker-compose-plugin
 
 # Verify
 docker --version
@@ -42,207 +44,266 @@ docker compose version
 
 ---
 
-## 2. Transfer the Repository
+## 2. Open Firewall Ports — on the server
 
 ```bash
-# Option A — clone from git
-git clone <your-repo-url> /opt/buyrealviews
-cd /opt/buyrealviews
-
-# Option B — rsync from your machine
-rsync -avz --exclude='node_modules' --exclude='.git' \
-  /local/path/glow-apex-web-development/ user@SERVER_IP:/opt/buyrealviews/
+sudo ufw allow 22/tcp    # SSH — keep this open
+sudo ufw allow 80/tcp    # BRV site
+sudo ufw allow 3001/tcp  # GA site
+sudo ufw enable
 ```
 
 ---
 
-## 3. Create Environment Files
+## 3. Transfer the Project — from your local machine
 
-### Backend
+The `.env` files are gitignored and contain secrets, so **rsync** is the only correct
+transfer method — it copies the full working tree including env files.
 
 ```bash
-cd /opt/buyrealviews
+rsync -avz --progress \
+  --exclude='node_modules' \
+  --exclude='dist' \
+  --exclude='.git' \
+  --exclude='__pycache__' \
+  --exclude='*.pyc' \
+  --exclude='.venv' \
+  /home/urmil/glow-apex-web-development/ \
+  user@SERVER_IP:/opt/glow-apex/
+```
+
+Replace `user` with your server login (e.g. `root` or `ubuntu`) and `SERVER_IP` with your IP.
+
+This copies:
+- All source code
+- `backend/.env` (secrets included — never commit this)
+- `frontend/.env.production` (baked into the JS bundle at build time)
+
+---
+
+## 4. Environment Files
+
+Both env files already exist locally and are transferred by rsync above.
+If you need to create them from scratch on the server:
+
+### Backend (`backend/.env`)
+
+```bash
 cp backend/.env.example backend/.env
 nano backend/.env
 ```
 
-**Required changes:**
-
 | Variable | Value |
 |---|---|
-| `BACKEND_BASE_URL` | `http://YOUR_SERVER_IP/api` |
-| `FRONTEND_ORIGIN` | `http://YOUR_SERVER_IP` |
-| `JWT_SECRET_KEY` | Run: `python3 -c "import secrets; print(secrets.token_hex(32))"` |
-| `API_KEY_ENCRYPTION_SECRET` | Run: `python3 -c "import secrets; print(secrets.token_hex(32))"` |
+| `BACKEND_BASE_URL` | `http://SERVER_IP/api` |
+| `FRONTEND_ORIGIN` | `http://SERVER_IP` |
+| `GLOWAPEX_ORIGIN` | `http://SERVER_IP:3001` |
+| `JWT_SECRET_KEY` | `python3 -c "import secrets; print(secrets.token_hex(32))"` |
+| `API_KEY_ENCRYPTION_SECRET` | `python3 -c "import secrets; print(secrets.token_hex(32))"` |
 | `SMTP_USER` | Your Gmail address |
-| `SMTP_PASSWORD` | Gmail App Password (not your login password) |
+| `SMTP_PASSWORD` | Gmail App Password (16-char, not your login password) |
 | `SMTP_FROM` | Same Gmail address |
 | `CONTACT_OWNER_EMAIL` | Email to receive contact form submissions |
 | `POSTLIKES_API_KEY` | From your Postlikes.com account |
 | Payment keys | From each gateway's dashboard |
 
-Leave `MONGODB_URI` and `REDIS_URL` unchanged — docker-compose overrides them automatically.
+Leave `MONGODB_URI` and `REDIS_URL` as-is — docker-compose overrides them automatically.
 
-### Frontend
+### Frontend (`frontend/.env.production`)
 
 ```bash
 cp frontend/.env.production.example frontend/.env.production
 nano frontend/.env.production
 ```
 
-Set `VITE_API_BASE_URL=http://YOUR_SERVER_IP/api` and fill in `VITE_STRIPE_PUBLISHABLE_KEY`.
+```env
+VITE_API_BASE_URL=http://SERVER_IP/api
+VITE_GLOWAPEX_URL=http://SERVER_IP:3001
+VITE_D1_URL=http://SERVER_IP
+VITE_STRIPE_PUBLISHABLE_KEY=pk_live_...
+VITE_GOOGLE_CLIENT_ID=your-google-client-id
+```
 
-> **Note:** These values are baked into the JavaScript bundle at build time.
-> If you change them later you must rebuild the frontend image.
+> These values are baked into the JS bundle at build time. Any change requires a frontend rebuild.
 
 ---
 
-## 4. Build and Start
+## 5. Build and Start — on the server
 
 ```bash
-cd ~/buyrealviews
+cd /opt/glow-apex
+docker compose -f docker-compose.prod.yml up --build -d
+```
 
-# Build all images (takes 3–5 minutes on first run)
-docker compose -f docker-compose.prod.yml build
+First run takes 3–5 minutes (pulls base images and builds frontend + backend).
+Watch progress:
 
-# Start everything
-docker compose -f docker-compose.prod.yml up -d
-
-# Watch logs during startup
+```bash
 docker compose -f docker-compose.prod.yml logs -f
 ```
 
 ---
 
-## 5. Verify the Deployment
+## 6. Verify the Deployment
 
 ```bash
-# Check all containers are healthy
 docker compose -f docker-compose.prod.yml ps
-
-# All services should show "healthy" or "running"
 ```
 
-Open a browser: `http://YOUR_SERVER_IP`
+All 5 containers should show **Up (healthy)**:
 
-Test the API: `http://YOUR_SERVER_IP/api/openapi.json` — should return JSON.
+| Container | Role |
+|---|---|
+| `mongo` | Database |
+| `redis` | Cache / rate limiting |
+| `backend` | FastAPI |
+| `frontend` | React SPA (nginx) |
+| `nginx` | Reverse proxy |
+
+Open in browser:
+- BRV site → `http://SERVER_IP`
+- GA site → `http://SERVER_IP:3001`
+- API health → `http://SERVER_IP/api/openapi.json` (should return JSON)
 
 ---
 
-## 6. Payment Gateway Webhook URLs
+## 7. Payment Gateway Webhook URLs
 
-Register these URLs in each payment gateway dashboard:
+Register these in each gateway's dashboard:
 
 | Gateway | Webhook URL |
 |---|---|
-| Stripe | `http://YOUR_SERVER_IP/api/payments/stripe/webhook` |
-| Razorpay | `http://YOUR_SERVER_IP/api/payments/razorpay/webhook` |
-| Cashfree | `http://YOUR_SERVER_IP/api/payments/cashfree/webhook` |
-| Cryptomus | `http://YOUR_SERVER_IP/api/payments/cryptomus/webhook` |
-| Payeer | `http://YOUR_SERVER_IP/api/payments/payeer/webhook` |
-
-> After switching to Cloudflare, replace `http://YOUR_SERVER_IP` with `https://buyrealviews.com`.
+| Stripe | `http://SERVER_IP/api/payments/stripe/webhook` |
+| Razorpay | `http://SERVER_IP/api/payments/razorpay/webhook` |
+| Cashfree | `http://SERVER_IP/api/payments/cashfree/webhook` |
+| Cryptomus | `http://SERVER_IP/api/payments/cryptomus/webhook` |
+| Payeer | `http://SERVER_IP/api/payments/payeer/webhook` |
 
 ---
 
-## 7. Switching to Cloudflare + Custom Domain
+## 8. Future Deploys (after code changes)
 
-When your domain is pointed at this server via Cloudflare:
-
-### Step 1 — Update backend env
+Run from your local machine:
 
 ```bash
-nano backend/.env
+# 1. Push updated code + env files to the server
+rsync -avz --progress \
+  --exclude='node_modules' --exclude='dist' --exclude='.git' \
+  --exclude='__pycache__' --exclude='*.pyc' --exclude='.venv' \
+  /home/urmil/glow-apex-web-development/ \
+  user@SERVER_IP:/opt/glow-apex/
+
+# 2. Rebuild and restart on the server
+ssh user@SERVER_IP "cd /opt/glow-apex && docker compose -f docker-compose.prod.yml up --build -d"
 ```
 
-Change two lines:
+To rebuild only one service (faster when only the backend changed):
+
+```bash
+ssh user@SERVER_IP "cd /opt/glow-apex && docker compose -f docker-compose.prod.yml up --build -d backend"
 ```
+
+---
+
+## 9. Switching to Cloudflare + Custom Domains
+
+When DNS is pointed at this server via Cloudflare:
+
+**Backend** (`backend/.env`):
+
+```env
 BACKEND_BASE_URL=https://buyrealviews.com/api
 FRONTEND_ORIGIN=https://buyrealviews.com
+GLOWAPEX_ORIGIN=https://glowapex.com
 ```
 
-### Step 2 — Update frontend env
+**Frontend** (`frontend/.env.production`):
 
-```bash
-nano frontend/.env.production
-```
-
-Change one line:
-```
+```env
 VITE_API_BASE_URL=https://buyrealviews.com/api
+VITE_GLOWAPEX_URL=https://glowapex.com
+VITE_D1_URL=https://buyrealviews.com
+VITE_STRIPE_PUBLISHABLE_KEY=pk_live_...
 ```
 
-### Step 3 — Rebuild and restart
+Rebuild after changing env files:
 
 ```bash
-docker compose -f docker-compose.prod.yml build frontend
-docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml up --build -d
 ```
 
-Nginx config does **not** need to change — Cloudflare handles SSL at their edge;
-your server continues to receive plain HTTP on port 80.
+Nginx config does **not** need to change — Cloudflare terminates SSL at their edge,
+your server continues to receive plain HTTP on ports 80 and 3001.
 
-> In Cloudflare dashboard: set SSL/TLS mode to **Flexible** (origin is HTTP only).
+> Cloudflare dashboard: set SSL/TLS mode to **Flexible** (origin is HTTP only).
+
+**Webhook URLs** after Cloudflare:
+Replace `http://SERVER_IP` with `https://buyrealviews.com` in all gateway dashboards.
 
 ---
 
-## 8. Useful Commands
+## 10. Useful Commands
 
 ```bash
-# View running containers
+# View all container statuses
 docker compose -f docker-compose.prod.yml ps
 
 # Tail logs for a specific service
 docker compose -f docker-compose.prod.yml logs -f backend
 docker compose -f docker-compose.prod.yml logs -f nginx
+docker compose -f docker-compose.prod.yml logs -f frontend
 
-# Restart a single service
+# Restart a single service (without rebuild)
 docker compose -f docker-compose.prod.yml restart backend
 
-# Stop everything
+# Stop everything (database volumes are preserved)
 docker compose -f docker-compose.prod.yml down
 
-# Stop and delete volumes (WARNING: deletes database)
+# Stop and wipe all data (WARNING: deletes database)
 docker compose -f docker-compose.prod.yml down -v
 ```
 
 ---
 
-## 9. Rollback Procedure
+## 11. Rollback
 
 ```bash
-# Stop the current deployment
+# On the server — stop current containers
 docker compose -f docker-compose.prod.yml down
 
-# Restore the previous code (if using git)
-git checkout <previous-commit>
+# From local — rsync the previous version
+rsync -avz --progress \
+  --exclude='node_modules' --exclude='dist' --exclude='.git' \
+  /path/to/previous-version/ user@SERVER_IP:/opt/glow-apex/
 
-# Rebuild and restart
-docker compose -f docker-compose.prod.yml build
-docker compose -f docker-compose.prod.yml up -d
+# On the server — rebuild
+cd /opt/glow-apex && docker compose -f docker-compose.prod.yml up --build -d
 ```
 
-Volumes (`mongo_data`, `redis_data`) are **not** deleted by `down` without `-v`,
-so your database survives a code rollback.
+Volumes (`mongo_data`, `redis_data`) survive `down` without `-v`, so your database
+is safe across rollbacks.
 
 ---
 
-## 10. Common Issues
+## 12. Common Issues
 
-**Containers restart immediately:**
+**Container exits immediately:**
 ```bash
 docker compose -f docker-compose.prod.yml logs backend
 ```
-Usually a missing `.env` value or incorrect `JWT_SECRET_KEY`.
+Usually a missing or malformed `.env` value (`JWT_SECRET_KEY`, `API_KEY_ENCRYPTION_SECRET`).
 
-**Frontend shows blank page / API calls fail:**
-Check that `VITE_API_BASE_URL` in `frontend/.env.production` uses the correct IP
-and you ran `docker compose build` after creating the file.
+**Frontend shows blank page or API calls fail:**
+Check `VITE_API_BASE_URL` in `frontend/.env.production` points to the correct address,
+then rebuild: `docker compose -f docker-compose.prod.yml up --build -d frontend`.
+
+**GA site (port 3001) not loading:**
+Check the firewall: `sudo ufw status` — port 3001 must be allowed.
 
 **Email not sending:**
-Ensure `SMTP_PASSWORD` is a Gmail **App Password** (16-char code from
+`SMTP_PASSWORD` must be a Gmail **App Password** (16-char code from
 Google Account → Security → 2-Step Verification → App Passwords),
-not your regular Gmail password.
+not your regular Gmail login password.
 
 **MongoDB healthcheck failing:**
 ```bash

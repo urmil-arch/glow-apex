@@ -19,6 +19,7 @@ from app.admin.pricing.router import router as admin_pricing_router
 from app.public_pricing.router import router as public_pricing_router
 from app.blog.router import public_router as blog_public_router
 from app.public_settings.router import router as public_settings_router
+from app.checkout.router import router as checkout_router
 
 
 def include_routers(app: FastAPI) -> None:
@@ -41,3 +42,4 @@ def include_routers(app: FastAPI) -> None:
     app.include_router(public_pricing_router, prefix="/pricing", tags=["Pricing"])
     app.include_router(blog_public_router, prefix="/blogs", tags=["Blogs"])
     app.include_router(public_settings_router, prefix="/settings", tags=["Settings"])
+    app.include_router(checkout_router, prefix="/checkout", tags=["Checkout"])

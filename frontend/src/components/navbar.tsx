@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { MobileMenu } from "./common/mobile-menu";
 import {
@@ -15,6 +15,7 @@ import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { API_ENDPOINTS } from "@/config";
 import NotificationPanel, { type NotifItem } from "./common/notification-panel";
+import { getActiveServiceMenuItems, type MenuItem } from "@/config/menu-items";
 
 interface Currency {
   code: string;
@@ -29,6 +30,7 @@ const currencies: Currency[] = [
 
 const Navbar = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout } = useAuth();
   const [isScrolled, setIsScrolled] = useState(false);
   const [selectedCurrency, setSelectedCurrency] = useState<Currency>(currencies[0]);
@@ -149,27 +151,14 @@ const Navbar = () => {
     window.location.reload();
   };
 
-  const menuitems = [
+  const menuitems: MenuItem[] = [
     { id: 1, title: "Home", href: "/", type: "link" },
-    // { id: 2, title: "Services", href: "/services", type: "link" },
-    { id: 3, title: "YouTube Views", href: "/buy-youtube-views", type: "link" },
-    {
-      id: 4,
-      title: "Other YouTube Services",
-      type: "menu",
-      items: [
-        { id: 41, title: "YouTube Subscriber", href: "/buy-youtube-subscribers" },
-        { id: 42, title: "YouTube Likes", href: "/buy-youtube-video-likes" },
-        { id: 43, title: "YouTube Comments", href: "/buy-youtube-comments" },
-        { id: 44, title: "YouTube Shorts Likes", href: "/buy-youtube-shorts-likes" },
-        { id: 45, title: "YouTube Shorts Views", href: "/buy-youtube-shorts-views" },
-      ],
-    },
+    ...getActiveServiceMenuItems(location.pathname),
     { id: 7, title: "Blogs", href: "/blogs", type: "link" },
   ];
 
-  function renderMenuItems(menuItem: { id: number; title: string; href?: string; type: string; items?: { id: number; title: string; href: string }[] }) {
-    if (menuItem.href === "/") return null;
+  function renderMenuItems(menuItem: MenuItem) {
+    if (menuItem.type === "link" && menuItem.href === "/") return null;
 
     switch (menuItem.type) {
       case "link":

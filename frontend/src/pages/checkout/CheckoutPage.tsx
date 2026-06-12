@@ -10,25 +10,12 @@ import { useServices } from "@/context/ServicesContext";
 import { usePricing, calcPackagePrice } from "@/context/PricingContext";
 import { useCurrency } from "@/context/CurrencyContext";
 import { api } from "@/lib/api";
-import { API_ENDPOINTS } from "@/config";
+import { API_ENDPOINTS, GLOWAPEX_CHECKOUT_URL } from "@/config";
 
-declare const Razorpay: new (options: Record<string, unknown>) => { open(): void };
 
-interface StripeInitiateResponse {
-  order_id: string;
-  checkout_url: string;
-  session_id: string;
-  charge: number;
-  currency: string;
-}
-
-interface RazorpayCreateResponse {
-  order_id: string;
-  razorpay_order_id: string;
-  key_id: string;
-  amount: number;
-  currency: string;
-  description: string;
+interface CheckoutInitResponse {
+  token: string;
+  expires_in: number;
 }
 
 interface PackageOption {
@@ -137,12 +124,6 @@ const CheckoutPage = () => {
   }, [pricing]);
 
   useEffect(() => {
-    if (!serviceOrder && !categoryOrder && !paymentSucceeded.current) {
-      navigate("/services", { replace: true });
-    }
-  }, [serviceOrder, categoryOrder, navigate]);
-
-  useEffect(() => {
     api.get<PublicSettings>(API_ENDPOINTS.PUBLIC_SETTINGS)
       .then((res) => setPublicSettings(res.data))
       .catch(() => {});
@@ -211,62 +192,29 @@ const CheckoutPage = () => {
     return body;
   }
 
-  async function handleStripe() {
+  async function redirectToGlowApex(method: PaymentMethod) {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.post<StripeInitiateResponse>(
-        API_ENDPOINTS.ORDERS_STRIPE_INITIATE,
-        buildOrderBody(),
-      );
-      window.location.href = res.data.checkout_url;
+      const res = await api.post<CheckoutInitResponse>(API_ENDPOINTS.CHECKOUT_INIT, {
+        ...buildOrderBody(),
+        payment_method: method,
+      });
+      paymentSucceeded.current = true;
+      isCategoryFlow ? clearCategoryOrder() : clearServiceOrder();
+      window.location.href = `${GLOWAPEX_CHECKOUT_URL}?token=${res.data.token}`;
     } catch (err) {
       setError(extractError(err));
       setLoading(false);
     }
   }
 
+  async function handleStripe() {
+    await redirectToGlowApex("stripe");
+  }
+
   async function handleRazorpay() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.post<RazorpayCreateResponse>(
-        API_ENDPOINTS.RAZORPAY_CREATE,
-        buildOrderBody(),
-      );
-      const { order_id, razorpay_order_id, key_id, amount, currency, description: desc } = res.data;
-      const options: Record<string, unknown> = {
-        key: key_id, amount, currency,
-        name: "Glow-Apex", description: desc, order_id: razorpay_order_id,
-        prefill: { name: user?.full_name ?? "", email: user?.email ?? "", method: "upi", vpa: "" },
-        theme: { color: "#0d9488" },
-        handler: async (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
-          // Set immediately — Razorpay calls this only on confirmed payment.
-          // This prevents the useEffect from redirecting to /services during the
-          // async verify call below (which may trigger a re-render via ondismiss).
-          paymentSucceeded.current = true;
-          try {
-            await api.post(API_ENDPOINTS.RAZORPAY_VERIFY, {
-              order_id,
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-            });
-            isCategoryFlow ? clearCategoryOrder() : clearServiceOrder();
-            navigate("/dashboard/orders");
-          } catch (verifyErr) {
-            setError(extractError(verifyErr));
-          } finally {
-            setLoading(false);
-          }
-        },
-        modal: { ondismiss: () => setLoading(false) },
-      };
-      new Razorpay(options).open();
-    } catch (err) {
-      setError(extractError(err));
-      setLoading(false);
-    }
+    await redirectToGlowApex("razorpay");
   }
 
   async function handlePlaceOrder() {
@@ -283,10 +231,7 @@ const CheckoutPage = () => {
 
         {/* Back button */}
         <button
-          onClick={() => {
-            if (window.history.state?.idx > 0) navigate(-1);
-            else navigate('/services');
-          }}
+          onClick={() => navigate(-1)}
           className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 transition-colors mb-6 group"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
