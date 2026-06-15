@@ -308,7 +308,7 @@ export default function StaffPage() {
                         <p className="text-gray-400 text-xs truncate">{member.email}</p>
                       </div>
                       {member.is_admin && (
-                        <ShieldCheck className="w-4 h-4 text-violet-500 flex-shrink-0" title="Full Administrator" />
+                        <ShieldCheck className="w-4 h-4 text-violet-500 flex-shrink-0"/>
                       )}
                     </div>
                   </td>
