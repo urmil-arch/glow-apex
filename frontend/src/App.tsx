@@ -45,6 +45,7 @@ import AdminReportsPage from './pages/admin/reports/ReportsPage'
 import AdminSupportPage from './pages/admin/support/SupportPage'
 import PricingPage from './pages/admin/pricing/PricingPage'
 import AdminBlogsPage from './pages/admin/blogs/BlogsPage'
+import StaffPage from './pages/admin/staff/StaffPage'
 import TicketsPage from './pages/dashboard/tickets/TicketsPage'
 import TicketThreadPage from './pages/dashboard/tickets/TicketThreadPage'
 import RouteScrollReset from './components/common/route-scroll-reset'
@@ -73,10 +74,15 @@ const MaintenanceGuard: React.FC<{ children: React.ReactNode }> = ({ children })
   const [maintenanceMode, setMaintenanceMode] = useState<boolean | null>(null)
 
   useEffect(() => {
-    api.get<{ maintenance_mode: boolean }>(API_ENDPOINTS.PUBLIC_SETTINGS)
-      .then((res) => setMaintenanceMode(res.data.maintenance_mode))
-      .catch(() => setMaintenanceMode(false))
-  }, [])
+    const check = () => {
+      api.get<{ maintenance_mode: boolean }>(API_ENDPOINTS.PUBLIC_SETTINGS)
+        .then((res) => setMaintenanceMode(res.data.maintenance_mode))
+        .catch(() => setMaintenanceMode(false))
+    }
+    check()
+    const interval = setInterval(check, 60_000)
+    return () => clearInterval(interval)
+  }, [location.pathname])
 
   const isAuthExempt = AUTH_EXEMPT.some(
     (p) => location.pathname === p || location.pathname.startsWith(p + '/')
@@ -105,8 +111,15 @@ const SuspensionGuard: React.FC<{ children: React.ReactNode }> = ({ children }) 
     return onSuspendedPage ? <>{children}</> : <Navigate to="/suspended" replace />
   }
 
-  if (onSuspendedPage) return <Navigate to="/" replace />
+  if (onSuspendedPage && user && !user.is_suspended) return <Navigate to="/" replace />
 
+  return <>{children}</>
+}
+
+const AdminOnlyRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, isLoading } = useAuth()
+  if (isLoading) return null
+  if (!user?.is_admin) return <Navigate to="/admin" replace />
   return <>{children}</>
 }
 
@@ -183,6 +196,7 @@ const App: React.FC = () => {
                 <Route path="support" element={<RequirePermission permission="support"><AdminSupportPage /></RequirePermission>} />
                 <Route path="pricing" element={<RequirePermission permission="pricing"><PricingPage /></RequirePermission>} />
                 <Route path="blogs" element={<RequirePermission permission="blogs"><AdminBlogsPage /></RequirePermission>} />
+                <Route path="staff" element={<AdminOnlyRoute><StaffPage /></AdminOnlyRoute>} />
               </Route>
             </Route>
           </Routes>

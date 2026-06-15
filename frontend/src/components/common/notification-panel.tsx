@@ -1,9 +1,9 @@
-import { Bell, X, MessageSquare, Ticket, Mail, CheckCircle } from 'lucide-react';
+import { Bell, X, MessageSquare, Ticket, Mail, CheckCircle, ListTodo } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export interface NotifItem {
   id: string;
-  type: 'new_ticket' | 'ticket_reply' | 'new_message';
+  type: 'new_ticket' | 'ticket_reply' | 'new_message' | 'new_task';
   title: string;
   body: string;
   href: string;
@@ -80,13 +80,15 @@ const NotificationPanel = ({ items, onClose, onClearAll, onRemove }: Notificatio
             >
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                  item.type === 'new_ticket'  ? 'bg-teal-100'  :
+                  item.type === 'new_ticket'  ? 'bg-teal-100'   :
                   item.type === 'new_message' ? 'bg-orange-100' :
+                  item.type === 'new_task'    ? 'bg-violet-100' :
                   'bg-blue-100'
                 }`}
               >
                 {item.type === 'new_ticket'  ? <Ticket        className="w-4 h-4 text-teal-600"   /> :
                  item.type === 'new_message' ? <Mail          className="w-4 h-4 text-orange-500" /> :
+                 item.type === 'new_task'    ? <ListTodo      className="w-4 h-4 text-violet-600" /> :
                                                <MessageSquare className="w-4 h-4 text-blue-600"   />}
               </div>
               <div className="flex-1 min-w-0">

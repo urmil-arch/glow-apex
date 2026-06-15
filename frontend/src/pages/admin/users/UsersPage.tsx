@@ -13,6 +13,15 @@ import {
   PERMISSION_LABELS, ROLE_DEFAULT_PERMISSIONS, type PermissionKey,
 } from '@/config/permissions';
 
+function parseApiError(err: unknown, fallback = 'Something went wrong'): string {
+  if (!axios.isAxiosError(err)) return fallback;
+  const detail = err.response?.data?.detail;
+  if (Array.isArray(detail)) {
+    return detail.map((e: { msg?: string }) => e.msg ?? 'Validation error').join('. ');
+  }
+  return typeof detail === 'string' ? detail : fallback;
+}
+
 interface AdminUser {
   id: string;
   full_name: string;
@@ -172,7 +181,7 @@ const UsersPage = () => {
       setAddForm({ full_name: '', username: '', email: '', password: '', role: 'user', extra_permissions: [] });
       fetchUsers(); fetchStats();
     } catch (err: unknown) {
-      setModalError(axios.isAxiosError(err) ? (err.response?.data?.detail ?? 'Failed to create user') : 'Failed to create user');
+      setModalError(parseApiError(err, 'Failed to create user'));
     } finally { setModalLoading(false); }
   };
 
@@ -192,7 +201,7 @@ const UsersPage = () => {
       });
       setEditTarget(null); fetchUsers();
     } catch (err: unknown) {
-      setModalError(axios.isAxiosError(err) ? (err.response?.data?.detail ?? 'Failed to update user') : 'Failed to update user');
+      setModalError(parseApiError(err, 'Failed to update user'));
     } finally { setModalLoading(false); }
   };
 
@@ -203,7 +212,7 @@ const UsersPage = () => {
       await api.post(`${API_ENDPOINTS.ADMIN_USERS}/${passwordTarget.id}/set-password`, { new_password: newPassword });
       setPasswordTarget(null); setNewPassword('');
     } catch (err: unknown) {
-      setModalError(axios.isAxiosError(err) ? (err.response?.data?.detail ?? 'Failed to set password') : 'Failed to set password');
+      setModalError(parseApiError(err, 'Failed to set password'));
     } finally { setModalLoading(false); }
   };
 
@@ -634,7 +643,7 @@ const RoleModal = ({ target, onClose, onSaved }: RoleModalProps) => {
       });
       onSaved();
     } catch (err: unknown) {
-      setError(axios.isAxiosError(err) ? (err.response?.data?.detail ?? 'Failed to update role') : 'Failed to update role');
+      setError(parseApiError(err, 'Failed to update role'));
     } finally { setSaving(false); }
   };
 

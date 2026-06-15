@@ -377,7 +377,12 @@ const SupportPage: React.FC = () => {
     }
   };
 
-  useEffect(() => { fetchTickets(); }, [ticketStatusFilter]);
+  useEffect(() => {
+    fetchTickets();
+    const interval = setInterval(fetchTickets, 30_000);
+    return () => clearInterval(interval);
+  }, [ticketStatusFilter]);
+
   useEffect(() => { fetchMessages(); }, [msgReadFilter]);
 
   const unreadCount = messages.filter((m) => !m.is_read).length;
