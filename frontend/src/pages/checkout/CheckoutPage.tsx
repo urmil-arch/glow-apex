@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import {
-  ArrowLeft, Check, CreditCard, ExternalLink,
+  ArrowLeft, Bitcoin, Check, CreditCard, ExternalLink,
   Loader, Lock, PlayCircle, ShieldCheck, Zap,
 } from "lucide-react";
 import { useOrderStore } from "@/store/useOrderStore";
@@ -11,6 +11,7 @@ import { usePricing, calcPackagePrice } from "@/context/PricingContext";
 import { useCurrency } from "@/context/CurrencyContext";
 import { api } from "@/lib/api";
 import { API_ENDPOINTS, GLOWAPEX_CHECKOUT_URL } from "@/config";
+import CryptomusInlinePayment from "./CryptomusInlinePayment";
 
 
 interface CheckoutInitResponse {
@@ -29,9 +30,10 @@ interface PackageOption {
 interface PublicSettings {
   payment_stripe_enabled: boolean;
   payment_razorpay_enabled: boolean;
+  payment_cryptomus_enabled: boolean;
 }
 
-type PaymentMethod = "stripe" | "razorpay";
+type PaymentMethod = "stripe" | "razorpay" | "cryptomus";
 
 const CATEGORY_TO_SERVICE_TYPE: Record<string, string> = {
   "YouTube Views":                "youtube_views",
@@ -83,9 +85,11 @@ const CheckoutPage = () => {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("stripe");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cryptoToken, setCryptoToken] = useState<string | null>(null);
   const [publicSettings, setPublicSettings] = useState<PublicSettings>({
     payment_stripe_enabled: true,
     payment_razorpay_enabled: true,
+    payment_cryptomus_enabled: true,
   });
 
   // ── Pricing ───────────────────────────────────────────────────────────────────
@@ -133,12 +137,29 @@ const CheckoutPage = () => {
     const available: PaymentMethod[] = [];
     if (publicSettings.payment_stripe_enabled) available.push("stripe");
     if (publicSettings.payment_razorpay_enabled) available.push("razorpay");
+    if (publicSettings.payment_cryptomus_enabled) available.push("cryptomus");
     if (available.length > 0 && !available.includes(paymentMethod)) {
       setPaymentMethod(available[0]);
     }
-  }, [publicSettings.payment_stripe_enabled, publicSettings.payment_razorpay_enabled]);
+  }, [
+    publicSettings.payment_stripe_enabled,
+    publicSettings.payment_razorpay_enabled,
+    publicSettings.payment_cryptomus_enabled,
+  ]);
 
   if (!authLoading && !isAuthenticated) return <Navigate to="/sign-in" replace />;
+
+  // Inline crypto payment takes over the page once an invoice has been created.
+  if (cryptoToken) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-teal-50/30">
+        <div className="max-w-5xl mx-auto px-4 pt-24 pb-12">
+          <CryptomusInlinePayment token={cryptoToken} onBack={() => setCryptoToken(null)} />
+        </div>
+      </div>
+    );
+  }
+
   if (!serviceOrder && !categoryOrder) return null;
 
   // ── Derived ───────────────────────────────────────────────────────────────────
@@ -173,6 +194,18 @@ const CheckoutPage = () => {
   const valueOptions = packageOptions.filter((o) => o.packageType === "value");
   const bulkOptions  = packageOptions.filter((o) => o.packageType === "bulk");
 
+  const anyPaymentEnabled =
+    publicSettings.payment_stripe_enabled ||
+    publicSettings.payment_razorpay_enabled ||
+    publicSettings.payment_cryptomus_enabled;
+  const enabledMethodsCount = [
+    publicSettings.payment_stripe_enabled,
+    publicSettings.payment_razorpay_enabled,
+    publicSettings.payment_cryptomus_enabled,
+  ].filter(Boolean).length;
+  const methodsGridClass =
+    enabledMethodsCount >= 3 ? "grid-cols-3" : enabledMethodsCount === 2 ? "grid-cols-2" : "grid-cols-1";
+
   // ── Helpers ───────────────────────────────────────────────────────────────────
   function extractError(err: unknown): string {
     const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
@@ -192,13 +225,16 @@ const CheckoutPage = () => {
     return body;
   }
 
-  async function redirectToGlowApex(method: PaymentMethod) {
+  // Stripe / Razorpay: create the session then redirect to the Glow Apex portal,
+  // telling the backend which store to return the user to after payment.
+  async function redirectToGlowApex(method: "stripe" | "razorpay") {
     setLoading(true);
     setError(null);
     try {
       const res = await api.post<CheckoutInitResponse>(API_ENDPOINTS.CHECKOUT_INIT, {
         ...buildOrderBody(),
         payment_method: method,
+        return_origin: window.location.origin,
       });
       paymentSucceeded.current = true;
       isCategoryFlow ? clearCategoryOrder() : clearServiceOrder();
@@ -209,19 +245,30 @@ const CheckoutPage = () => {
     }
   }
 
-  async function handleStripe() {
-    await redirectToGlowApex("stripe");
-  }
-
-  async function handleRazorpay() {
-    await redirectToGlowApex("razorpay");
+  // Cryptomus: paid inline on this store — no redirect. Keep the order store intact so
+  // the user can go back; it is cleared only once payment is confirmed (in the inline view).
+  async function startCryptomus() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api.post<CheckoutInitResponse>(API_ENDPOINTS.CHECKOUT_INIT, {
+        ...buildOrderBody(),
+        payment_method: "cryptomus",
+        return_origin: window.location.origin,
+      });
+      setCryptoToken(res.data.token);
+    } catch (err) {
+      setError(extractError(err));
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handlePlaceOrder() {
     if (!link.trim()) return;
     if (!isCategoryFlow && (quantity < serviceOrder!.min || quantity > serviceOrder!.max)) return;
-    if (paymentMethod === "razorpay") await handleRazorpay();
-    else await handleStripe();
+    if (paymentMethod === "cryptomus") await startCryptomus();
+    else await redirectToGlowApex(paymentMethod);
   }
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -346,7 +393,7 @@ const CheckoutPage = () => {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <StepHeader num={3} label="Choose Payment Method" />
 
-              {!publicSettings.payment_stripe_enabled && !publicSettings.payment_razorpay_enabled ? (
+              {!anyPaymentEnabled ? (
                 <div className="flex flex-col items-center gap-3 py-6 text-center">
                   <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
                     <Lock className="w-5 h-5 text-red-400" />
@@ -358,11 +405,7 @@ const CheckoutPage = () => {
                 </div>
               ) : (
                 <>
-                  <div className={`grid gap-3 ${
-                    publicSettings.payment_stripe_enabled && publicSettings.payment_razorpay_enabled
-                      ? "grid-cols-2"
-                      : "grid-cols-1"
-                  }`}>
+                  <div className={`grid gap-3 ${methodsGridClass}`}>
                     {/* Stripe */}
                     {publicSettings.payment_stripe_enabled && (
                       <button
@@ -418,6 +461,34 @@ const CheckoutPage = () => {
                         )}
                       </button>
                     )}
+
+                    {/* Cryptomus */}
+                    {publicSettings.payment_cryptomus_enabled && (
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod("cryptomus")}
+                        className={`relative flex flex-col items-start gap-2 p-4 rounded-xl border-2 text-left transition-all ${
+                          paymentMethod === "cryptomus"
+                            ? "border-orange-500 bg-orange-50"
+                            : "border-gray-200 bg-white hover:border-gray-300"
+                        }`}
+                      >
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                          paymentMethod === "cryptomus" ? "bg-orange-100" : "bg-gray-100"
+                        }`}>
+                          <Bitcoin className={`w-5 h-5 ${paymentMethod === "cryptomus" ? "text-orange-600" : "text-gray-500"}`} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Crypto</p>
+                          <p className="text-xs text-gray-400">USDT · TRC-20</p>
+                        </div>
+                        {paymentMethod === "cryptomus" && (
+                          <span className="absolute top-3 right-3 w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center">
+                            <Check className="w-2.5 h-2.5 text-white" />
+                          </span>
+                        )}
+                      </button>
+                    )}
                   </div>
 
                   {/* Error message */}
@@ -436,12 +507,20 @@ const CheckoutPage = () => {
                     {loading ? (
                       <>
                         <Loader className="w-4 h-4 animate-spin" />
-                        {paymentMethod === "razorpay" ? "Opening Payment…" : "Redirecting…"}
+                        {paymentMethod === "cryptomus"
+                          ? "Generating invoice…"
+                          : paymentMethod === "razorpay"
+                            ? "Opening Payment…"
+                            : "Redirecting…"}
                       </>
                     ) : (
                       <>
                         <Lock className="w-4 h-4" />
-                        Pay {fmt(finalCharge)} — {paymentMethod === "razorpay" ? "Razorpay" : "Stripe"}
+                        Pay {fmt(finalCharge)} — {paymentMethod === "cryptomus"
+                          ? "Crypto"
+                          : paymentMethod === "razorpay"
+                            ? "Razorpay"
+                            : "Stripe"}
                       </>
                     )}
                   </button>

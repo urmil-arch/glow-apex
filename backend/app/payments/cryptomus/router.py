@@ -3,9 +3,12 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
 
+from app.orders.fulfillment import place_smm_order
+from app.orders.repository import OrderRepository
 from app.payments.cryptomus import service as cryptomus_service
 from app.payments.cryptomus.schemas import CryptomusCreateRequest
 from app.payments.cryptomus.utils import map_cryptomus_status, verify_cryptomus_webhook_signature
+from app.payments.ledger_repository import PaymentLedgerRepository
 from app.common.config import settings
 
 logger = logging.getLogger(__name__)
@@ -63,7 +66,10 @@ async def verify_order(
 async def cryptomus_webhook(request: Request) -> dict:
     """Handle Cryptomus payment webhook events.
 
-    TODO: Call /smm/add-order after payment status maps to PAID.
+    Verifies the signature, and on a PAID status atomically claims the payment, marks
+    the order paid, and places the SMM order. The store's status poll performs the same
+    claim-guarded placement, so whichever observes PAID first wins — the order is never
+    placed twice.
     """
     try:
         payload: dict = await request.json()
@@ -79,12 +85,27 @@ async def cryptomus_webhook(request: Request) -> dict:
         logger.error("Cryptomus webhook signature verification failed for order %s", payload.get("order_id"))
         raise HTTPException(status_code=400, detail="Invalid signature")
 
-    status = map_cryptomus_status(payload.get("payment_status", ""))
+    order_id = payload.get("order_id", "")
+    mapped_status = map_cryptomus_status(payload.get("payment_status", ""))
     logger.info(
         "Cryptomus webhook — order: %s, raw_status: %s, mapped: %s",
-        payload.get("order_id"),
-        payload.get("payment_status"),
-        status,
+        order_id, payload.get("payment_status"), mapped_status,
     )
+
+    if mapped_status == "PAID" and order_id:
+        db = request.app.state.db
+        ledger = PaymentLedgerRepository(db)
+        repo = OrderRepository(db)
+
+        claimed = await ledger.claim_for_payment(order_id)
+        if claimed:
+            order = await repo.find_by_id_admin(order_id)
+            if order:
+                await repo.update(order_id, {"payment_status": "paid"})
+                await place_smm_order(db, order, order_id, "Cryptomus")
+            else:
+                logger.error("Cryptomus webhook: order %s vanished after claim", order_id)
+        else:
+            logger.info("Cryptomus webhook: order %s already processed, skipping", order_id)
 
     return {"status": "success", "message": "Webhook processed successfully"}

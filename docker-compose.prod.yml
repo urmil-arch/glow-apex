@@ -68,6 +68,9 @@ services:
   # ── Nginx reverse proxy ───────────────────────────────────────────────────
   nginx:
     image: nginx:alpine
+    # Ports only needed for direct/Tailscale access + local dev. Public traffic
+    # arrives through the Cloudflare Tunnel (cloudflared → nginx:80), so these can
+    # be removed once the tunnel is verified.
     ports:
       - "80:80"
       - "3001:3001"
@@ -79,6 +82,19 @@ services:
       frontend:
         condition: service_healthy
     restart: unless-stopped
+
+  # ── Cloudflare Tunnel ───────────────────────────────────────────────────────
+  # Exposes the site publicly without a public IP / port-forwarding. cloudflared
+  # makes an outbound connection to Cloudflare; the tunnel's public-hostname
+  # ingress (configured in the Zero Trust dashboard) forwards each domain to
+  # http://nginx:80. The Host header is preserved, so the SPA routes by hostname
+  # (buyrealviews → Views, buyrealsubscribers → Subscribers, glowapex → portal).
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    restart: unless-stopped
+    depends_on:
+      - nginx
 
 volumes:
   mongo_data:

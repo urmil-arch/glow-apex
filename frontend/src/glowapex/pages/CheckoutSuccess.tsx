@@ -1,9 +1,10 @@
 import { useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { CheckCircle, Loader } from 'lucide-react'
+import { resolveReturnOrigin } from '../lib/returnOrigin'
 
 export default function CheckoutSuccess() {
-  const d1Url = (import.meta.env.VITE_D1_URL || 'http://localhost:5173').replace(/\/$/, '')
+  const d1Url = resolveReturnOrigin(window.location.search)
 
   useEffect(() => {
     const timer = setTimeout(() => {

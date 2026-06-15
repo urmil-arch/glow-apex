@@ -30,6 +30,7 @@ interface PlatformSettings {
   maintenance_mode: boolean;
   payment_stripe_enabled: boolean;
   payment_razorpay_enabled: boolean;
+  payment_cryptomus_enabled: boolean;
   social_twitter: string;
   social_instagram: string;
   social_youtube: string;
@@ -343,6 +344,7 @@ const SettingsPage = () => {
     maintenance_mode: false,
     payment_stripe_enabled: true,
     payment_razorpay_enabled: true,
+    payment_cryptomus_enabled: true,
     social_twitter: '',
     social_instagram: '',
     social_youtube: '',
@@ -516,8 +518,14 @@ const SettingsPage = () => {
                         checked={settings.payment_razorpay_enabled}
                         onChange={(v) => set('payment_razorpay_enabled', v)}
                       />
+                      <ToggleRow
+                        label="Crypto (Cryptomus)"
+                        description="Paid on-store · USDT · TRC-20"
+                        checked={settings.payment_cryptomus_enabled}
+                        onChange={(v) => set('payment_cryptomus_enabled', v)}
+                      />
                     </div>
-                    {!settings.payment_stripe_enabled && !settings.payment_razorpay_enabled && (
+                    {!settings.payment_stripe_enabled && !settings.payment_razorpay_enabled && !settings.payment_cryptomus_enabled && (
                       <div className="mt-4 flex items-center gap-2 px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg">
                         <Zap className="h-4 w-4 text-red-500 flex-shrink-0" />
                         <p className="text-xs text-red-700 font-medium">

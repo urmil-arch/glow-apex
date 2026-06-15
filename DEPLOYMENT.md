@@ -215,7 +215,15 @@ When DNS is pointed at this server via Cloudflare:
 BACKEND_BASE_URL=https://buyrealviews.com/api
 FRONTEND_ORIGIN=https://buyrealviews.com
 GLOWAPEX_ORIGIN=https://glowapex.com
+ALLOWED_RETURN_ORIGINS=https://buyrealviews.com,https://buyrealsubscribers.com
 ```
+
+> **Three domains, one build.** buyrealviews.com and buyrealsubscribers.com are served by
+> the same React store build — the hostname picks the landing page (Views vs Subscribers).
+> glowapex.com renders the payment portal. Point all three A-records at this server via
+> Cloudflare (SSL Flexible). Stripe/Razorpay redirect to glowapex.com and bounce the user
+> back to the originating store (validated against `ALLOWED_RETURN_ORIGINS`); Cryptomus is
+> paid inline on the store itself, no redirect.
 
 **Frontend** (`frontend/.env.production`):
 

@@ -52,6 +52,19 @@ import RouteScrollReset from './components/common/route-scroll-reset'
 import SuspendedPage from './pages/auth/SuspendedPage'
 import MaintenancePage from './pages/MaintenancePage'
 
+// Per-domain landing: buyrealviews.com opens on the Views page, buyrealsubscribers.com
+// on the Subscribers page; every other host (localhost, glowapex.com store) gets Home.
+const STORE_LANDING: Record<string, React.FC> = {
+  'buyrealviews.com': BuyYoutubeViews,
+  'buyrealsubscribers.com': BuyYoutubeSubscribers,
+}
+
+const RootLanding: React.FC = () => {
+  const host = window.location.hostname.replace(/^www\./, '')
+  const Landing = STORE_LANDING[host] ?? HomePage
+  return <Landing />
+}
+
 const AUTH_EXEMPT = ['/sign-in', '/sign-up', '/suspended']
 
 const MaintenanceGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -118,7 +131,7 @@ const App: React.FC = () => {
             <Route path="/maintenance" element={<MaintenancePage />} />
             {/* Public routes with Navbar + Footer */}
             <Route element={<PublicLayout />}>
-              <Route path="/" element={<HomePage />} />
+              <Route path="/" element={<RootLanding />} />
               <Route path="/buy-youtube-views" element={<BuyYoutubeViews />} />
               <Route path="/buy-youtube-video-likes" element={<BuyYoutubeVideoLikes />} />
               <Route path="/buy-youtube-subscribers" element={<BuyYoutubeSubscribers />} />
