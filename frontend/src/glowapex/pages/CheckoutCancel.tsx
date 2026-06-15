@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { ArrowRight, Mail, ShieldCheck, Zap } from 'lucide-react'
+import { resolveReturnOrigin, storeNameFromOrigin } from '../lib/returnOrigin'
 
 function CancelInfoPanel({ d1Url }: { d1Url: string }) {
   const reasons = [
@@ -33,7 +34,7 @@ function CancelInfoPanel({ d1Url }: { d1Url: string }) {
           className="flex items-center gap-2 text-emerald-400 hover:text-emerald-300 transition-colors text-sm font-medium group w-fit"
         >
           <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          Back to BuyRealViews Store
+          Back to {storeNameFromOrigin(d1Url)} Store
         </a>
       </div>
 
@@ -59,7 +60,7 @@ function CancelInfoPanel({ d1Url }: { d1Url: string }) {
 }
 
 export default function CheckoutCancel() {
-  const d1Url = (import.meta.env.VITE_D1_URL || 'http://localhost:5173').replace(/\/$/, '')
+  const d1Url = resolveReturnOrigin(window.location.search)
 
   return (
     <main className="pt-36 pb-24">

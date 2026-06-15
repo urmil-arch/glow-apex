@@ -107,6 +107,8 @@ export const API_ENDPOINTS = {
   CHECKOUT_INIT: `${API_BASE_URL}/checkout/init`,
   CHECKOUT_PRE_AUTH: `${API_BASE_URL}/checkout/pre-auth`,
   CHECKOUT_INIT_WITH_PRE_AUTH: `${API_BASE_URL}/checkout/init-with-pre-auth`,
+  CHECKOUT_SESSION: `${API_BASE_URL}/checkout/session`,            // append /{token}
+  CHECKOUT_VERIFY_CRYPTOMUS: `${API_BASE_URL}/checkout/verify/cryptomus`,
 }
 
 export const GLOWAPEX_CHECKOUT_URL = `${GLOWAPEX_URL}/checkout`

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import {
-  ArrowLeft, Check, CreditCard, ExternalLink,
+  ArrowLeft, Bitcoin, Check, CreditCard, ExternalLink,
   Loader, Lock, PlayCircle, ShieldCheck, Zap,
 } from "lucide-react";
 import { useOrderStore } from "@/store/useOrderStore";
@@ -16,6 +16,7 @@ import { API_ENDPOINTS, GLOWAPEX_CHECKOUT_URL } from "@/config";
 interface CheckoutInitResponse {
   token: string;
   expires_in: number;
+  payment_url?: string;
 }
 
 interface PackageOption {
@@ -29,9 +30,10 @@ interface PackageOption {
 interface PublicSettings {
   payment_stripe_enabled: boolean;
   payment_razorpay_enabled: boolean;
+  payment_cryptomus_enabled: boolean;
 }
 
-type PaymentMethod = "stripe" | "razorpay";
+type PaymentMethod = "stripe" | "razorpay" | "cryptomus";
 
 const CATEGORY_TO_SERVICE_TYPE: Record<string, string> = {
   "YouTube Views":                "youtube_views",
@@ -42,6 +44,12 @@ const CATEGORY_TO_SERVICE_TYPE: Record<string, string> = {
   "YouTube Shorts Likes":         "youtube_shorts_likes",
   "Country Targeted Subscribers": "country_targeted_subscribers",
 };
+
+const YOUTUBE_REGEX = /^https?:\/\/(www\.|m\.)?(youtube\.com\/(watch\?.*v=[\w-]+|shorts\/[\w-]+|live\/[\w-]+|channel\/[\w-]+|c\/[\w-]+|user\/[\w-]+|@[\w.-]+)|youtu\.be\/[\w-]+)/i;
+
+function isValidYouTubeLink(url: string): boolean {
+  return YOUTUBE_REGEX.test(url.trim());
+}
 
 function buildDiscountLabel(
   discountType: string,
@@ -71,11 +79,10 @@ const CheckoutPage = () => {
   const { services } = useServices();
   const { getPricing } = usePricing();
   const { currency, fmt } = useCurrency();
-  const { serviceOrder, clearServiceOrder, categoryOrder, clearCategoryOrder } = useOrderStore();
+  const { serviceOrder, categoryOrder } = useOrderStore();
   const navigate = useNavigate();
 
   const isCategoryFlow = Boolean(categoryOrder);
-  const paymentSucceeded = useRef(false);
 
   const [link, setLink] = useState(() => categoryOrder?.link ?? "");
   const [quantity, setQuantity] = useState<number>(() => serviceOrder?.min ?? 100);
@@ -86,6 +93,7 @@ const CheckoutPage = () => {
   const [publicSettings, setPublicSettings] = useState<PublicSettings>({
     payment_stripe_enabled: true,
     payment_razorpay_enabled: true,
+    payment_cryptomus_enabled: true,
   });
 
   // ── Pricing ───────────────────────────────────────────────────────────────────
@@ -133,12 +141,19 @@ const CheckoutPage = () => {
     const available: PaymentMethod[] = [];
     if (publicSettings.payment_stripe_enabled) available.push("stripe");
     if (publicSettings.payment_razorpay_enabled) available.push("razorpay");
+    if (publicSettings.payment_cryptomus_enabled) available.push("cryptomus");
     if (available.length > 0 && !available.includes(paymentMethod)) {
       setPaymentMethod(available[0]);
     }
-  }, [publicSettings.payment_stripe_enabled, publicSettings.payment_razorpay_enabled]);
+  }, [
+    publicSettings.payment_stripe_enabled,
+    publicSettings.payment_razorpay_enabled,
+    publicSettings.payment_cryptomus_enabled,
+  ]);
 
   if (!authLoading && !isAuthenticated) return <Navigate to="/sign-in" replace />;
+
+
   if (!serviceOrder && !categoryOrder) return null;
 
   // ── Derived ───────────────────────────────────────────────────────────────────
@@ -167,11 +182,25 @@ const CheckoutPage = () => {
   const finalCharge = Math.max(afterPersonalDiscount, 0.50);
 
   const categoryPackageValid = packageOptions.length === 0 || effectivePackageKey !== "";
-  const isValid = link.trim().length > 0 &&
+  const linkTouched = link.trim().length > 0;
+  const linkValid = linkTouched && isValidYouTubeLink(link);
+  const isValid = linkValid &&
     (isCategoryFlow ? categoryPackageValid : quantity >= min && quantity <= max);
 
   const valueOptions = packageOptions.filter((o) => o.packageType === "value");
   const bulkOptions  = packageOptions.filter((o) => o.packageType === "bulk");
+
+  const anyPaymentEnabled =
+    publicSettings.payment_stripe_enabled ||
+    publicSettings.payment_razorpay_enabled ||
+    publicSettings.payment_cryptomus_enabled;
+  const enabledMethodsCount = [
+    publicSettings.payment_stripe_enabled,
+    publicSettings.payment_razorpay_enabled,
+    publicSettings.payment_cryptomus_enabled,
+  ].filter(Boolean).length;
+  const methodsGridClass =
+    enabledMethodsCount >= 3 ? "grid-cols-3" : enabledMethodsCount === 2 ? "grid-cols-2" : "grid-cols-1";
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
   function extractError(err: unknown): string {
@@ -192,16 +221,17 @@ const CheckoutPage = () => {
     return body;
   }
 
-  async function redirectToGlowApex(method: PaymentMethod) {
+  // Stripe / Razorpay: create the session then redirect to the Glow Apex portal,
+  // telling the backend which store to return the user to after payment.
+  async function redirectToGlowApex(method: "stripe" | "razorpay") {
     setLoading(true);
     setError(null);
     try {
       const res = await api.post<CheckoutInitResponse>(API_ENDPOINTS.CHECKOUT_INIT, {
         ...buildOrderBody(),
         payment_method: method,
+        return_origin: window.location.origin,
       });
-      paymentSucceeded.current = true;
-      isCategoryFlow ? clearCategoryOrder() : clearServiceOrder();
       window.location.href = `${GLOWAPEX_CHECKOUT_URL}?token=${res.data.token}`;
     } catch (err) {
       setError(extractError(err));
@@ -209,19 +239,32 @@ const CheckoutPage = () => {
     }
   }
 
-  async function handleStripe() {
-    await redirectToGlowApex("stripe");
-  }
-
-  async function handleRazorpay() {
-    await redirectToGlowApex("razorpay");
+  async function startCryptomus() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api.post<CheckoutInitResponse>(API_ENDPOINTS.CHECKOUT_INIT, {
+        ...buildOrderBody(),
+        payment_method: "cryptomus",
+        return_origin: window.location.origin,
+      });
+      if (res.data.payment_url) {
+        window.location.href = res.data.payment_url;
+      } else {
+        setError("Failed to create Cryptomus payment. Please try again.");
+        setLoading(false);
+      }
+    } catch (err) {
+      setError(extractError(err));
+      setLoading(false);
+    }
   }
 
   async function handlePlaceOrder() {
     if (!link.trim()) return;
     if (!isCategoryFlow && (quantity < serviceOrder!.min || quantity > serviceOrder!.max)) return;
-    if (paymentMethod === "razorpay") await handleRazorpay();
-    else await handleStripe();
+    if (paymentMethod === "cryptomus") await startCryptomus();
+    else await redirectToGlowApex(paymentMethod);
   }
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -265,8 +308,7 @@ const CheckoutPage = () => {
                         <optgroup label="Value Packages">
                           {valueOptions.map((opt) => (
                             <option key={opt.key} value={opt.key}>
-                              {opt.quantity.toLocaleString()} units — {fmt(opt.price)}
-                              {opt.discountLabel ? ` (${opt.discountLabel})` : ""}
+                              {opt.quantity.toLocaleString()} units
                             </option>
                           ))}
                         </optgroup>
@@ -275,8 +317,7 @@ const CheckoutPage = () => {
                         <optgroup label="Bulk Packages">
                           {bulkOptions.map((opt) => (
                             <option key={opt.key} value={opt.key}>
-                              {opt.quantity.toLocaleString()} units — {fmt(opt.price)}
-                              {opt.discountLabel ? ` (${opt.discountLabel})` : ""}
+                              {opt.quantity.toLocaleString()} units
                             </option>
                           ))}
                         </optgroup>
@@ -318,35 +359,47 @@ const CheckoutPage = () => {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <StepHeader num={2} label="Enter Your YouTube Link" />
               <div className="relative">
-                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-red-500">
-                  <PlayCircle className="w-4 h-4" />
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2">
+                  <PlayCircle className={`w-4 h-4 ${linkTouched ? (linkValid ? "text-teal-500" : "text-red-500") : "text-red-500"}`} />
                 </div>
                 <input
                   type="url"
                   placeholder="https://youtube.com/watch?v=..."
                   value={link}
                   onChange={(e) => setLink(e.target.value)}
-                  className="w-full text-sm border border-gray-200 rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
+                  className={`w-full text-sm border rounded-xl pl-10 pr-10 py-3 focus:outline-none focus:ring-2 transition-colors ${
+                    !linkTouched
+                      ? "border-gray-200 focus:ring-teal-400 focus:border-teal-400"
+                      : linkValid
+                      ? "border-teal-400 focus:ring-teal-400 focus:border-teal-400"
+                      : "border-red-400 focus:ring-red-300 focus:border-red-400"
+                  }`}
                 />
-                {link && (
-                  <a
-                    href={link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-teal-500 hover:text-teal-600"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
+                {linkTouched && (
+                  <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
+                    {linkValid ? (
+                      <a href={link} target="_blank" rel="noopener noreferrer" className="text-teal-500 hover:text-teal-600">
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    ) : (
+                      <Check className="w-4 h-4 text-gray-300" />
+                    )}
+                  </div>
                 )}
               </div>
-              <p className="text-xs text-gray-400 mt-2">Paste the full URL of the video, channel, or post you want to promote.</p>
+              {linkTouched && !linkValid && (
+                <p className="text-xs text-red-500 mt-2">Please enter a valid YouTube URL (video, channel, or shorts link).</p>
+              )}
+              {!linkTouched && (
+                <p className="text-xs text-gray-400 mt-2">Paste the full URL of the video, channel, or post you want to promote.</p>
+              )}
             </div>
 
             {/* Step 3 — Payment method */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <StepHeader num={3} label="Choose Payment Method" />
 
-              {!publicSettings.payment_stripe_enabled && !publicSettings.payment_razorpay_enabled ? (
+              {!anyPaymentEnabled ? (
                 <div className="flex flex-col items-center gap-3 py-6 text-center">
                   <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
                     <Lock className="w-5 h-5 text-red-400" />
@@ -358,11 +411,7 @@ const CheckoutPage = () => {
                 </div>
               ) : (
                 <>
-                  <div className={`grid gap-3 ${
-                    publicSettings.payment_stripe_enabled && publicSettings.payment_razorpay_enabled
-                      ? "grid-cols-2"
-                      : "grid-cols-1"
-                  }`}>
+                  <div className={`grid gap-3 ${methodsGridClass}`}>
                     {/* Stripe */}
                     {publicSettings.payment_stripe_enabled && (
                       <button
@@ -418,6 +467,34 @@ const CheckoutPage = () => {
                         )}
                       </button>
                     )}
+
+                    {/* Cryptomus */}
+                    {publicSettings.payment_cryptomus_enabled && (
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod("cryptomus")}
+                        className={`relative flex flex-col items-start gap-2 p-4 rounded-xl border-2 text-left transition-all ${
+                          paymentMethod === "cryptomus"
+                            ? "border-orange-500 bg-orange-50"
+                            : "border-gray-200 bg-white hover:border-gray-300"
+                        }`}
+                      >
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                          paymentMethod === "cryptomus" ? "bg-orange-100" : "bg-gray-100"
+                        }`}>
+                          <Bitcoin className={`w-5 h-5 ${paymentMethod === "cryptomus" ? "text-orange-600" : "text-gray-500"}`} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Crypto</p>
+                          <p className="text-xs text-gray-400">USDT · TRC-20</p>
+                        </div>
+                        {paymentMethod === "cryptomus" && (
+                          <span className="absolute top-3 right-3 w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center">
+                            <Check className="w-2.5 h-2.5 text-white" />
+                          </span>
+                        )}
+                      </button>
+                    )}
                   </div>
 
                   {/* Error message */}
@@ -436,12 +513,20 @@ const CheckoutPage = () => {
                     {loading ? (
                       <>
                         <Loader className="w-4 h-4 animate-spin" />
-                        {paymentMethod === "razorpay" ? "Opening Payment…" : "Redirecting…"}
+                        {paymentMethod === "cryptomus"
+                          ? "Generating invoice…"
+                          : paymentMethod === "razorpay"
+                            ? "Opening Payment…"
+                            : "Redirecting…"}
                       </>
                     ) : (
                       <>
                         <Lock className="w-4 h-4" />
-                        Pay {fmt(finalCharge)} — {paymentMethod === "razorpay" ? "Razorpay" : "Stripe"}
+                        Pay {fmt(finalCharge)} — {paymentMethod === "cryptomus"
+                          ? "Crypto"
+                          : paymentMethod === "razorpay"
+                            ? "Razorpay"
+                            : "Stripe"}
                       </>
                     )}
                   </button>

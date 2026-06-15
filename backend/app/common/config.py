@@ -60,7 +60,45 @@ class Settings(BaseSettings):
     FRONTEND_ORIGIN: str = "http://localhost:5173"
     GLOWAPEX_ORIGIN: str = "http://localhost:3001"
 
+    # Cross-domain stores (buyrealviews.com, buyrealsubscribers.com, ...) that a user
+    # may be redirected back to after paying on the Glow Apex portal. Comma-separated.
+    # The return_origin sent at checkout is validated against this allowlist to prevent
+    # open-redirect attacks. FRONTEND_ORIGIN is always allowed implicitly.
+    ALLOWED_RETURN_ORIGINS: str = ""
+
+    # Cryptomus inline (on-store) payment — single coin/network at launch.
+    CRYPTOMUS_DEFAULT_CURRENCY: str = "USDT"
+    CRYPTOMUS_DEFAULT_NETWORK: str = "tron"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @property
+    def allowed_return_origins(self) -> list[str]:
+        """Normalized allowlist of origins a user may be returned to after payment."""
+        origins = [self.FRONTEND_ORIGIN.rstrip("/")]
+        origins.extend(
+            o.strip().rstrip("/") for o in self.ALLOWED_RETURN_ORIGINS.split(",") if o.strip()
+        )
+        # Preserve order, drop duplicates and empties
+        seen: set[str] = set()
+        result: list[str] = []
+        for o in origins:
+            if o and o not in seen:
+                seen.add(o)
+                result.append(o)
+        return result
+
+    @property
+    def cors_origins(self) -> list[str]:
+        """All browser origins permitted by CORS: the stores plus the Glow Apex portal."""
+        origins = self.allowed_return_origins + [self.GLOWAPEX_ORIGIN.rstrip("/")]
+        seen: set[str] = set()
+        result: list[str] = []
+        for o in origins:
+            if o and o not in seen:
+                seen.add(o)
+                result.append(o)
+        return result
 
 
 settings = Settings()

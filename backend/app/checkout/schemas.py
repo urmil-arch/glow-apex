@@ -10,7 +10,10 @@ class CheckoutInitRequest(BaseModel):
     quantity: int
     service_id: Optional[str] = None
     category_name: Optional[str] = None
-    payment_method: str  # "stripe" | "razorpay"
+    payment_method: str  # "stripe" | "razorpay" | "cryptomus"
+    # Store origin to return the user to after payment (stripe/razorpay portal bounce).
+    # Validated against the server-side allowlist — never trusted blindly.
+    return_origin: Optional[str] = None
 
     @field_validator("link")
     @classmethod
@@ -30,14 +33,15 @@ class CheckoutInitRequest(BaseModel):
     @field_validator("payment_method")
     @classmethod
     def valid_method(cls, v: str) -> str:
-        if v not in ("stripe", "razorpay"):
-            raise ValueError("payment_method must be 'stripe' or 'razorpay'")
+        if v not in ("stripe", "razorpay", "cryptomus"):
+            raise ValueError("payment_method must be 'stripe', 'razorpay' or 'cryptomus'")
         return v
 
 
 class CheckoutInitResponse(BaseModel):
     token: str
     expires_in: int  # seconds
+    payment_url: Optional[str] = None  # set for Cryptomus — frontend redirects directly
 
 
 class CheckoutSessionData(BaseModel):
@@ -52,12 +56,22 @@ class CheckoutSessionData(BaseModel):
     currency: str
     link: str
     description: str
+    # Store the user is returned to after payment (set for stripe/razorpay portal flow)
+    return_origin: Optional[str] = None
     # Stripe-specific
     checkout_url: Optional[str] = None
     # Razorpay-specific
     razorpay_order_id: Optional[str] = None
     key_id: Optional[str] = None
     amount_paise: Optional[int] = None
+    # Cryptomus-specific (inline on-store payment)
+    cryptomus_invoice_id: Optional[str] = None
+    cryptomus_address: Optional[str] = None
+    cryptomus_network: Optional[str] = None
+    cryptomus_payer_currency: Optional[str] = None
+    cryptomus_payer_amount: Optional[str] = None
+    cryptomus_payment_url: Optional[str] = None
+    cryptomus_expired_at: Optional[int] = None
 
 
 class RazorpayVerifyViaTokenRequest(BaseModel):
@@ -67,6 +81,12 @@ class RazorpayVerifyViaTokenRequest(BaseModel):
     razorpay_order_id: str
     razorpay_payment_id: str
     razorpay_signature: str
+
+
+class CryptomusVerifyViaTokenRequest(BaseModel):
+    """Poll a Cryptomus payment using a checkout session token (no JWT required)."""
+
+    session_token: str
 
 
 class PreAuthRequest(BaseModel):
@@ -105,9 +125,10 @@ class GuestInitRequest(BaseModel):
     category_name: str
     quantity: int
     link: str
-    payment_method: str  # "stripe" | "razorpay"
+    payment_method: str  # "stripe" | "razorpay" | "cryptomus"
     email: str
     name: Optional[str] = None
+    return_origin: Optional[str] = None
 
     @field_validator("link")
     @classmethod
@@ -127,8 +148,8 @@ class GuestInitRequest(BaseModel):
     @field_validator("payment_method")
     @classmethod
     def valid_method(cls, v: str) -> str:
-        if v not in ("stripe", "razorpay"):
-            raise ValueError("payment_method must be 'stripe' or 'razorpay'")
+        if v not in ("stripe", "razorpay", "cryptomus"):
+            raise ValueError("payment_method must be 'stripe', 'razorpay' or 'cryptomus'")
         return v
 
     @field_validator("email")
@@ -149,7 +170,8 @@ class InitWithPreAuthRequest(BaseModel):
     pre_auth_token: str
     quantity: int
     link: str
-    payment_method: str  # "stripe" | "razorpay"
+    payment_method: str  # "stripe" | "razorpay" | "cryptomus"
+    return_origin: Optional[str] = None
 
     @field_validator("link")
     @classmethod
@@ -169,6 +191,6 @@ class InitWithPreAuthRequest(BaseModel):
     @field_validator("payment_method")
     @classmethod
     def valid_method(cls, v: str) -> str:
-        if v not in ("stripe", "razorpay"):
-            raise ValueError("payment_method must be 'stripe' or 'razorpay'")
+        if v not in ("stripe", "razorpay", "cryptomus"):
+            raise ValueError("payment_method must be 'stripe', 'razorpay' or 'cryptomus'")
         return v

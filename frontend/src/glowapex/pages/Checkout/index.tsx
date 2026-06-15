@@ -6,6 +6,7 @@ import {
   Loader, Mail, Package, ShieldCheck, Zap,
 } from 'lucide-react'
 import api from '../../lib/api'
+import { resolveReturnOriginValue, storeNameFromOrigin } from '../../lib/returnOrigin'
 
 declare const Razorpay: new (options: Record<string, unknown>) => { open(): void }
 
@@ -19,6 +20,7 @@ interface SessionData {
   currency: string
   link: string
   description: string
+  return_origin?: string
   checkout_url?: string
   razorpay_order_id?: string
   key_id?: string
@@ -45,7 +47,7 @@ function loadRazorpayScript(): Promise<boolean> {
 }
 
 // Slide-in toast that auto-dismisses after 4 s
-function RedirectBanner() {
+function RedirectBanner({ storeName }: { storeName: string }) {
   const [visible, setVisible] = useState(true)
   useEffect(() => {
     const t = setTimeout(() => setVisible(false), 4000)
@@ -66,7 +68,7 @@ function RedirectBanner() {
             <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
           </div>
           <div className="min-w-0">
-            <p className="text-white text-xs font-semibold leading-tight">Redirected from BuyRealViews</p>
+            <p className="text-white text-xs font-semibold leading-tight">Redirected from {storeName}</p>
             <p className="text-zinc-500 text-[10px] mt-0.5">Your order details are ready</p>
           </div>
           <button
@@ -242,7 +244,7 @@ function SessionPage({ token, d1Url }: { token: string; d1Url: string }) {
             razorpay_signature: response.razorpay_signature,
           }
           await api.post('/checkout/verify/razorpay', body)
-          window.location.href = `${d1Url}/dashboard/orders`
+          window.location.href = '/checkout/success'
         } catch {
           setPayError('Payment received but order confirmation failed. Please contact support with your payment ID.')
           setPaying(false)
@@ -269,7 +271,7 @@ function SessionPage({ token, d1Url }: { token: string; d1Url: string }) {
 
   return (
     <>
-      <RedirectBanner />
+      <RedirectBanner storeName={storeNameFromOrigin(resolveReturnOriginValue(session.return_origin))} />
 
       <main className="pt-36 pb-24">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">

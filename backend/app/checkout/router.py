@@ -8,13 +8,12 @@ from fastapi.concurrency import run_in_threadpool
 
 from app.admin.pricing.repository import PricingRepository
 from app.admin.provider_config.repository import RoutingConfigRepository
-from app.admin.providers.repository import ProviderRepository
 from app.admin.services.repository import CategoryRepository, ServiceRepository
-from app.admin.tasks.repository import TaskRepository
 from app.checkout.schemas import (
     CheckoutInitRequest,
     CheckoutInitResponse,
     CheckoutSessionData,
+    CryptomusVerifyViaTokenRequest,
     GuestInitRequest,
     InitWithPreAuthRequest,
     PreAuthInfo,
@@ -23,9 +22,10 @@ from app.checkout.schemas import (
     RazorpayVerifyViaTokenRequest,
 )
 from app.common.config import settings
+from app.orders.fulfillment import place_smm_order
 from app.orders.pricing_utils import CATEGORY_TO_SERVICE_TYPE, calc_pricing_charge
-from app.orders.provider_api import call_provider
 from app.orders.repository import OrderRepository
+from app.payments.cryptomus import service as cryptomus_service
 from app.payments.ledger_repository import PaymentLedgerRepository
 from app.payments.razorpay import service as rzp_service
 from app.payments.stripe import service as stripe_service
@@ -106,19 +106,42 @@ async def _resolve_service_and_charge(
     return service, category_name, charge, server_cost
 
 
+def _validated_return_origin(return_origin: str | None) -> str:
+    """
+    Validate the client-supplied return origin against the server-side allowlist.
+
+    Prevents an open-redirect: a tampered return_origin could otherwise send the user
+    to a phishing site after payment. Falls back to the primary store origin when none
+    is supplied (e.g. legacy guest/pre-auth flows).
+    """
+    origin = (return_origin or "").rstrip("/")
+    allowed = settings.allowed_return_origins
+    if origin:
+        if origin not in allowed:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid return origin")
+        return origin
+    return allowed[0] if allowed else settings.FRONTEND_ORIGIN.rstrip("/")
+
+
 async def _create_checkout_session(
     body: CheckoutInitRequest,
     user: dict,
     db,
     redis,
     glowapex_origin: str,
+    return_origin: str | None = None,
 ) -> CheckoutInitResponse:
     """
-    Core session creation logic shared by /init and /init-with-pre-auth.
+    Core session creation logic shared by /init, /init-with-pre-auth and /guest-init.
     Creates an order record, a payment gateway session, stores session data in Redis,
-    and returns a short-lived token for the Glow Apex checkout page.
+    and returns a short-lived token.
+
+    For stripe/razorpay the user is redirected to the Glow Apex portal, which bounces
+    back to resolved_origin after payment. For cryptomus the payment is rendered inline
+    on the originating store, so resolved_origin is also used for the invoice return URL.
     """
     user_id = str(user["_id"])
+    resolved_origin = _validated_return_origin(return_origin)
 
     service, category_name, charge, server_cost = await _resolve_service_and_charge(body, user, db)
     description = f"{category_name or service.get('name', 'Order')} × {body.quantity:,}"
@@ -140,6 +163,7 @@ async def _create_checkout_session(
         "currency": "USD",
         "payment_method": body.payment_method,
         "payment_status": "pending",
+        "return_origin": resolved_origin,
         "created_at": datetime.now(timezone.utc),
     }
     order_id = await OrderRepository(db).insert(order_doc)
@@ -155,6 +179,7 @@ async def _create_checkout_session(
         "currency": "USD",
         "link": body.link.strip(),
         "description": description,
+        "return_origin": resolved_origin,
     }
 
     if body.payment_method == "stripe":
@@ -171,8 +196,8 @@ async def _create_checkout_session(
                     "customer_phone": user.get("phone", "0000000000"),
                 },
                 order_description=description,
-                return_url=f"{glowapex_origin}/checkout/success?session_id={{CHECKOUT_SESSION_ID}}",
-                cancel_url=f"{glowapex_origin}/checkout/cancel",
+                return_url=f"{glowapex_origin}/checkout/success?session_id={{CHECKOUT_SESSION_ID}}&origin={resolved_origin}",
+                cancel_url=f"{glowapex_origin}/checkout/cancel?origin={resolved_origin}",
             )
         except Exception as exc:
             logger.error("[CHECKOUT-INIT] Stripe session failed for order %s: %s", order_id, exc)
@@ -202,7 +227,7 @@ async def _create_checkout_session(
         session_data["checkout_url"] = stripe_result["checkout_url"]
         logger.info("[CHECKOUT-INIT] Stripe session ready — order=%s session=%s", order_id, stripe_result["session_id"])
 
-    else:  # razorpay
+    elif body.payment_method == "razorpay":
         try:
             rzp_order = await run_in_threadpool(
                 rzp_service.create_order,
@@ -240,11 +265,66 @@ async def _create_checkout_session(
         session_data["amount_paise"] = rzp_order["amount"]
         logger.info("[CHECKOUT-INIT] Razorpay order ready — order=%s rzp=%s amount=%s paise", order_id, rzp_order["id"], rzp_order["amount"])
 
+    else:  # cryptomus — paid inline on the originating store, no portal redirect
+        try:
+            invoice = await cryptomus_service.create_invoice(
+                order_id=order_id,
+                order_amount=str(charge),
+                order_currency="USD",
+                customer_details={
+                    "customer_id": user_id,
+                    "customer_name": user.get("full_name", "Customer"),
+                    "customer_email": user.get("email", ""),
+                    "customer_phone": user.get("phone", "0000000000"),
+                },
+                order_description=description,
+                return_url=f"{resolved_origin}/checkout/check-status?order_id={order_id}&method=cryptomus",
+                crypto_currency=settings.CRYPTOMUS_DEFAULT_CURRENCY,
+                network=settings.CRYPTOMUS_DEFAULT_NETWORK,
+            )
+        except Exception as exc:
+            logger.error("[CHECKOUT-INIT] Cryptomus invoice failed for order %s: %s", order_id, exc)
+            await OrderRepository(db).update(order_id, {"status": "failed", "payment_status": "failed"})
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Failed to create payment session. Please try again.")
+
+        await PaymentLedgerRepository(db).insert({
+            "order_id": order_id,
+            "user_id": user_id,
+            "user_email": user.get("email", ""),
+            "user_username": user.get("username", ""),
+            "user_balance": 0.0,
+            "amount": charge,
+            "currency": "USD",
+            "method": "Cryptomus",
+            "type": "credit",
+            "status": "pending",
+            "cryptomus_invoice_id": invoice["invoice_id"],
+            "service_name": service.get("name", ""),
+            "category_name": category_name,
+            "quantity": body.quantity,
+            "memo": description,
+            "created_at": now,
+            "updated_at": now,
+        })
+
+        session_data["cryptomus_invoice_id"] = invoice["invoice_id"]
+        session_data["cryptomus_address"] = invoice.get("address")
+        session_data["cryptomus_network"] = invoice.get("network")
+        session_data["cryptomus_payer_currency"] = invoice.get("payer_currency")
+        session_data["cryptomus_payer_amount"] = invoice.get("payer_amount")
+        session_data["cryptomus_payment_url"] = invoice.get("payment_url")
+        session_data["cryptomus_expired_at"] = invoice.get("expired_at")
+        logger.info("[CHECKOUT-INIT] Cryptomus invoice ready — order=%s invoice=%s", order_id, invoice["invoice_id"])
+
     token = secrets.token_urlsafe(32)
     await redis.set(f"{_KEY_PREFIX}{token}", json.dumps(session_data), ex=_SESSION_TTL)
 
     logger.info("[CHECKOUT-INIT] Portal session created — order=%s method=%s", order_id, body.payment_method)
-    return CheckoutInitResponse(token=token, expires_in=_SESSION_TTL)
+    return CheckoutInitResponse(
+        token=token,
+        expires_in=_SESSION_TTL,
+        payment_url=session_data.get("cryptomus_payment_url"),
+    )
 
 
 @router.post("/init", response_model=CheckoutInitResponse, status_code=status.HTTP_201_CREATED)
@@ -263,6 +343,7 @@ async def checkout_init(
         request.app.state.db,
         request.app.state.redis,
         settings.GLOWAPEX_ORIGIN.rstrip("/"),
+        return_origin=body.return_origin,
     )
 
 
@@ -407,6 +488,7 @@ async def checkout_init_with_pre_auth(
         request.app.state.db,
         redis,
         settings.GLOWAPEX_ORIGIN.rstrip("/"),
+        return_origin=body.return_origin,
     )
 
     # Single-use: invalidate after a session is successfully created.
@@ -451,6 +533,7 @@ async def checkout_guest_init(
         request.app.state.db,
         request.app.state.redis,
         settings.GLOWAPEX_ORIGIN.rstrip("/"),
+        return_origin=body.return_origin,
     )
 
     logger.info("[CHECKOUT-GUEST] Session created — category=%s email=%s", body.category_name, body.email)
@@ -501,94 +584,63 @@ async def verify_razorpay_via_token(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
 
     await repo.update(order_id, {"payment_status": "paid"})
-
-    service_id = order.get("service_id", "")
-    service = await ServiceRepository(db).find_by_id(service_id) if service_id else None
-    if not service:
-        logger.error("[CHECKOUT-VERIFY-RZP] Service %s not found for order %s", service_id, order_id)
-        await repo.update(order_id, {"status": "failed"})
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Service configuration error.")
-
-    category_id = service.get("category_id", "")
-    routing_config = await RoutingConfigRepository(db).find_by_category_id(category_id) if category_id else None
-    if routing_config:
-        service_ids: list[str] = []
-        if routing_config.get("default_service_id"):
-            service_ids.append(routing_config["default_service_id"])
-        service_ids.extend(routing_config.get("fallback_service_ids", []))
-        candidates = []
-        for sid in service_ids:
-            svc = await ServiceRepository(db).find_by_id(sid)
-            if svc and svc.get("is_active", True):
-                candidates.append(svc)
-    else:
-        candidates = await ServiceRepository(db).find_active_by_category_id(category_id) if category_id else [service]
-
-    placed = False
-    for attempt, candidate in enumerate(candidates, start=1):
-        label = "DEFAULT" if attempt == 1 else f"FALLBACK #{attempt - 1}"
-        provider = await ProviderRepository(db).find_by_id(candidate.get("provider_id", ""))
-        if not provider:
-            logger.warning("[CHECKOUT-VERIFY-RZP] [ORDER %s] [%s] No provider, skipping", order_id, label)
-            continue
-        try:
-            result = await call_provider(
-                provider["url"], provider["api_key"],
-                {
-                    "action": "add",
-                    "service": candidate["provider_service_id"],
-                    "link": order["link"],
-                    "quantity": order["quantity"],
-                },
-            )
-        except Exception as exc:
-            logger.warning("[CHECKOUT-VERIFY-RZP] [ORDER %s] [%s] Provider exception: %s", order_id, label, exc)
-            continue
-
-        if "error" not in result:
-            await repo.update(order_id, {
-                "provider_id": str(provider["_id"]),
-                "provider_order_id": str(result.get("order", "")),
-                "status": result.get("status", "Pending"),
-            })
-            logger.info("[CHECKOUT-VERIFY-RZP] [ORDER %s] [%s] SUCCESS via '%s'", order_id, label, provider.get("name"))
-            placed = True
-            break
-        logger.warning("[CHECKOUT-VERIFY-RZP] [ORDER %s] [%s] Rejected: %s", order_id, label, result.get("error"))
-
-    if not placed:
-        await repo.update(order_id, {"status": "provider_error"})
-        task_repo = TaskRepository(db)
-        if not await task_repo.exists_for_order(order_id, "failed_order"):
-            user_info = (order.get("user_info") or [{}])[0]
-            now = datetime.now(timezone.utc)
-            await task_repo.insert({
-                "type": "failed_order",
-                "status": "open",
-                "priority": "high",
-                "title": f"Provider unavailable — {order.get('category_name') or order.get('service_name', 'Unknown')} × {order.get('quantity', 0):,}",
-                "description": (
-                    f"Order #{order_id[-8:]} was paid via Razorpay (Glow Apex portal) "
-                    f"but all {len(candidates)} provider(s) rejected it. Manual fulfilment required."
-                ),
-                "notes": "",
-                "order_id": order_id,
-                "user_id": order.get("user_id", ""),
-                "user_email": user_info.get("email", ""),
-                "user_username": user_info.get("username", ""),
-                "order_link": order.get("link", ""),
-                "service_name": order.get("service_name", ""),
-                "category_name": order.get("category_name", ""),
-                "quantity": order.get("quantity"),
-                "charge": order.get("charge"),
-                "currency": order.get("currency", "USD"),
-                "seen_by_admin": False,
-                "resolved_at": None,
-                "created_at": now,
-                "updated_at": now,
-            })
+    await place_smm_order(db, order, order_id, "Razorpay (Glow Apex portal)")
 
     # Invalidate the session token — single use after payment
     await redis.delete(f"{_KEY_PREFIX}{body.session_token}")
 
     return {"status": "success", "order_id": order_id, "payment_id": body.razorpay_payment_id}
+
+
+@router.post("/verify/cryptomus", status_code=status.HTTP_200_OK)
+async def verify_cryptomus_via_token(
+    body: CryptomusVerifyViaTokenRequest,
+    request: Request,
+) -> dict:
+    """
+    Poll a Cryptomus payment using a checkout session token instead of a user JWT.
+    Called by the originating store while the inline crypto payment is pending.
+
+    Returns the current status. On the first poll that observes PAID, it atomically
+    claims the payment, marks the order paid, and places the SMM order. The webhook
+    performs the same claim-guarded placement, so whichever arrives first wins and the
+    other is a no-op — payment is never placed twice.
+    """
+    redis = request.app.state.redis
+    raw = await redis.get(f"{_KEY_PREFIX}{body.session_token}")
+    if not raw:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Session not found or expired")
+
+    session_data = json.loads(raw)
+    order_id = session_data.get("order_id")
+    if not order_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid session data")
+
+    try:
+        info = await cryptomus_service.verify_invoice(order_id=order_id)
+    except Exception as exc:
+        logger.error("[CHECKOUT-VERIFY-CRYPTO] Status check failed for order %s: %s", order_id, exc)
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Failed to check payment status. Please try again.")
+
+    mapped_status = info.get("order_status", "PENDING")
+
+    if mapped_status != "PAID":
+        return {"status": mapped_status.lower(), "order_id": order_id}
+
+    db = request.app.state.db
+    ledger = PaymentLedgerRepository(db)
+    repo = OrderRepository(db)
+
+    claimed = await ledger.claim_for_payment(order_id)
+    if claimed:
+        order = await repo.find_by_id_admin(order_id)
+        if order:
+            await repo.update(order_id, {"payment_status": "paid"})
+            await place_smm_order(db, order, order_id, "Cryptomus")
+        else:
+            logger.error("[CHECKOUT-VERIFY-CRYPTO] Order %s vanished after claim", order_id)
+
+    # Single-use: invalidate the session token once payment is confirmed
+    await redis.delete(f"{_KEY_PREFIX}{body.session_token}")
+
+    return {"status": "paid", "order_id": order_id}
