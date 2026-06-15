@@ -92,8 +92,8 @@ function HeroSection() {
           className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-20"
         >
           <a
-            href="#what-we-do"
-            onClick={(e) => { e.preventDefault(); document.getElementById('what-we-do')?.scrollIntoView({ behavior: 'smooth' }) }}
+            href="#services"
+            onClick={(e) => { e.preventDefault(); document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' }) }}
             className="inline-flex items-center gap-2 px-6 py-3.5 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold rounded-xl transition-all duration-200 hover:shadow-xl hover:shadow-emerald-500/25 hover:-translate-y-0.5"
           >
             Explore Services

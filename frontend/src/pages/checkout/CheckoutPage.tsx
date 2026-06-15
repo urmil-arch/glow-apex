@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import {
   ArrowLeft, Bitcoin, Check, CreditCard, ExternalLink,
@@ -11,12 +11,12 @@ import { usePricing, calcPackagePrice } from "@/context/PricingContext";
 import { useCurrency } from "@/context/CurrencyContext";
 import { api } from "@/lib/api";
 import { API_ENDPOINTS, GLOWAPEX_CHECKOUT_URL } from "@/config";
-import CryptomusInlinePayment from "./CryptomusInlinePayment";
 
 
 interface CheckoutInitResponse {
   token: string;
   expires_in: number;
+  payment_url?: string;
 }
 
 interface PackageOption {
@@ -44,6 +44,12 @@ const CATEGORY_TO_SERVICE_TYPE: Record<string, string> = {
   "YouTube Shorts Likes":         "youtube_shorts_likes",
   "Country Targeted Subscribers": "country_targeted_subscribers",
 };
+
+const YOUTUBE_REGEX = /^https?:\/\/(www\.|m\.)?(youtube\.com\/(watch\?.*v=[\w-]+|shorts\/[\w-]+|live\/[\w-]+|channel\/[\w-]+|c\/[\w-]+|user\/[\w-]+|@[\w.-]+)|youtu\.be\/[\w-]+)/i;
+
+function isValidYouTubeLink(url: string): boolean {
+  return YOUTUBE_REGEX.test(url.trim());
+}
 
 function buildDiscountLabel(
   discountType: string,
@@ -73,11 +79,10 @@ const CheckoutPage = () => {
   const { services } = useServices();
   const { getPricing } = usePricing();
   const { currency, fmt } = useCurrency();
-  const { serviceOrder, clearServiceOrder, categoryOrder, clearCategoryOrder } = useOrderStore();
+  const { serviceOrder, categoryOrder } = useOrderStore();
   const navigate = useNavigate();
 
   const isCategoryFlow = Boolean(categoryOrder);
-  const paymentSucceeded = useRef(false);
 
   const [link, setLink] = useState(() => categoryOrder?.link ?? "");
   const [quantity, setQuantity] = useState<number>(() => serviceOrder?.min ?? 100);
@@ -85,7 +90,6 @@ const CheckoutPage = () => {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("stripe");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [cryptoToken, setCryptoToken] = useState<string | null>(null);
   const [publicSettings, setPublicSettings] = useState<PublicSettings>({
     payment_stripe_enabled: true,
     payment_razorpay_enabled: true,
@@ -149,16 +153,6 @@ const CheckoutPage = () => {
 
   if (!authLoading && !isAuthenticated) return <Navigate to="/sign-in" replace />;
 
-  // Inline crypto payment takes over the page once an invoice has been created.
-  if (cryptoToken) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-teal-50/30">
-        <div className="max-w-5xl mx-auto px-4 pt-24 pb-12">
-          <CryptomusInlinePayment token={cryptoToken} onBack={() => setCryptoToken(null)} />
-        </div>
-      </div>
-    );
-  }
 
   if (!serviceOrder && !categoryOrder) return null;
 
@@ -188,7 +182,9 @@ const CheckoutPage = () => {
   const finalCharge = Math.max(afterPersonalDiscount, 0.50);
 
   const categoryPackageValid = packageOptions.length === 0 || effectivePackageKey !== "";
-  const isValid = link.trim().length > 0 &&
+  const linkTouched = link.trim().length > 0;
+  const linkValid = linkTouched && isValidYouTubeLink(link);
+  const isValid = linkValid &&
     (isCategoryFlow ? categoryPackageValid : quantity >= min && quantity <= max);
 
   const valueOptions = packageOptions.filter((o) => o.packageType === "value");
@@ -236,8 +232,6 @@ const CheckoutPage = () => {
         payment_method: method,
         return_origin: window.location.origin,
       });
-      paymentSucceeded.current = true;
-      isCategoryFlow ? clearCategoryOrder() : clearServiceOrder();
       window.location.href = `${GLOWAPEX_CHECKOUT_URL}?token=${res.data.token}`;
     } catch (err) {
       setError(extractError(err));
@@ -245,8 +239,6 @@ const CheckoutPage = () => {
     }
   }
 
-  // Cryptomus: paid inline on this store — no redirect. Keep the order store intact so
-  // the user can go back; it is cleared only once payment is confirmed (in the inline view).
   async function startCryptomus() {
     setLoading(true);
     setError(null);
@@ -256,10 +248,14 @@ const CheckoutPage = () => {
         payment_method: "cryptomus",
         return_origin: window.location.origin,
       });
-      setCryptoToken(res.data.token);
+      if (res.data.payment_url) {
+        window.location.href = res.data.payment_url;
+      } else {
+        setError("Failed to create Cryptomus payment. Please try again.");
+        setLoading(false);
+      }
     } catch (err) {
       setError(extractError(err));
-    } finally {
       setLoading(false);
     }
   }
@@ -312,8 +308,7 @@ const CheckoutPage = () => {
                         <optgroup label="Value Packages">
                           {valueOptions.map((opt) => (
                             <option key={opt.key} value={opt.key}>
-                              {opt.quantity.toLocaleString()} units — {fmt(opt.price)}
-                              {opt.discountLabel ? ` (${opt.discountLabel})` : ""}
+                              {opt.quantity.toLocaleString()} units
                             </option>
                           ))}
                         </optgroup>
@@ -322,8 +317,7 @@ const CheckoutPage = () => {
                         <optgroup label="Bulk Packages">
                           {bulkOptions.map((opt) => (
                             <option key={opt.key} value={opt.key}>
-                              {opt.quantity.toLocaleString()} units — {fmt(opt.price)}
-                              {opt.discountLabel ? ` (${opt.discountLabel})` : ""}
+                              {opt.quantity.toLocaleString()} units
                             </option>
                           ))}
                         </optgroup>
@@ -365,28 +359,40 @@ const CheckoutPage = () => {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <StepHeader num={2} label="Enter Your YouTube Link" />
               <div className="relative">
-                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-red-500">
-                  <PlayCircle className="w-4 h-4" />
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2">
+                  <PlayCircle className={`w-4 h-4 ${linkTouched ? (linkValid ? "text-teal-500" : "text-red-500") : "text-red-500"}`} />
                 </div>
                 <input
                   type="url"
                   placeholder="https://youtube.com/watch?v=..."
                   value={link}
                   onChange={(e) => setLink(e.target.value)}
-                  className="w-full text-sm border border-gray-200 rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
+                  className={`w-full text-sm border rounded-xl pl-10 pr-10 py-3 focus:outline-none focus:ring-2 transition-colors ${
+                    !linkTouched
+                      ? "border-gray-200 focus:ring-teal-400 focus:border-teal-400"
+                      : linkValid
+                      ? "border-teal-400 focus:ring-teal-400 focus:border-teal-400"
+                      : "border-red-400 focus:ring-red-300 focus:border-red-400"
+                  }`}
                 />
-                {link && (
-                  <a
-                    href={link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-teal-500 hover:text-teal-600"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
+                {linkTouched && (
+                  <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
+                    {linkValid ? (
+                      <a href={link} target="_blank" rel="noopener noreferrer" className="text-teal-500 hover:text-teal-600">
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    ) : (
+                      <Check className="w-4 h-4 text-gray-300" />
+                    )}
+                  </div>
                 )}
               </div>
-              <p className="text-xs text-gray-400 mt-2">Paste the full URL of the video, channel, or post you want to promote.</p>
+              {linkTouched && !linkValid && (
+                <p className="text-xs text-red-500 mt-2">Please enter a valid YouTube URL (video, channel, or shorts link).</p>
+              )}
+              {!linkTouched && (
+                <p className="text-xs text-gray-400 mt-2">Paste the full URL of the video, channel, or post you want to promote.</p>
+              )}
             </div>
 
             {/* Step 3 — Payment method */}

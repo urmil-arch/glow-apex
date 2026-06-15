@@ -320,7 +320,11 @@ async def _create_checkout_session(
     await redis.set(f"{_KEY_PREFIX}{token}", json.dumps(session_data), ex=_SESSION_TTL)
 
     logger.info("[CHECKOUT-INIT] Portal session created — order=%s method=%s", order_id, body.payment_method)
-    return CheckoutInitResponse(token=token, expires_in=_SESSION_TTL)
+    return CheckoutInitResponse(
+        token=token,
+        expires_in=_SESSION_TTL,
+        payment_url=session_data.get("cryptomus_payment_url"),
+    )
 
 
 @router.post("/init", response_model=CheckoutInitResponse, status_code=status.HTTP_201_CREATED)

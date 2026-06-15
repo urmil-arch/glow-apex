@@ -41,6 +41,7 @@ class CheckoutInitRequest(BaseModel):
 class CheckoutInitResponse(BaseModel):
     token: str
     expires_in: int  # seconds
+    payment_url: Optional[str] = None  # set for Cryptomus — frontend redirects directly
 
 
 class CheckoutSessionData(BaseModel):

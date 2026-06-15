@@ -244,7 +244,7 @@ function SessionPage({ token, d1Url }: { token: string; d1Url: string }) {
             razorpay_signature: response.razorpay_signature,
           }
           await api.post('/checkout/verify/razorpay', body)
-          window.location.href = `${resolveReturnOriginValue(session.return_origin)}/dashboard/orders`
+          window.location.href = '/checkout/success'
         } catch {
           setPayError('Payment received but order confirmation failed. Please contact support with your payment ID.')
           setPaying(false)

@@ -21,7 +21,6 @@ import BuyYoutubeShortsLikes from './pages/services/BuyYoutubeShortsLikes'
 import ServiceDetail from './pages/services/ServiceDetail'
 import TargetedCountry from './pages/services/TargetedCountry'
 import CheckStatus from './pages/checkout/CheckStatus'
-import StripeSuccess from './pages/checkout/StripeSuccess'
 import StripeCancel from './pages/checkout/StripeCancel'
 import AllBlogsPage from './pages/blogs/AllBlogsPage'
 import BlogSlugPage from './pages/blogs/BlogSlugPage'
@@ -49,6 +48,7 @@ import AdminBlogsPage from './pages/admin/blogs/BlogsPage'
 import TicketsPage from './pages/dashboard/tickets/TicketsPage'
 import TicketThreadPage from './pages/dashboard/tickets/TicketThreadPage'
 import RouteScrollReset from './components/common/route-scroll-reset'
+import AdminFAB from './components/common/AdminFAB'
 import SuspendedPage from './pages/auth/SuspendedPage'
 import MaintenancePage from './pages/MaintenancePage'
 
@@ -125,6 +125,7 @@ const App: React.FC = () => {
       <AuthProvider>
         <ServicesProvider>
           <RouteScrollReset />
+          <AdminFAB />
           <MaintenanceGuard>
           <SuspensionGuard>
           <Routes>
@@ -149,7 +150,6 @@ const App: React.FC = () => {
 
             {/* Checkout routes (no sidebar, but keep Navbar) */}
             <Route element={<><Navbar /><Outlet /></>}>
-              <Route path="/checkout/success" element={<StripeSuccess />} />
               <Route path="/checkout/cancel" element={<StripeCancel />} />
               <Route path="/checkout/check-status/:orderid" element={<CheckStatus />} />
             </Route>
