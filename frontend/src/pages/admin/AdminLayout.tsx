@@ -16,6 +16,7 @@ import {
   CreditCard,
   DollarSign,
   Newspaper,
+  UserCog,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
@@ -31,6 +32,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { to: '/admin', icon: <LayoutDashboard className="h-5 w-5" />, label: 'Dashboard', perm: 'dashboard' },
   { to: '/admin/users', icon: <Users className="h-5 w-5" />, label: 'Users', perm: 'users' },
+  { to: '/admin/staff', icon: <UserCog className="h-5 w-5" />, label: 'Staff', perm: 'admin' },
   { to: '/admin/orders', icon: <ClipboardList className="h-5 w-5" />, label: 'Orders', perm: 'orders' },
   { to: '/admin/tasks', icon: <ListTodo className="h-5 w-5" />, label: 'Tasks', perm: 'tasks' },
   { to: '/admin/payments', icon: <CreditCard className="h-5 w-5" />, label: 'Payments', perm: 'payments' },
@@ -50,22 +52,29 @@ const AdminLayout = () => {
   const [hasUnreadTicket, setHasUnreadTicket] = useState(false);
   const [unreadTasks, setUnreadTasks] = useState(0);
 
-  const visibleNav = NAV_ITEMS.filter((item) => hasPermission(item.perm));
+  const visibleNav = NAV_ITEMS.filter((item) =>
+    item.perm === 'admin' ? user?.is_admin === true : hasPermission(item.perm)
+  );
 
   useEffect(() => {
     if (!hasPermission('support')) return;
-    Promise.all([
-      api.get(API_ENDPOINTS.ADMIN_SUPPORT_TICKETS, { params: { page_size: 50 } }),
-      api.get(API_ENDPOINTS.ADMIN_SUPPORT_MESSAGES),
-    ]).then(([ticketsRes, msgsRes]) => {
-      const tickets: { admin_has_unread: boolean }[] = ticketsRes.data.tickets ?? [];
-      const messages: { is_read: boolean }[] = msgsRes.data.messages ?? [];
-      setHasUnreadTicket(
-        tickets.some((t) => t.admin_has_unread) ||
-        messages.some((m) => !m.is_read)
-      );
-    }).catch(() => {/* non-critical, silent */});
-  }, [location.pathname, hasPermission]);
+    const fetchSupportUnread = () => {
+      Promise.all([
+        api.get(API_ENDPOINTS.ADMIN_SUPPORT_TICKETS, { params: { page_size: 50 } }),
+        api.get(API_ENDPOINTS.ADMIN_SUPPORT_MESSAGES),
+      ]).then(([ticketsRes, msgsRes]) => {
+        const tickets: { admin_has_unread: boolean }[] = ticketsRes.data.tickets ?? [];
+        const messages: { is_read: boolean }[] = msgsRes.data.messages ?? [];
+        setHasUnreadTicket(
+          tickets.some((t) => t.admin_has_unread) ||
+          messages.some((m) => !m.is_read)
+        );
+      }).catch(() => {/* non-critical, silent */});
+    };
+    fetchSupportUnread();
+    const interval = setInterval(fetchSupportUnread, 30_000);
+    return () => clearInterval(interval);
+  }, [hasPermission]);
 
   // Poll unread task count every 60s; reset immediately when admin opens tasks page
   useEffect(() => {

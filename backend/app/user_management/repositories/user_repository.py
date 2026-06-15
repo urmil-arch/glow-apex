@@ -134,6 +134,8 @@ class UserRepository:
             query["is_verified"] = False
         elif filter_by == "suspended":
             query["is_suspended"] = True
+        elif filter_by == "staff":
+            query["role"] = {"$ne": "user"}
 
         sort_dir = 1 if sort_order == "asc" else -1
         skip = (page - 1) * page_size

@@ -132,7 +132,7 @@ const PurchaseFlow: React.FC<{ data: FlowCardProps[]; btnText?: string }> = ({
     if (!autoAnimate) {
       const timeout = setTimeout(() => {
         setAutoAnimate(true);
-      }, 5000);
+      }, 2000);
 
       return () => clearTimeout(timeout);
     }

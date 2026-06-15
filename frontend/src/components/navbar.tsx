@@ -54,7 +54,7 @@ const Navbar = () => {
 
   const pollNotifications = useCallback(async () => {
     if (!user) return;
-    const isStaff = user.is_admin || (user.role && user.role !== 'user');
+    const isStaff = user.is_admin || (user.permissions ?? []).length > 0;
     try {
       if (isStaff) {
         const ticketsRes = await api.get<{ tickets: { id: string; user_username: string; subject: string; updated_at: string; admin_has_unread: boolean }[] }>(
@@ -90,7 +90,24 @@ const Navbar = () => {
             }));
         } catch { /* no permission for messages — silently skip */ }
 
-        setNotifications([...ticketNotifs, ...msgNotifs]);
+        // Unread tasks — count-only endpoint, does not mark tasks as seen
+        let taskNotifs: NotifItem[] = [];
+        try {
+          const tasksRes = await api.get<{ count: number }>(API_ENDPOINTS.ADMIN_TASKS_UNREAD);
+          const count = tasksRes.data.count ?? 0;
+          if (count > 0) {
+            taskNotifs = [{
+              id: 'tasks-unread',
+              type: 'new_task' as const,
+              title: `${count} task${count === 1 ? '' : 's'} need attention`,
+              body: 'View and manage pending tasks',
+              href: '/admin/tasks',
+              created_at: new Date().toISOString(),
+            }];
+          }
+        } catch { /* no permission for tasks — silently skip */ }
+
+        setNotifications([...ticketNotifs, ...msgNotifs, ...taskNotifs]);
       } else {
         const res = await api.get<{ tickets: { id: string; subject: string; updated_at: string; user_has_unread: boolean }[] }>(
           API_ENDPOINTS.TICKETS
