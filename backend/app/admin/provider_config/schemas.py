@@ -15,10 +15,14 @@ class RoutingConfigServiceInfo(BaseModel):
 class RoutingConfigResponse(BaseModel):
     category_id: str
     category_name: str
-    default: RoutingConfigServiceInfo | None = None
-    fallbacks: list[RoutingConfigServiceInfo] = []
+    value_default: RoutingConfigServiceInfo | None = None
+    value_fallbacks: list[RoutingConfigServiceInfo] = []
+    bulk_default: RoutingConfigServiceInfo | None = None
+    bulk_fallbacks: list[RoutingConfigServiceInfo] = []
 
 
 class UpsertRoutingConfigRequest(BaseModel):
-    default_service_id: str
-    fallback_service_ids: list[str] = []
+    value_default_service_id: str
+    value_fallback_service_ids: list[str] = []
+    bulk_default_service_id: str = ""
+    bulk_fallback_service_ids: list[str] = []

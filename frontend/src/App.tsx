@@ -45,9 +45,11 @@ import AdminReportsPage from './pages/admin/reports/ReportsPage'
 import AdminSupportPage from './pages/admin/support/SupportPage'
 import PricingPage from './pages/admin/pricing/PricingPage'
 import AdminBlogsPage from './pages/admin/blogs/BlogsPage'
+import AdminNotificationsPage from './pages/admin/notifications/NotificationsPage'
 import StaffPage from './pages/admin/staff/StaffPage'
 import TicketsPage from './pages/dashboard/tickets/TicketsPage'
 import TicketThreadPage from './pages/dashboard/tickets/TicketThreadPage'
+import DashboardNotificationsPage from './pages/dashboard/notifications/NotificationsPage'
 import RouteScrollReset from './components/common/route-scroll-reset'
 import AdminFAB from './components/common/AdminFAB'
 import SuspendedPage from './pages/auth/SuspendedPage'
@@ -180,6 +182,7 @@ const App: React.FC = () => {
               <Route path="profile" element={<ProfilePage />} />
               <Route path="tickets" element={<TicketsPage />} />
               <Route path="tickets/:ticketId" element={<TicketThreadPage />} />
+              <Route path="notifications" element={<DashboardNotificationsPage />} />
             </Route>
 
             {/* Admin routes — requires is_admin */}
@@ -196,6 +199,7 @@ const App: React.FC = () => {
                 <Route path="support" element={<RequirePermission permission="support"><AdminSupportPage /></RequirePermission>} />
                 <Route path="pricing" element={<RequirePermission permission="pricing"><PricingPage /></RequirePermission>} />
                 <Route path="blogs" element={<RequirePermission permission="blogs"><AdminBlogsPage /></RequirePermission>} />
+                <Route path="notifications" element={<RequirePermission permission="notifications"><AdminNotificationsPage /></RequirePermission>} />
                 <Route path="staff" element={<AdminOnlyRoute><StaffPage /></AdminOnlyRoute>} />
               </Route>
             </Route>

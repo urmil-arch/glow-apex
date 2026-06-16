@@ -13,6 +13,7 @@ from app.checkout.schemas import (
     CheckoutInitRequest,
     CheckoutInitResponse,
     CheckoutSessionData,
+    CreateCryptomusInvoiceRequest,
     CryptomusVerifyViaTokenRequest,
     GuestInitRequest,
     InitWithPreAuthRequest,
@@ -265,28 +266,7 @@ async def _create_checkout_session(
         session_data["amount_paise"] = rzp_order["amount"]
         logger.info("[CHECKOUT-INIT] Razorpay order ready — order=%s rzp=%s amount=%s paise", order_id, rzp_order["id"], rzp_order["amount"])
 
-    else:  # cryptomus — paid inline on the originating store, no portal redirect
-        try:
-            invoice = await cryptomus_service.create_invoice(
-                order_id=order_id,
-                order_amount=str(charge),
-                order_currency="USD",
-                customer_details={
-                    "customer_id": user_id,
-                    "customer_name": user.get("full_name", "Customer"),
-                    "customer_email": user.get("email", ""),
-                    "customer_phone": user.get("phone", "0000000000"),
-                },
-                order_description=description,
-                return_url=f"{resolved_origin}/checkout/check-status?order_id={order_id}&method=cryptomus",
-                crypto_currency=settings.CRYPTOMUS_DEFAULT_CURRENCY,
-                network=settings.CRYPTOMUS_DEFAULT_NETWORK,
-            )
-        except Exception as exc:
-            logger.error("[CHECKOUT-INIT] Cryptomus invoice failed for order %s: %s", order_id, exc)
-            await OrderRepository(db).update(order_id, {"status": "failed", "payment_status": "failed"})
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Failed to create payment session. Please try again.")
-
+    else:  # cryptomus — invoice created lazily by Glow Apex via POST /checkout/create-cryptomus-invoice
         await PaymentLedgerRepository(db).insert({
             "order_id": order_id,
             "user_id": user_id,
@@ -298,7 +278,6 @@ async def _create_checkout_session(
             "method": "Cryptomus",
             "type": "credit",
             "status": "pending",
-            "cryptomus_invoice_id": invoice["invoice_id"],
             "service_name": service.get("name", ""),
             "category_name": category_name,
             "quantity": body.quantity,
@@ -306,15 +285,7 @@ async def _create_checkout_session(
             "created_at": now,
             "updated_at": now,
         })
-
-        session_data["cryptomus_invoice_id"] = invoice["invoice_id"]
-        session_data["cryptomus_address"] = invoice.get("address")
-        session_data["cryptomus_network"] = invoice.get("network")
-        session_data["cryptomus_payer_currency"] = invoice.get("payer_currency")
-        session_data["cryptomus_payer_amount"] = invoice.get("payer_amount")
-        session_data["cryptomus_payment_url"] = invoice.get("payment_url")
-        session_data["cryptomus_expired_at"] = invoice.get("expired_at")
-        logger.info("[CHECKOUT-INIT] Cryptomus invoice ready — order=%s invoice=%s", order_id, invoice["invoice_id"])
+        logger.info("[CHECKOUT-INIT] Cryptomus session ready (invoice deferred to portal) — order=%s", order_id)
 
     token = secrets.token_urlsafe(32)
     await redis.set(f"{_KEY_PREFIX}{token}", json.dumps(session_data), ex=_SESSION_TTL)
@@ -538,6 +509,87 @@ async def checkout_guest_init(
 
     logger.info("[CHECKOUT-GUEST] Session created — category=%s email=%s", body.category_name, body.email)
     return result
+
+
+@router.post("/create-cryptomus-invoice", status_code=status.HTTP_201_CREATED)
+async def create_cryptomus_invoice(
+    body: CreateCryptomusInvoiceRequest,
+    request: Request,
+) -> dict:
+    """
+    Create a Cryptomus invoice for a pending checkout session.
+    Called by Glow Apex (D2) when it loads the Cryptomus payment screen.
+    No JWT required — the session token is the authorization.
+    Idempotent: if an invoice already exists for this session, the existing data is returned.
+    """
+    redis = request.app.state.redis
+    raw = await redis.get(f"{_KEY_PREFIX}{body.session_token}")
+    if not raw:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Session not found or expired")
+
+    session_data = json.loads(raw)
+    if session_data.get("payment_method") != "cryptomus":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Session is not for Cryptomus payment")
+
+    if session_data.get("cryptomus_invoice_id"):
+        return {
+            "invoice_id": session_data["cryptomus_invoice_id"],
+            "address": session_data.get("cryptomus_address"),
+            "network": session_data.get("cryptomus_network"),
+            "payer_currency": session_data.get("cryptomus_payer_currency"),
+            "payer_amount": session_data.get("cryptomus_payer_amount"),
+            "payment_url": session_data.get("cryptomus_payment_url"),
+            "expired_at": session_data.get("cryptomus_expired_at"),
+        }
+
+    order_id = session_data["order_id"]
+    resolved_origin = session_data.get("return_origin", settings.FRONTEND_ORIGIN.rstrip("/"))
+
+    try:
+        invoice = await cryptomus_service.create_invoice(
+            order_id=order_id,
+            order_amount=str(session_data["charge"]),
+            order_currency="USD",
+            customer_details={
+                "customer_id": "",
+                "customer_name": "Customer",
+                "customer_email": "",
+                "customer_phone": "0000000000",
+            },
+            order_description=session_data.get("description", ""),
+            return_url=f"{resolved_origin}/checkout/check-status?order_id={order_id}&method=cryptomus",
+            crypto_currency=settings.CRYPTOMUS_DEFAULT_CURRENCY,
+            network=settings.CRYPTOMUS_DEFAULT_NETWORK,
+        )
+    except Exception as exc:
+        logger.error("[CHECKOUT-CRYPTOMUS] Invoice creation failed for order %s: %s", order_id, exc)
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Failed to create Cryptomus invoice. Please try again.")
+
+    session_data["cryptomus_invoice_id"] = invoice["invoice_id"]
+    session_data["cryptomus_address"] = invoice.get("address")
+    session_data["cryptomus_network"] = invoice.get("network")
+    session_data["cryptomus_payer_currency"] = invoice.get("payer_currency")
+    session_data["cryptomus_payer_amount"] = invoice.get("payer_amount")
+    session_data["cryptomus_payment_url"] = invoice.get("payment_url")
+    session_data["cryptomus_expired_at"] = invoice.get("expired_at")
+
+    ttl = await redis.ttl(f"{_KEY_PREFIX}{body.session_token}")
+    await redis.set(
+        f"{_KEY_PREFIX}{body.session_token}",
+        json.dumps(session_data),
+        ex=max(ttl, 60),
+    )
+
+    logger.info("[CHECKOUT-CRYPTOMUS] Invoice created — order=%s invoice=%s", order_id, invoice["invoice_id"])
+    return {
+        "invoice_id": invoice["invoice_id"],
+        "address": invoice.get("address"),
+        "network": invoice.get("network"),
+        "payer_currency": invoice.get("payer_currency"),
+        "payer_amount": invoice.get("payer_amount"),
+        "payment_url": invoice.get("payment_url"),
+        "expired_at": invoice.get("expired_at"),
+    }
 
 
 @router.post("/verify/razorpay", status_code=status.HTTP_200_OK)

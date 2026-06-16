@@ -1,13 +1,21 @@
 import logging
+import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from starlette.concurrency import run_in_threadpool
 
 from app.blog.repository import BlogRepository
 from app.blog.schemas import BlogCreate, BlogListResponse, BlogResponse, BlogUpdate
+from app.common.config import settings
 from app.user_management.utils.dependencies import require_permission
 from app.user_management.utils.permissions import PERM_BLOGS
+
+_UPLOAD_DIR = Path("static/blog-images")
+_MAX_SIZE = 5 * 1024 * 1024  # 5 MB
+_ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +88,30 @@ async def create_post(body: BlogCreate, request: Request) -> BlogResponse:
     post = await repo.find_by_id(post_id)
     logger.info("Blog post created: slug=%s id=%s", body.slug, post_id)
     return BlogResponse(**post)
+
+
+@admin_router.post("/upload-image")
+async def upload_blog_image(file: UploadFile = File(...)) -> dict:
+    """Upload a blog cover image and return its public URL."""
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in _ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(_ALLOWED_EXTENSIONS))}",
+        )
+    contents = await file.read()
+    if len(contents) > _MAX_SIZE:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "File exceeds 5 MB limit")
+
+    filename = f"{uuid.uuid4().hex}{ext}"
+    dest = _UPLOAD_DIR / filename
+
+    def _write() -> None:
+        dest.write_bytes(contents)
+
+    await run_in_threadpool(_write)
+    logger.info("Blog image uploaded: %s", filename)
+    return {"url": f"{settings.BACKEND_BASE_URL}/static/blog-images/{filename}"}
 
 
 @admin_router.patch("/{post_id}", response_model=BlogResponse)

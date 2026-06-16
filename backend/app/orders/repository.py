@@ -142,6 +142,37 @@ class OrderRepository:
         results = await self._col.aggregate(pipeline).to_list(length=1)
         return results[0] if results else None
 
+    async def aggregate_service_stats(self) -> list[dict]:
+        """
+        Group orders by service_id and return total vs working order counts.
+        'Working' = the provider accepted the order (status is not an error/cancel/refund).
+        """
+        working_statuses = [
+            "Pending", "Processing", "InProgress", "In progress",
+            "Completed", "Partial", "Active",
+        ]
+        pipeline: list[dict] = [
+            {"$group": {
+                "_id": "$service_id",
+                "total_orders": {"$sum": 1},
+                "working_orders": {
+                    "$sum": {
+                        "$cond": [{"$in": ["$status", working_statuses]}, 1, 0]
+                    }
+                },
+            }},
+        ]
+        results = await self._col.aggregate(pipeline).to_list(length=None)
+        return [
+            {
+                "service_id": r["_id"],
+                "total_orders": r["total_orders"],
+                "working_orders": r["working_orders"],
+            }
+            for r in results
+            if r["_id"]
+        ]
+
     async def find_all_admin(
         self,
         page: int = 1,

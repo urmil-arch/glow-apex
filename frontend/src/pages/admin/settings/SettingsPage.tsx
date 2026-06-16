@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Check,
+  ChevronDown,
   CreditCard,
   DollarSign,
   Edit2,
@@ -354,6 +355,7 @@ const SettingsPage = () => {
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [settingsError, setSettingsError] = useState('');
+  const [socialOpen, setSocialOpen] = useState(false);
 
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loadingProviders, setLoadingProviders] = useState(true);
@@ -456,6 +458,21 @@ const SettingsPage = () => {
                 <p className="text-sm text-red-600 bg-red-50 px-4 py-3 rounded-xl">{settingsError}</p>
               )}
 
+              {/* Save bar */}
+              <div className="flex items-center justify-end gap-3">
+                <button type="submit" className={primaryCls} disabled={savingSettings}>
+                  {savingSettings ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : settingsSaved ? (
+                    <Check className="h-4 w-4" />
+                  ) : null}
+                  {settingsSaved ? 'Saved' : 'Save Settings'}
+                </button>
+                {settingsSaved && (
+                  <span className="text-sm text-emerald-600 font-medium">Changes saved successfully.</span>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
 
                 {/* ---- Left column ---- */}
@@ -536,33 +553,42 @@ const SettingsPage = () => {
                   </div>
 
                   {/* Social Links */}
-                  <div className="bg-white border border-gray-200 rounded-xl p-5">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Globe className="h-4 w-4 text-gray-500" />
-                      <h3 className="font-medium text-gray-800 text-sm">Social Links</h3>
-                    </div>
-                    <p className="text-xs text-gray-400 mb-4">Filled links appear in the site footer.</p>
-                    <div className="space-y-3">
-                      {(
-                        [
-                          { key: 'social_twitter', label: 'Twitter / X', placeholder: 'https://x.com/yourhandle' },
-                          { key: 'social_instagram', label: 'Instagram', placeholder: 'https://instagram.com/yourhandle' },
-                          { key: 'social_youtube', label: 'YouTube', placeholder: 'https://youtube.com/@yourchannel' },
-                          { key: 'social_facebook', label: 'Facebook', placeholder: 'https://facebook.com/yourpage' },
-                        ] as const
-                      ).map(({ key, label, placeholder }) => (
-                        <div key={key}>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
-                          <input
-                            type="url"
-                            className={inputCls}
-                            placeholder={placeholder}
-                            value={settings[key]}
-                            onChange={(e) => set(key, e.target.value)}
-                          />
-                        </div>
-                      ))}
-                    </div>
+                  <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setSocialOpen((o) => !o)}
+                      className="w-full flex items-center justify-between gap-2 p-5 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Globe className="h-4 w-4 text-gray-500" />
+                        <h3 className="font-medium text-gray-800 text-sm">Social Links</h3>
+                      </div>
+                      <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${socialOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {socialOpen && (
+                      <div className="px-5 pb-5 space-y-3 border-t border-gray-100 pt-4">
+                        <p className="text-xs text-gray-400">Filled links appear in the site footer.</p>
+                        {(
+                          [
+                            { key: 'social_twitter', label: 'Twitter / X', placeholder: 'https://x.com/yourhandle' },
+                            { key: 'social_instagram', label: 'Instagram', placeholder: 'https://instagram.com/yourhandle' },
+                            { key: 'social_youtube', label: 'YouTube', placeholder: 'https://youtube.com/@yourchannel' },
+                            { key: 'social_facebook', label: 'Facebook', placeholder: 'https://facebook.com/yourpage' },
+                          ] as const
+                        ).map(({ key, label, placeholder }) => (
+                          <div key={key}>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+                            <input
+                              type="url"
+                              className={inputCls}
+                              placeholder={placeholder}
+                              value={settings[key]}
+                              onChange={(e) => set(key, e.target.value)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -631,23 +657,10 @@ const SettingsPage = () => {
                       </div>
                     )}
                   </div>
+
                 </div>
               </div>
 
-              {/* Save */}
-              <div className="flex items-center gap-3 pt-1">
-                <button type="submit" className={primaryCls} disabled={savingSettings}>
-                  {savingSettings ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : settingsSaved ? (
-                    <Check className="h-4 w-4" />
-                  ) : null}
-                  {settingsSaved ? 'Saved' : 'Save Settings'}
-                </button>
-                {settingsSaved && (
-                  <span className="text-sm text-emerald-600 font-medium">Changes saved successfully.</span>
-                )}
-              </div>
             </form>
           )}
         </div>

@@ -41,16 +41,31 @@ const Navbar = () => {
   const [panelOpen, setPanelOpen]               = useState(false);
   const notifRef                                 = useRef<HTMLDivElement>(null);
 
-  const unreadCount = notifications.filter(n => !acknowledgedIds.has(n.id)).length;
+  const unreadCount = notifications.filter(n =>
+    n.type === 'admin_notification' ? n.is_read === false : !acknowledgedIds.has(n.id)
+  ).length;
 
   const handleOpenPanel = () => {
     setPanelOpen(prev => {
       if (!prev) {
+        // Acknowledge ticket/task/message items locally
         setAcknowledgedIds(ids => new Set([...ids, ...notifications.map(n => n.id)]));
+        // Locally clear unread flag on admin notifications so badge drops immediately
+        setNotifications(prev => prev.map(n =>
+          n.type === 'admin_notification' ? { ...n, is_read: true } : n
+        ));
+        // Mark all admin notifications as read on the backend
+        if (user) {
+          api.post(API_ENDPOINTS.USER_NOTIFICATIONS_READ_ALL).catch(() => {});
+        }
       }
       return !prev;
     });
   };
+
+  const handleMarkNotifRead = useCallback((backendId: string) => {
+    api.post(`${API_ENDPOINTS.USER_NOTIFICATIONS}/${backendId}/read`).catch(() => {});
+  }, []);
 
   const pollNotifications = useCallback(async () => {
     if (!user) return;
@@ -107,21 +122,59 @@ const Navbar = () => {
           }
         } catch { /* no permission for tasks — silently skip */ }
 
-        setNotifications([...ticketNotifs, ...msgNotifs, ...taskNotifs]);
+        // Admin-sent notifications visible to all users (including staff)
+        let adminNotifItems: NotifItem[] = [];
+        try {
+          const nRes = await api.get<{ notifications: { id: string; title: string; message: string; is_read: boolean; created_at: string }[] }>(
+            API_ENDPOINTS.USER_NOTIFICATIONS, { params: { page_size: 10 } }
+          );
+          adminNotifItems = (nRes.data.notifications ?? []).map(n => ({
+            id: `admin-notif-${n.id}`,
+            type: 'admin_notification' as const,
+            title: n.title,
+            body: n.message,
+            href: '/dashboard/notifications',
+            created_at: n.created_at,
+            is_read: n.is_read,
+            backend_id: n.id,
+          }));
+        } catch { /* no permission or network — silently skip */ }
+
+        setNotifications([...ticketNotifs, ...msgNotifs, ...taskNotifs, ...adminNotifItems]);
       } else {
         const res = await api.get<{ tickets: { id: string; subject: string; updated_at: string; user_has_unread: boolean }[] }>(
           API_ENDPOINTS.TICKETS
         );
         const tickets = res.data.tickets ?? [];
         const unread = tickets.filter(t => t.user_has_unread);
-        setNotifications(unread.map(t => ({
+        const ticketItems: NotifItem[] = unread.map(t => ({
           id: t.id,
           type: 'ticket_reply' as const,
           title: 'Admin replied to your ticket',
           body: t.subject,
           href: `/dashboard/tickets/${t.id}`,
           created_at: t.updated_at,
-        })));
+        }));
+
+        // Admin-sent notifications for regular users
+        let adminNotifItems: NotifItem[] = [];
+        try {
+          const nRes = await api.get<{ notifications: { id: string; title: string; message: string; is_read: boolean; created_at: string }[] }>(
+            API_ENDPOINTS.USER_NOTIFICATIONS, { params: { page_size: 10 } }
+          );
+          adminNotifItems = (nRes.data.notifications ?? []).map(n => ({
+            id: `admin-notif-${n.id}`,
+            type: 'admin_notification' as const,
+            title: n.title,
+            body: n.message,
+            href: '/dashboard/notifications',
+            created_at: n.created_at,
+            is_read: n.is_read,
+            backend_id: n.id,
+          }));
+        } catch { /* silently skip */ }
+
+        setNotifications([...ticketItems, ...adminNotifItems]);
       }
     } catch { /* silent — non-critical */ }
   }, [user]);
@@ -243,28 +296,30 @@ const Navbar = () => {
               Contact
             </button>
 
-            <Menubar>
-              <MenubarMenu>
-                <MenubarTrigger className="transition-colors flex items-center justify-center bg-emerald-700 text-white rounded-full gap-2 py-1 px-3 text-sm data-[state=open]:bg-emerald-700 data-[state=open]:text-white">
-                  {selectedCurrency.symbol} {selectedCurrency.name}
-                </MenubarTrigger>
-                <MenubarContent align="end" className="rounded-xl border-none bg-background/10 backdrop-blur-2xl text-sm w-fit min-w-0">
+            <div className="relative group">
+              <button className="transition-colors flex items-center justify-center bg-emerald-700 text-white rounded-full gap-2 py-1 px-3 text-sm">
+                {selectedCurrency.symbol} {selectedCurrency.name}
+              </button>
+              {/* Invisible bridge prevents menu closing when cursor moves down */}
+              <div className="absolute left-0 top-full w-full h-2" />
+              <div className="absolute top-[calc(100%+4px)] right-0 hidden group-hover:block z-50">
+                <div className="rounded-xl bg-white/95 backdrop-blur-2xl shadow-lg py-1 min-w-[120px] border border-gray-100">
                   {currencies.map((currency) => (
-                    <MenubarItem
+                    <button
                       key={currency.code}
                       onClick={() => handleCurrencyChange(currency)}
-                      className={`cursor-pointer ${
+                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-gray-50 hover:text-gray-900 ${
                         selectedCurrency.code === currency.code
                           ? "bg-emerald-50 text-emerald-600 font-medium"
-                          : ""
+                          : "text-gray-700"
                       }`}
                     >
                       {currency.symbol} ({currency.name})
-                    </MenubarItem>
+                    </button>
                   ))}
-                </MenubarContent>
-              </MenubarMenu>
-            </Menubar>
+                </div>
+              </div>
+            </div>
 
             {/* Notification bell */}
             {user && (
@@ -285,6 +340,7 @@ const Navbar = () => {
                     onClose={() => setPanelOpen(false)}
                     onClearAll={() => { setNotifications([]); setPanelOpen(false); }}
                     onRemove={id => setNotifications(prev => prev.filter(n => n.id !== id))}
+                    onRead={handleMarkNotifRead}
                   />
                 )}
               </div>

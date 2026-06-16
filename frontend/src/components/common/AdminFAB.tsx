@@ -1,12 +1,23 @@
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
 export default function AdminFAB() {
   const { user } = useAuth()
+  const { pathname } = useLocation()
 
   const isStaff = user?.is_admin || (user?.permissions ?? []).length > 0
-  if (!isStaff) return null
+  const hidden =
+    !isStaff ||
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/checkout') ||
+    pathname.startsWith('/sign-in') ||
+    pathname.startsWith('/sign-up') ||
+    pathname.startsWith('/maintenance') ||
+    pathname.startsWith('/suspended')
+
+  if (hidden) return null
 
   return (
     <div className="group fixed bottom-6 right-6 z-50 flex items-center gap-2">

@@ -91,6 +91,12 @@ async def list_orders(
     )
 
 
+@router.get("/service-stats")
+async def get_service_stats(request: Request) -> list[dict]:
+    """Return per-service order counts for the working-services panel."""
+    return await OrderRepository(request.app.state.db).aggregate_service_stats()
+
+
 @router.get("/{order_id}", response_model=AdminOrderResponse)
 async def get_order(
     order_id: str,

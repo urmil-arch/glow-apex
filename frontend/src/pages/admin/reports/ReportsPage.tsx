@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, Fragment } from 'react';
+import { Link } from 'react-router-dom';
 import {
-  BarChart3, TrendingUp, ShoppingCart, Ticket,
+  BarChart3, TrendingUp, ShoppingCart, Ticket, ListTodo,
   DollarSign, Layers, Server, RefreshCw, Loader2, AlertCircle,
   ChevronDown, ChevronRight,
 } from 'lucide-react';
@@ -235,20 +236,24 @@ interface StatCardProps {
   icon: React.ReactNode;
   iconBg: string;
   iconColor: string;
+  to?: string;
 }
 
-const StatCard = ({ label, value, sub, icon, iconBg, iconColor }: StatCardProps) => (
-  <div className="bg-white rounded-xl border border-gray-200 p-5">
-    <div className="flex items-center justify-between mb-3">
-      <p className="text-sm text-gray-500">{label}</p>
-      <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${iconBg}`}>
-        <span className={iconColor}>{icon}</span>
+const StatCard = ({ label, value, sub, icon, iconBg, iconColor, to }: StatCardProps) => {
+  const inner = (
+    <div className={`bg-white rounded-xl border border-gray-200 p-5 h-full ${to ? 'hover:border-teal-300 hover:shadow-sm transition-all' : ''}`}>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm text-gray-500">{label}</p>
+        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${iconBg}`}>
+          <span className={iconColor}>{icon}</span>
+        </div>
       </div>
+      <p className="text-2xl font-bold text-gray-900">{value}</p>
+      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
     </div>
-    <p className="text-2xl font-bold text-gray-900">{value}</p>
-    {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
-  </div>
-);
+  );
+  return to ? <Link to={to} className="block">{inner}</Link> : inner;
+};
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
@@ -271,6 +276,7 @@ const ReportsPage = () => {
   const [ticketStatusBreakdown, setTicketStatusBreakdown] = useState<Record<string, number>>({});
   const [ticketTypeBreakdown,   setTicketTypeBreakdown]   = useState<Record<string, number>>({});
   const [ticketBreakdownLoading, setTicketBreakdownLoading] = useState(false);
+  const [pendingTasksCount, setPendingTasksCount] = useState(0);
 
   const fetchReport = useCallback(async () => {
     setLoading(true);
@@ -322,16 +328,16 @@ const ReportsPage = () => {
     try {
       const statusResults = await Promise.all(
         TICKET_STATUSES.map(s =>
-          api.get<{ tickets: unknown[] }>(API_ENDPOINTS.ADMIN_SUPPORT_TICKETS, {
-            params: { status_filter: s.key },
-          }).then(r => ({ key: s.key, count: (r.data.tickets ?? []).length }))
+          api.get<{ tickets: unknown[]; total?: number }>(API_ENDPOINTS.ADMIN_SUPPORT_TICKETS, {
+            params: { status_filter: s.key, page_size: 1 },
+          }).then(r => ({ key: s.key, count: r.data.total ?? (r.data.tickets ?? []).length }))
         )
       );
       const typeResults = await Promise.all(
         TICKET_TYPES.map(t =>
-          api.get<{ tickets: unknown[] }>(API_ENDPOINTS.ADMIN_SUPPORT_TICKETS, {
-            params: { type_filter: t.key },
-          }).then(r => ({ key: t.key, count: (r.data.tickets ?? []).length }))
+          api.get<{ tickets: unknown[]; total?: number }>(API_ENDPOINTS.ADMIN_SUPPORT_TICKETS, {
+            params: { type_filter: t.key, page_size: 1 },
+          }).then(r => ({ key: t.key, count: r.data.total ?? (r.data.tickets ?? []).length }))
         )
       );
       const sb: Record<string, number> = {};
@@ -342,6 +348,21 @@ const ReportsPage = () => {
       setTicketTypeBreakdown(tb);
     } catch { /* non-critical */ }
     finally { setTicketBreakdownLoading(false); }
+  }, []);
+
+  // Fetch ticket breakdown on mount so the stat card is always populated
+  useEffect(() => { fetchTicketBreakdown(); }, [fetchTicketBreakdown]);
+
+  // Fetch open + in_progress task counts for the tasks stat card
+  useEffect(() => {
+    Promise.all([
+      api.get<{ total: number }>(API_ENDPOINTS.ADMIN_TASKS, { params: { status: 'open',        page_size: 1 } }),
+      api.get<{ total: number }>(API_ENDPOINTS.ADMIN_TASKS, { params: { status: 'in_progress', page_size: 1 } }),
+    ])
+      .then(([openRes, inProgressRes]) =>
+        setPendingTasksCount((openRes.data.total ?? 0) + (inProgressRes.data.total ?? 0))
+      )
+      .catch(() => {/* non-critical */});
   }, []);
 
   useEffect(() => {
@@ -446,26 +467,12 @@ const ReportsPage = () => {
             </button>
           ))}
         </div>
-
-        <div className="ml-auto flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-          {(['day', 'month'] as GroupBy[]).map(g => (
-            <button
-              key={g}
-              onClick={() => setGroupBy(g)}
-              className={`px-3 py-1 text-xs font-medium rounded-md capitalize transition-colors ${
-                groupBy === g ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              By {g}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
         <StatCard
-          label={`Orders — ${periodLabel}`}
+          label={`Orders ${periodLabel}`}
           value={num(summary.total_orders)}
           sub={`${num(summary.total_quantity)} units`}
           icon={<ShoppingCart className="w-4 h-4" />}
@@ -473,15 +480,7 @@ const ReportsPage = () => {
           iconColor="text-blue-500"
         />
         <StatCard
-          label={`Charges — ${periodLabel}`}
-          value={$(summary.total_charges)}
-          sub={`${summary.total_payments} payments`}
-          icon={<DollarSign className="w-4 h-4" />}
-          iconBg="bg-green-50"
-          iconColor="text-green-500"
-        />
-        <StatCard
-          label={`Revenue — ${periodLabel}`}
+          label={`Revenue ${periodLabel}`}
           value={$(summary.total_revenue)}
           sub={`Server: ${$(summary.total_server_price)}`}
           icon={<TrendingUp className="w-4 h-4" />}
@@ -489,12 +488,30 @@ const ReportsPage = () => {
           iconColor="text-teal-500"
         />
         <StatCard
-          label={`Tickets — ${periodLabel}`}
-          value={num(summary.total_tickets)}
-          sub={`${num(summary.total_ticket_replies)} replies`}
+          label={`Charges ${periodLabel}`}
+          value={$(summary.total_charges)}
+          sub={`${summary.total_payments} payments`}
+          icon={<DollarSign className="w-4 h-4" />}
+          iconBg="bg-green-50"
+          iconColor="text-green-500"
+        />
+        <StatCard
+          label="Active Tickets"
+          value={num((ticketStatusBreakdown['open'] ?? 0) + (ticketStatusBreakdown['in_progress'] ?? 0))}
+          sub="Open + In Progress"
           icon={<Ticket className="w-4 h-4" />}
           iconBg="bg-purple-50"
           iconColor="text-purple-500"
+          to="/admin/support"
+        />
+        <StatCard
+          label="Pending Tasks"
+          value={num(pendingTasksCount)}
+          sub="Open + In Progress"
+          icon={<ListTodo className="w-4 h-4" />}
+          iconBg="bg-amber-50"
+          iconColor="text-amber-500"
+          to="/admin/tasks"
         />
       </div>
 
@@ -513,6 +530,19 @@ const ReportsPage = () => {
             {t.label}
           </button>
         ))}
+        <div className="ml-auto flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+          {(['day', 'month'] as GroupBy[]).map(g => (
+            <button
+              key={g}
+              onClick={() => setGroupBy(g)}
+              className={`px-3 py-1 text-xs font-medium rounded-md capitalize transition-colors ${
+                groupBy === g ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              By {g}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Table */}

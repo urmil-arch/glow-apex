@@ -680,14 +680,134 @@
 [2026-06-12 00:00] | modify | frontend/src/pages/dashboard/orders/OrderPage.tsx | Removed Link to /services in the empty-orders state; replaced with plain "No orders yet." text.
 
 [2026-06-15 00:00] | refactor | backend/app/orders/fulfillment.py (new), backend/app/payments/stripe/router.py, backend/app/checkout/router.py | Extracted place_smm_order() shared helper (provider resolution via routing config, default+fallback attempts, order update, failed_order task on total failure). Replaced two duplicated copies of this logic — the Stripe webhook and the Razorpay verify-via-token endpoint — with calls to the helper. Removed now-unused imports (ProviderRepository, TaskRepository, RoutingConfigRepository, ServiceRepository, call_provider, datetime) from both routers.
+
 [2026-06-15 00:00] | add | backend/app/common/config.py, backend/app/main.py | Added ALLOWED_RETURN_ORIGINS setting + allowed_return_origins/cors_origins computed properties; CORS allow_origins now built from settings.cors_origins (stores + portal) instead of the two hardcoded origins. Added CRYPTOMUS_DEFAULT_CURRENCY (USDT) and CRYPTOMUS_DEFAULT_NETWORK (tron) for inline crypto payments.
+
 [2026-06-15 00:00] | modify | backend/app/checkout/schemas.py, backend/app/checkout/router.py | Cross-domain 3-store support. Added return_origin to CheckoutInitRequest/GuestInitRequest/InitWithPreAuthRequest and to CheckoutSessionData; added "cryptomus" to all payment_method validators; added cryptomus_* invoice fields to CheckoutSessionData; added CryptomusVerifyViaTokenRequest. _create_checkout_session now validates return_origin against the allowlist (open-redirect guard via _validated_return_origin), persists it on the order doc + session data, and has a cryptomus branch that creates a Cryptomus invoice (single coin/network) for inline on-store payment. Stripe success/cancel URLs now carry the validated origin so the portal bounces back to the correct store. Added POST /checkout/verify/cryptomus token endpoint that polls invoice status and places the SMM order (claim-guarded) on PAID.
+
 [2026-06-15 00:00] | fix | backend/app/payments/cryptomus/router.py | Cryptomus webhook was a stub (TODO). Now on a PAID status it atomically claims the payment, marks the order paid, and places the SMM order via the shared helper. Claim guard makes it idempotent with the store's status poll — the order is never placed twice.
+
 [2026-06-15 00:00] | add | backend/app/admin/settings/schemas.py, backend/app/admin/settings/router.py, backend/app/public_settings/router.py | Added payment_cryptomus_enabled flag (default true) to platform settings, admin update, and public settings response so the store can show/hide the crypto method.
+
 [2026-06-15 00:00] | add | frontend/src/pages/checkout/CryptomusInlinePayment.tsx (new) | Inline crypto payment view rendered on the store (no redirect). Loads the invoice via GET /checkout/session/{token}, shows exact amount + wallet address (copy) + network + expiry countdown, polls POST /checkout/verify/cryptomus, and on PAID navigates to the dashboard. Falls back to the hosted Cryptomus invoice link for QR/wallet-connect.
+
 [2026-06-15 00:00] | modify | frontend/src/config.ts, frontend/src/pages/checkout/CheckoutPage.tsx | Added CHECKOUT_SESSION and CHECKOUT_VERIFY_CRYPTOMUS endpoints. CheckoutPage now supports the "cryptomus" method (third payment option, dynamic method grid, payment_cryptomus_enabled gating), sends return_origin=window.location.origin on init for stripe/razorpay (portal bounce target), and renders CryptomusInlinePayment inline for crypto.
+
 [2026-06-15 00:00] | modify | frontend/src/App.tsx | Added RootLanding component: buyrealviews.com lands on the Views page, buyrealsubscribers.com on the Subscribers page, all other hosts on Home. Root route now uses RootLanding instead of HomePage.
+
 [2026-06-15 00:00] | add | frontend/src/glowapex/lib/returnOrigin.ts (new) | Helper to resolve the per-session return origin (from ?origin query for Stripe or session.return_origin for Razorpay, with VITE_D1_URL fallback) and a store-name lookup for portal copy.
+
 [2026-06-15 00:00] | modify | frontend/src/glowapex/pages/Checkout/index.tsx, frontend/src/glowapex/pages/CheckoutSuccess.tsx, frontend/src/glowapex/pages/CheckoutCancel.tsx | Portal now bounces the user back to the originating store using the per-session return origin instead of a single baked VITE_D1_URL, and shows the dynamic store name ("Redirected from X", "Back to X Store") instead of hardcoded BuyRealViews.
+
 [2026-06-15 00:00] | modify | frontend/src/pages/admin/settings/SettingsPage.tsx | Added Crypto (Cryptomus) toggle to the admin Payment Methods card; updated the all-off warning to include cryptomus.
+
 [2026-06-15 00:00] | discovery | backend/app/payments/stripe/router.py, backend/app/checkout/router.py, backend/app/payments/cryptomus/router.py | The SMM provider-placement+fallback logic was duplicated verbatim in the Stripe webhook and the Razorpay verify endpoint; the Cryptomus webhook was a stub that never placed orders. Consolidated into orders/fulfillment.place_smm_order and wired all three gateways through it.
+
+[2026-06-15 10:00] | fix | frontend/src/pages/checkout/CheckoutPage.tsx | Removed unused variables left from previous session's blank-page fix: clearServiceOrder, clearCategoryOrder from useOrderStore destructure; paymentSucceeded ref; useRef from React imports.
+
+[2026-06-15 10:10] | modify | frontend/src/glowapex/pages/CheckoutSuccess.tsx | Full redesign: rewritten as a centered min-h-screen flex layout with ambient emerald glow backdrop. Animated CheckCircle icon (spring) with Sparkles corner accent, pulsing "Payment Confirmed" badge, progress bar filling 0→100% over REDIRECT_MS (4000ms), and manual "Go to dashboard now" CTA. Reads VITE_D1_URL env var for redirect target.
+
+[2026-06-15 10:20] | add | frontend/src/components/common/AdminFAB.tsx | New floating action button rendered at bottom-right of every page. Visible only to staff (is_admin or permissions.length > 0). Links to /admin. Hover tooltip "Admin Panel" revealed via Tailwind group/group-hover (slides in from right with opacity transition).
+
+[2026-06-15 10:30] | modify | frontend/src/App.tsx | Added AdminFAB alongside RouteScrollReset so it appears on all pages. Fixed SuspensionGuard: added `&& user && !user.is_suspended` condition so unauthenticated users (login failed for suspended account) can reach /suspended without being redirected. Added AdminOnlyRoute guard component (redirects non-admin to /admin). Added /admin/staff route wrapped in AdminOnlyRoute. Fixed MaintenanceGuard to poll every 60s and re-run on every route change — ensures maintenance mode takes effect for active sessions without requiring a page reload.
+
+[2026-06-15 10:40] | modify | frontend/src/pages/admin/AdminLayout.tsx | Added UserCog import and Staff nav item at /admin/staff (perm: 'admin') after Users. Updated visibleNav filter: items with perm='admin' now require user?.is_admin === true instead of falling through to hasPermission. Extracted support unread fetch into fetchSupportUnread() with 30s polling via setInterval — nav dot now updates without needing a route change.
+
+[2026-06-15 10:45] | modify | frontend/src/pages/admin/support/SupportPage.tsx | Added 30s polling for the ticket list (setInterval on fetchTickets, keyed to ticketStatusFilter). Ensures new tickets appear in the support tab without manual refresh.
+
+[2026-06-15 10:50] | fix | frontend/src/components/navbar.tsx | isStaff check was using role field (undefined in the User type); changed to user.is_admin || (user.permissions ?? []).length > 0. Added unread task fetch inside pollNotifications: calls ADMIN_TASKS_UNREAD, injects a synthetic 'new_task' NotifItem when count > 0. Task notifications now appear in the bell icon alongside ticket notifications.
+
+[2026-06-15 10:55] | modify | frontend/src/components/common/notification-panel.tsx | Added 'new_task' to NotifItem type union. Added ListTodo icon (violet) and bg-violet-100 background for task notification items.
+
+[2026-06-15 11:00] | modify | backend/app/user_management/repositories/user_repository.py | Added 'staff' case to filter_by in admin_list_users: applies {"role": {"$ne": "user"}} query to return all non-user accounts for the Staff page.
+
+[2026-06-15 11:05] | add | frontend/src/pages/admin/staff/StaffPage.tsx | New admin-only Staff page. Lists all non-user accounts (filter_by=staff) in a table: member avatar (initials), name, email, admin shield (is_admin), role badge, permissions chips, active/suspended status. Edit button (hidden for self) opens EditModal. EditModal: role dropdown, static default-permissions block (grey chips showing role's built-in grants, "All permissions" text for admin/ops_manager), extra permissions checkboxes where role defaults are locked (disabled + "default" label). Saves via PATCH /admin/users/{id}/role. handleSaved updates the row in-place without re-fetching.
+
+[2026-06-15 11:10] | fix | frontend/src/pages/admin/users/UsersPage.tsx | White screen crash when creating a user with a Pydantic validation error. Root cause: FastAPI 422 returns detail as an array of {type,loc,msg,...} objects; passing the array directly into a string state threw during React render. Added parseApiError() helper: handles both array detail (joins msg fields) and string detail, applied to all 4 catch blocks (handleAddUser, handleEditUser, handleSetPassword, role update modal).
+
+[2026-06-16 00:00] | modify | frontend/src/pages/admin/services/ServicesPage.tsx | Removed "Add subscription" toolbar button and "Add subscription here" category dropdown item (subscription creation was unused). Removed onAddSubscription prop from CategorySection entirely. Edit-existing-subscription path preserved via handleEdit().
+
+[2026-06-16 00:00] | add | backend/app/orders/repository.py | Added aggregate_service_stats() — MongoDB $group aggregation on orders collection grouped by service_id. Returns total_orders and working_orders per service. working_orders counts orders with status in [Pending, Processing, InProgress, In progress, Completed, Partial, Active].
+
+[2026-06-16 00:00] | add | backend/app/admin/orders/router.py | Added GET /service-stats endpoint (before /{order_id} to avoid path conflict). Returns aggregate_service_stats() result. Used by the Working Services panel on the admin Services page.
+
+[2026-06-16 00:00] | modify | frontend/src/config.ts | Added ADMIN_ORDERS_SERVICE_STATS endpoint constant.
+
+[2026-06-16 00:00] | modify | frontend/src/pages/admin/services/ServicesPage.tsx | Added Working Services tab to the Services page. Page is now split into two tabs: "Services" (existing toolbar + category list) and "Working Services" (new section). Working Services fetches GET /admin/orders/service-stats and GET /admin/routing in parallel on mount. Shows a summary strip (Working / Not Tested / Errors Only / Total counts) and per-category cards. Each card shows the routing chain (Value + Bulk) with ChainEntry components displaying position badge (Default/Fallback N), service name, provider, rate, and a status badge per service derived from order history. Services with working_orders > 0 → green "Working · N", total_orders > 0 but working_orders = 0 → red "Errors only", no orders → gray "Not tested". Tab pill on "Working Services" shows a green count badge of working services when > 0.
+
+[2026-06-16 00:00] | modify | frontend/src/components/navbar.tsx | Currency dropdown now opens on hover in addition to click. Replaced Radix Menubar currency block with a CSS group/group-hover div pattern. Invisible 8px bridge div between trigger and panel prevents the dropdown from closing as the cursor moves from button to list. Radix Menubar imports retained for avatar dropdown.
+
+[2026-06-16 00:10] | modify | frontend/src/pages/checkout/CheckoutPage.tsx | Package selector now shows unit labels matching the service type instead of generic "units". Added CATEGORY_TO_UNIT constant mapping category names (YouTube Views, YouTube Likes, etc.) to their unit strings (Views, Likes, etc.). unitLabel derived from categoryOrder.categoryName with "units" fallback. Replaced all 4 hardcoded "units" occurrences in select options and summary card.
+
+[2026-06-16 00:20] | modify | frontend/src/pages/admin/settings/SettingsPage.tsx | Moved Save button to the top of the settings form (above the 2-column grid). Converted Social Links section to a collapsible card: header is a clickable button with rotating ChevronDown icon, content toggled via socialOpen state (defaults open).
+
+[2026-06-16 00:30] | modify | frontend/src/pages/admin/reports/ReportsPage.tsx | Tickets stat card now shows active tickets (open + in_progress) instead of all-time total. Added fetchTicketBreakdown using page_size:1 requests to get accurate status counts without downloading all rows. Added mount-time useEffect so the stat card is populated on page load, not only on tab change. Card label changed to "Active Tickets", value = open + in_progress counts, sub-label "Open + In Progress".
+
+[2026-06-16 00:40] | modify | frontend/src/pages/admin/users/UsersPage.tsx | Added page size selector (25/50/100) to the admin users list. Replaced hardcoded PAGE_SIZE=20 with PAGE_SIZE_OPTIONS constant and pageSize state (default 25). Pagination footer now always visible when total > 0 with 3 sections: "Showing X–Y of Z users" / page size pills / prev-page-next navigation.
+
+[2026-06-16 00:50] | modify | frontend/src/pages/admin/users/UsersPage.tsx, backend/app/admin/users/router.py, backend/app/user_management/repositories/user_repository.py | Export buttons now open a date range modal before downloading. ExportModal accepts from/to date inputs, shows a preview line ("Exporting users registered from X to Y"), validates from ≤ to, then calls handleExport with optional date params. Backend export_users endpoint accepts created_from/created_to YYYY-MM-DD query strings, parses to UTC day boundaries (from=midnight, to=23:59:59), and passes Optional[datetime] to admin_export_users. Repository conditionally prepends a $match stage when dates are provided.
+
+[2026-06-16 00:55] | fix | frontend/src/pages/admin/users/UsersPage.tsx | ExportModal export button was missing flex layout — Download icon and label were not aligned. Added flex items-center gap-2 to the button className alongside the existing primaryCls.
+
+[2026-06-16 01:00] | modify | frontend/src/pages/admin/services/ServicesPage.tsx | Live API Rate/Min/Max values now auto-refresh every 15 minutes. Added servicesRef (useRef) kept in sync inside fetchAll. Mount useEffect now sets a setInterval calling fetchProviderSvcMap(servicesRef.current) every 900 000 ms; clearInterval runs on unmount. Only the provider comparison values refresh — stored DB values are unaffected.
+
+[2026-06-16 02:00] | modify | backend/app/admin/provider_config/schemas.py | Replaced single default/fallbacks shape with four fields: value_default_service_id, value_fallback_service_ids, bulk_default_service_id, bulk_fallback_service_ids on both UpsertRoutingConfigRequest and RoutingConfigResponse.
+
+[2026-06-16 02:00] | modify | backend/app/admin/provider_config/repository.py | upsert() updated to store the four new fields. Legacy default_service_id/fallback_service_ids kept in sync with value config so existing order routing code (orders/router.py, fulfillment.py) continues working without change.
+
+[2026-06-16 02:00] | modify | backend/app/admin/provider_config/router.py | _config_to_response reads new value_*/bulk_* fields with legacy fallback for old documents. upsert_routing_config validates and passes all 4 new fields to the repository.
+
+[2026-06-16 02:00] | modify | frontend/src/types/index.ts | RoutingConfig interface updated: replaced default/fallbacks with value_default/value_fallbacks/bulk_default/bulk_fallbacks.
+
+[2026-06-16 02:00] | modify | frontend/src/pages/admin/routing/ProviderConfigPage.tsx | Full rewrite. Category cards are now collapsible (closed by default) with ChevronDown toggle. Each card shows a Value Packages / Bulk Packages tab strip. Both tabs have independent default + fallback service pickers. Same service can be selected in both tabs (no cross-tab exclusion). Header shows "Value configured" / "Bulk configured" badges when set. Save sends all 4 fields together. Clear Config resets both configs at once.
+
+[2026-06-16 02:00] | fix | frontend/src/pages/admin/pricing/PricingPage.tsx | Updated r.default → r.value_default when reading routing config min/max bounds for the pricing page package validator (broken by the RoutingConfig type change).
+
+[2026-06-16 03:00] | modify | frontend/src/components/common/purchase-flow.tsx | Replaced auto-cycle timer with scroll-driven step highlighting. Removed autoAnimate state, 3s interval, 2s resume timeout, and unused useParams. Added sectionRef + passive scroll listener: progress = (vh - rect.top) / vh (uses viewport height as denominator so transitions complete as the section scrolls into view, not across full travel). Framer Motion durations reduced to 0.15–0.2s for snappier visual feedback.
+
+[2026-06-16 04:00] | add | backend/app/admin/settings/router.py (GET /admin/settings/server-info), backend/requirements.txt | New server-info endpoint. Returns CPU %, core count, memory used/total/%, disk used/total/%, uptime seconds, Python version, OS platform+release, MongoDB ping status+latency, Redis ping status+latency. Protected by require_admin_role. psutil>=5.9.0 added to requirements.
+
+[2026-06-16 04:00] | modify | frontend/src/config.ts | Added ADMIN_SERVER_INFO endpoint constant.
+
+[2026-06-16 04:00] | modify | frontend/src/pages/admin/settings/SettingsPage.tsx | Added "Server" third tab. Fetches GET /admin/settings/server-info on first tab open (lazy) and on Refresh button click. Shows: Connections card (MongoDB/Redis status pills with latency), Resources card (CPU/Memory/Disk progress bars coloured teal/amber/red by threshold), System card (Python version, OS, uptime, CPU cores). Progress bars turn amber at 60% and red at 85%.
+
+[2026-06-16 11:00] | fix | frontend/src/pages/checkout/CheckoutPage.tsx | Cryptomus now routes through GlowApex portal instead of redirecting directly to the Cryptomus payment URL. Removed startCryptomus() function, widened redirectToGlowApex() type from "stripe"|"razorpay" to PaymentMethod, updated handlePlaceOrder() to always call redirectToGlowApex(). Updated loading button label — Cryptomus now shows "Redirecting…" matching Stripe behaviour.
+
+[2026-06-16 12:00] | add | backend/app/blog/router.py, backend/app/main.py, backend/static/blog-images/ | Blog image upload. POST /admin/blogs/upload-image accepts multipart file upload (jpg/jpeg/png/gif/webp, max 5 MB), saves to backend/static/blog-images/<uuid>.<ext>, returns {"url": "<BACKEND_BASE_URL>/static/blog-images/<filename>"}. FastAPI StaticFiles mounted at /static to serve uploaded images. Directory created at startup via Path.mkdir in main.py.
+
+[2026-06-16 12:00] | modify | frontend/src/pages/admin/blogs/BlogsPage.tsx, frontend/src/config.ts | Blog form Cover Image field now has URL/Upload toggle. URL mode keeps existing text input. Upload mode shows a file picker that POSTs to ADMIN_BLOGS_UPLOAD_IMAGE, sets form.image_url from the response URL, and shows inline upload errors. Image preview (20px thumbnail) renders below the field in both modes when image_url is set.
+
+[2026-06-16 13:00] | fix | backend/app/checkout/router.py, backend/app/checkout/schemas.py | Cryptomus CHECKOUT_INIT was calling the Cryptomus API immediately, causing 502 before the frontend could redirect to GlowApex. Deferred invoice creation: CHECKOUT_INIT now just creates the order + ledger entry + session token for Cryptomus (no API call). Added POST /checkout/create-cryptomus-invoice endpoint — called by GlowApex using the session token to create the invoice lazily when it loads the payment screen. Idempotent: returns existing invoice data if already created. Root cause: old Cryptomus flow was designed for inline (on-store) payment, not the portal redirect flow.
+
+[2026-06-16 14:00] | add | backend/app/notifications/ (new module) | Full notifications module: repository.py (MongoDB collection with indexes on created_at, target, user_ids, read_by; unread_count uses $ne on read_by; mark_all_read_for_user uses $addToSet + update_many for idempotency), schemas.py (NotificationCreate, NotificationResponse, NotificationListResponse, UnreadCountResponse), router.py (admin_router gated by PERM_NOTIFICATIONS: list/create/delete; user_router: list/unread-count/mark-read/mark-all-read — /read-all defined before /{id}/read to avoid routing conflict).
+
+[2026-06-16 14:00] | modify | backend/app/user_management/utils/permissions.py | Added PERM_NOTIFICATIONS = "notifications" and included it in ALL_PERMISSIONS frozenset. Admin and operations_manager roles get it automatically. Added to ROLE_PERMISSIONS docs.
+
+[2026-06-16 14:00] | modify | backend/app/admin/router.py | Imported notifications admin_router and registered it at prefix /notifications.
+
+[2026-06-16 14:00] | modify | backend/app/app_components.py | Imported notifications user_router and registered it at prefix /notifications.
+
+[2026-06-16 14:00] | modify | backend/app/main.py | Imported NotificationRepository and added create_indexes() call in lifespan startup.
+
+[2026-06-16 14:00] | modify | frontend/src/config.ts | Added ADMIN_NOTIFICATIONS, USER_NOTIFICATIONS, USER_NOTIFICATIONS_UNREAD, USER_NOTIFICATIONS_READ_ALL endpoint constants.
+
+[2026-06-16 14:00] | modify | frontend/src/components/common/notification-panel.tsx | Added 'admin_notification' to NotifItem type union. Added Megaphone icon import with emerald-100/emerald-600 color theme for admin_notification type.
+
+[2026-06-16 14:00] | modify | frontend/src/pages/admin/AdminLayout.tsx | Added Bell icon import and Notifications nav item (perm: 'notifications') between Blogs and Settings.
+
+[2026-06-16 14:00] | add | frontend/src/pages/admin/notifications/NotificationsPage.tsx | Admin notifications page: compose panel (title, message, type info/success/warning, target all/selective/personal, debounced user search with chip picker for selective/personal). History table with type badge, target badge, read count, created-by, relative timestamp, per-item delete button and pagination.
+
+[2026-06-16 14:00] | modify | frontend/src/App.tsx | Added import and route for AdminNotificationsPage at /admin/notifications (gated by RequirePermission "notifications").
+
+[2026-06-16 14:00] | modify | frontend/src/components/navbar.tsx | pollNotifications now also fetches GET /notifications for both staff and regular users and appends unread admin-sent notifications as admin_notification items to the panel. handleOpenPanel now calls POST /notifications/read-all on the backend when the panel opens (in addition to updating local acknowledgedIds).
+
+[2026-06-16 15:00] | modify | frontend/src/components/common/notification-panel.tsx | Added is_read? and backend_id? to NotifItem. Added onRead? callback prop. handleClick now calls onRead for admin_notification items before navigating. Unread admin notifications show left emerald border + bold title + green dot. Added "View all notifications" footer link to /dashboard/notifications.
+
+[2026-06-16 15:00] | modify | frontend/src/components/navbar.tsx | Fetches last 10 admin notifications (both read+unread, not filtered) for panel history. Maps is_read and backend_id onto items. unreadCount formula: admin_notification items use n.is_read===false, others use acknowledgedIds. handleOpenPanel now locally sets is_read=true on all admin notifs (for immediate badge clear) before calling POST /notifications/read-all. Added handleMarkNotifRead callback (calls POST /{id}/read) passed as onRead to panel.
+
+[2026-06-16 15:00] | modify | frontend/src/pages/dashboard/DashboardLayout.tsx | Added Bell icon import, Notifications nav item at /dashboard/notifications. getPageTitle handles "notifications". Added unreadNotifCount state fetched from USER_NOTIFICATIONS_UNREAD on route change. Sidebar shows emerald badge count; mobile bottom nav shows dot. Clearing count when navigating to /dashboard/notifications.
+
+[2026-06-16 15:00] | add | frontend/src/pages/dashboard/notifications/NotificationsPage.tsx | Dashboard notifications history page. Fetches GET /notifications paginated. Unread items: emerald left border, green dot, bold title, bg-emerald-50, clicking calls POST /{id}/read and updates is_read locally. Read items: normal weight, gray text. "Mark all as read" button calls POST /read-all. Pagination for large history.
+
+[2026-06-16 15:00] | modify | frontend/src/App.tsx | Added DashboardNotificationsPage import and /dashboard/notifications route.
+

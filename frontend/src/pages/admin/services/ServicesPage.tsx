@@ -71,6 +71,32 @@ interface ProviderServiceItem {
   max: string;
 }
 
+interface RoutingConfigServiceInfo {
+  service_id: string;
+  service_name: string;
+  provider_id: string;
+  provider_name: string;
+  provider_service_id: string;
+  rate: number;
+  min: number;
+  max: number;
+}
+
+interface RoutingConfigData {
+  category_id: string;
+  category_name: string;
+  value_default: RoutingConfigServiceInfo | null;
+  value_fallbacks: RoutingConfigServiceInfo[];
+  bulk_default: RoutingConfigServiceInfo | null;
+  bulk_fallbacks: RoutingConfigServiceInfo[];
+}
+
+interface ServiceStat {
+  service_id: string;
+  total_orders: number;
+  working_orders: number;
+}
+
 // ---- Shared styles ----
 
 const inputCls =
@@ -1147,7 +1173,6 @@ interface CategorySectionProps {
   onDelete: (svc: Service) => void;
   onToggleActive: (svc: Service) => void;
   onAddService: (categoryId: string) => void;
-  onAddSubscription: (categoryId: string) => void;
   onDeleteCategory: (cat: Category) => void;
   providerSvcMap: Record<string, ProviderServiceItem>;
 }
@@ -1162,7 +1187,6 @@ const CategorySection = ({
   onDelete,
   onToggleActive,
   onAddService,
-  onAddSubscription,
   onDeleteCategory,
   providerSvcMap,
 }: CategorySectionProps) => {
@@ -1216,10 +1240,6 @@ const CategorySection = ({
               {
                 label: 'Add service here',
                 onClick: () => onAddService(category.id),
-              },
-              {
-                label: 'Add subscription here',
-                onClick: () => onAddSubscription(category.id),
               },
               {
                 label: 'Delete category',
@@ -1419,10 +1439,229 @@ const CategorySection = ({
   );
 };
 
+// ---- Working Services ----
+
+interface ChainEntryProps {
+  svc: RoutingConfigServiceInfo;
+  label: string;
+  isDefault: boolean;
+  isLast: boolean;
+  stat: ServiceStat | undefined;
+}
+
+const ChainEntry = ({ svc, label, isDefault, isLast, stat }: ChainEntryProps) => {
+  const hasOrders = stat && stat.total_orders > 0;
+  const isWorking = stat && stat.working_orders > 0;
+  const isFailedOnly = hasOrders && !isWorking;
+  const isUntested = !hasOrders;
+
+  const statusBadge = isWorking
+    ? <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Working · {stat!.working_orders}</span>
+    : isFailedOnly
+    ? <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-50 text-red-600"><span className="h-1.5 w-1.5 rounded-full bg-red-500" />Errors only · {stat!.total_orders}</span>
+    : <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-500"><span className="h-1.5 w-1.5 rounded-full bg-gray-400" />Not tested</span>;
+
+  return (
+    <div className="relative flex items-start gap-3 pb-3">
+      {!isLast && (
+        <div className="absolute left-[11px] top-7 bottom-0 w-0 border-l-2 border-dashed border-gray-200" />
+      )}
+      {/* Position circle */}
+      <div
+        className={`flex-shrink-0 h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold ring-2 z-10 ${
+          isDefault
+            ? 'bg-teal-100 text-teal-700 ring-teal-200'
+            : 'bg-amber-50 text-amber-700 ring-amber-200'
+        }`}
+      >
+        {isDefault ? '★' : label.replace('Fallback ', '')}
+      </div>
+
+      {/* Content */}
+      <div className="min-w-0 flex-1 pt-0.5">
+        <div className="flex items-center justify-between gap-2 mb-0.5">
+          <span
+            className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-md ${
+              isDefault ? 'bg-teal-50 text-teal-700' : 'bg-amber-50 text-amber-700'
+            }`}
+          >
+            {label}
+          </span>
+          <span className="text-[11px] text-gray-400 font-mono flex-shrink-0">
+            ${svc.rate.toFixed(4)}/1k
+          </span>
+        </div>
+        <p className="text-sm text-gray-800 font-medium truncate leading-snug">
+          {svc.service_name}
+        </p>
+        <p className="text-xs text-gray-400 truncate mb-1">
+          {svc.provider_name} · #{svc.provider_service_id}
+        </p>
+        <div className="flex items-center gap-2">
+          {statusBadge}
+          {isWorking && isUntested === false && (
+            <span className="text-[10px] text-gray-400">
+              {stat!.total_orders} total
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface WorkingServicesSectionProps {
+  categories: Category[];
+  routingConfigs: RoutingConfigData[];
+  serviceStats: ServiceStat[];
+}
+
+const WorkingServicesSection = ({ categories, routingConfigs, serviceStats }: WorkingServicesSectionProps) => {
+  const configMap = new Map(routingConfigs.map((rc) => [rc.category_id, rc]));
+  const statsMap = new Map(serviceStats.map((s) => [s.service_id, s]));
+
+  if (categories.length === 0 && routingConfigs.length === 0) return null;
+
+  // Collect all unique services across all routing configs for the summary row
+  const allConfiguredServices: RoutingConfigServiceInfo[] = [];
+  for (const rc of routingConfigs) {
+    if (rc.value_default) allConfiguredServices.push(rc.value_default);
+    allConfiguredServices.push(...rc.value_fallbacks);
+    if (rc.bulk_default) allConfiguredServices.push(rc.bulk_default);
+    allConfiguredServices.push(...rc.bulk_fallbacks);
+  }
+  const uniqueServices = [...new Map(allConfiguredServices.map((s) => [s.service_id, s])).values()];
+  const workingCount = uniqueServices.filter((s) => (statsMap.get(s.service_id)?.working_orders ?? 0) > 0).length;
+  const untestedCount = uniqueServices.filter((s) => !statsMap.has(s.service_id)).length;
+  const failedCount = uniqueServices.length - workingCount - untestedCount;
+
+  return (
+    <div className="mt-10">
+      {/* Section header */}
+      <div className="flex items-center gap-4 mb-1">
+        <div className="flex-1 h-px bg-gray-200" />
+        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap px-2">
+          Working Services
+        </span>
+        <div className="flex-1 h-px bg-gray-200" />
+      </div>
+      <p className="text-center text-xs text-gray-400 mb-4">
+        Which configured services have successfully placed orders — when the default fails, fallbacks are tried in order
+      </p>
+
+      {/* Summary strip */}
+      {uniqueServices.length > 0 && (
+        <div className="flex items-center justify-center gap-6 mb-6 py-3 bg-gray-50 rounded-xl border border-gray-200">
+          <div className="text-center">
+            <p className="text-xl font-bold text-emerald-600">{workingCount}</p>
+            <p className="text-xs text-gray-500 mt-0.5">Working</p>
+          </div>
+          <div className="h-8 w-px bg-gray-200" />
+          <div className="text-center">
+            <p className="text-xl font-bold text-gray-400">{untestedCount}</p>
+            <p className="text-xs text-gray-500 mt-0.5">Not Tested</p>
+          </div>
+          <div className="h-8 w-px bg-gray-200" />
+          <div className="text-center">
+            <p className="text-xl font-bold text-red-500">{failedCount}</p>
+            <p className="text-xs text-gray-500 mt-0.5">Errors Only</p>
+          </div>
+          <div className="h-8 w-px bg-gray-200" />
+          <div className="text-center">
+            <p className="text-xl font-bold text-gray-700">{uniqueServices.length}</p>
+            <p className="text-xs text-gray-500 mt-0.5">Total</p>
+          </div>
+        </div>
+      )}
+
+      {/* Category cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {categories.map((cat) => {
+          const config = configMap.get(cat.id);
+          const hasValue = config?.value_default != null;
+          const hasBulk = config?.bulk_default != null;
+          const hasAny = hasValue || hasBulk;
+
+          if (!hasAny) return null;
+
+          // Count working services in this category's chains
+          const allChainSvcs = [
+            ...(hasValue ? [config!.value_default!, ...config!.value_fallbacks] : []),
+            ...(hasBulk ? [config!.bulk_default!, ...config!.bulk_fallbacks] : []),
+          ];
+          const uniqueChainSvcs = [...new Map(allChainSvcs.map((s) => [s.service_id, s])).values()];
+          const catWorking = uniqueChainSvcs.filter((s) => (statsMap.get(s.service_id)?.working_orders ?? 0) > 0).length;
+
+          return (
+            <div key={cat.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              {/* Card header */}
+              <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+                <span className="font-semibold text-gray-800 text-sm">{cat.name}</span>
+                <span className="text-xs text-gray-500">
+                  <span className="font-semibold text-emerald-600">{catWorking}</span>
+                  <span className="text-gray-400">/{uniqueChainSvcs.length} working</span>
+                </span>
+              </div>
+
+              {/* Chains */}
+              <div className="px-4 py-3 space-y-4">
+                {hasValue && (
+                  <div>
+                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                      Value
+                    </p>
+                    {[config!.value_default!, ...config!.value_fallbacks].map((svc, i, arr) => (
+                      <ChainEntry
+                        key={svc.service_id}
+                        svc={svc}
+                        label={i === 0 ? 'Default' : `Fallback ${i}`}
+                        isDefault={i === 0}
+                        isLast={i === arr.length - 1}
+                        stat={statsMap.get(svc.service_id)}
+                      />
+                    ))}
+                  </div>
+                )}
+                {hasBulk && (
+                  <div>
+                    {hasValue && <div className="border-t border-gray-100 mb-3" />}
+                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                      Bulk
+                    </p>
+                    {[config!.bulk_default!, ...config!.bulk_fallbacks].map((svc, i, arr) => (
+                      <ChainEntry
+                        key={svc.service_id}
+                        svc={svc}
+                        label={i === 0 ? 'Default' : `Fallback ${i}`}
+                        isDefault={i === 0}
+                        isLast={i === arr.length - 1}
+                        stat={statsMap.get(svc.service_id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Empty state when no category has routing config */}
+      {routingConfigs.length === 0 && (
+        <div className="text-center py-10 text-gray-400">
+          <p className="text-sm font-medium text-gray-500 mb-1">No routing config yet</p>
+          <p className="text-xs">Configure service routing on the Routing page — working services will appear here.</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ---- Main page ----
 
 const ServicesPage = () => {
   const [services, setServices] = useState<Service[]>([]);
+  const servicesRef = useRef<Service[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1439,13 +1678,14 @@ const ServicesPage = () => {
   const [showAddService, setShowAddService] = useState(false);
   const [addServiceCategory, setAddServiceCategory] = useState<string>('');
   const [editService, setEditService] = useState<Service | null>(null);
-  const [showAddSubscription, setShowAddSubscription] = useState(false);
-  const [addSubscriptionCategory, setAddSubscriptionCategory] = useState<string>('');
   const [editSubscription, setEditSubscription] = useState<Service | null>(null);
   const [deleteService, setDeleteService] = useState<Service | null>(null);
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [deleteCategory, setDeleteCategory] = useState<Category | null>(null);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [routingConfigs, setRoutingConfigs] = useState<RoutingConfigData[]>([]);
+  const [serviceStats, setServiceStats] = useState<ServiceStat[]>([]);
+  const [activeTab, setActiveTab] = useState<'services' | 'working'>('services');
 
   const fetchProviderSvcMap = async (svcs: Service[]) => {
     const uniqueProviderIds = [...new Set(svcs.map((s) => s.provider_id).filter(Boolean))];
@@ -1470,21 +1710,32 @@ const ServicesPage = () => {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [svcRes, provRes, catRes] = await Promise.all([
+      const [svcRes, provRes, catRes, routingRes, statsRes] = await Promise.all([
         api.get<Service[]>(API_ENDPOINTS.ADMIN_SERVICES),
         api.get<Provider[]>(API_ENDPOINTS.ADMIN_PROVIDERS),
         api.get<Category[]>(API_ENDPOINTS.ADMIN_CATEGORIES),
+        api.get<RoutingConfigData[]>(API_ENDPOINTS.ADMIN_ROUTING_CONFIG).catch(() => ({ data: [] as RoutingConfigData[] })),
+        api.get<ServiceStat[]>(API_ENDPOINTS.ADMIN_ORDERS_SERVICE_STATS).catch(() => ({ data: [] as ServiceStat[] })),
       ]);
       setServices(svcRes.data);
+      servicesRef.current = svcRes.data;
       setProviders(provRes.data);
       setCategories(catRes.data);
+      setRoutingConfigs(routingRes.data);
+      setServiceStats(statsRes.data);
       fetchProviderSvcMap(svcRes.data);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => {
+    fetchAll();
+    const interval = setInterval(() => {
+      fetchProviderSvcMap(servicesRef.current);
+    }, 10 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleToggleActive = async (svc: Service) => {
     await api.patch(`${API_ENDPOINTS.ADMIN_SERVICES}/${svc.id}`, { is_active: !svc.is_active });
@@ -1600,22 +1851,48 @@ const ServicesPage = () => {
   return (
     <div>
       {/* Page header */}
-      <div className="mb-5">
+      <div className="mb-0">
         <h1 className="text-2xl font-bold text-gray-900">Services</h1>
         <p className="text-gray-500 text-sm mt-1">Manage your SMM services and categories.</p>
       </div>
 
+      {/* Tab nav */}
+      <div className="flex gap-1 border-b border-gray-200 mt-4 mb-6">
+        <button
+          onClick={() => setActiveTab('services')}
+          className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${
+            activeTab === 'services'
+              ? 'border-teal-600 text-teal-700'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+          }`}
+        >
+          Services
+        </button>
+        <button
+          onClick={() => setActiveTab('working')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${
+            activeTab === 'working'
+              ? 'border-teal-600 text-teal-700'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+          }`}
+        >
+          Working Services
+          {serviceStats.filter((s) => s.working_orders > 0).length > 0 && (
+            <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+              {serviceStats.filter((s) => s.working_orders > 0).length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {activeTab === 'services' ? (
+      <div>
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2 mb-6">
         {/* Left actions */}
         <button className={primaryCls} onClick={() => { setAddServiceCategory(''); setShowAddService(true); }}>
           <Plus className="h-4 w-4" />
           Add service
-        </button>
-
-        <button className={ghostCls} onClick={() => { setAddSubscriptionCategory(''); setShowAddSubscription(true); }}>
-          <Plus className="h-4 w-4" />
-          Add subscription
         </button>
 
         <button className={ghostCls} onClick={() => setShowAddCategory(true)}>
@@ -1759,11 +2036,14 @@ const ServicesPage = () => {
             onDelete={setDeleteService}
             onToggleActive={handleToggleActive}
             onAddService={(catId) => { setAddServiceCategory(catId); setShowAddService(true); }}
-            onAddSubscription={(catId) => { setAddSubscriptionCategory(catId); setShowAddSubscription(true); }}
             onDeleteCategory={setDeleteCategory}
             providerSvcMap={providerSvcMap}
           />
         ))
+      )}
+      </div>
+      ) : (
+        <WorkingServicesSection categories={categories} routingConfigs={routingConfigs} serviceStats={serviceStats} />
       )}
 
       {/* Modals */}
@@ -1784,16 +2064,6 @@ const ServicesPage = () => {
           categories={categories}
           onClose={() => setEditService(null)}
           onSaved={() => { setEditService(null); fetchAll(); }}
-        />
-      )}
-
-      {showAddSubscription && (
-        <SubscriptionFormModal
-          providers={providers}
-          categories={categories}
-          defaultCategoryId={addSubscriptionCategory}
-          onClose={() => setShowAddSubscription(false)}
-          onSaved={() => { setShowAddSubscription(false); fetchAll(); }}
         />
       )}
 

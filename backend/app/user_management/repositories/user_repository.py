@@ -186,9 +186,27 @@ class UserRepository:
         suspended = await self._col.count_documents({"is_suspended": True})
         return {"total": total, "verified": verified, "suspended": suspended}
 
-    async def admin_export_users(self) -> list[dict]:
-        """Return all user documents with total_spent for CSV export."""
+    async def admin_export_users(
+        self,
+        created_from: Optional[datetime] = None,
+        created_to: Optional[datetime] = None,
+    ) -> list[dict]:
+        """Return all user documents with total_spent for CSV export.
+
+        Optionally filtered to users whose created_at falls within
+        [created_from, created_to] (both boundaries inclusive).
+        """
+        match: dict = {}
+        if created_from or created_to:
+            date_filter: dict = {}
+            if created_from:
+                date_filter["$gte"] = created_from
+            if created_to:
+                date_filter["$lte"] = created_to
+            match["created_at"] = date_filter
+
         pipeline: list[dict] = [
+            *([ {"$match": match} ] if match else []),
             {"$sort": {"created_at": -1}},
             *_TOTAL_SPENT_LOOKUP,
         ]

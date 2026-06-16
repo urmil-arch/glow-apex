@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Plus, Pencil, Trash2, X, Loader2, Globe, EyeOff,
-  FileText, ChevronLeft, ChevronRight, ExternalLink,
+  FileText, ChevronLeft, ChevronRight, ExternalLink, Upload,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config';
@@ -104,6 +104,10 @@ function FormPanel({ editing, onClose, onSaved }: FormPanelProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [slugManual, setSlugManual] = useState(!!editing);
+  const [imageMode, setImageMode] = useState<'url' | 'upload'>('url');
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm(prev => {
@@ -137,6 +141,37 @@ function FormPanel({ editing, onClose, onSaved }: FormPanelProps) {
       setError(msg ?? 'Failed to save. Please try again.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadLoading(true);
+    setUploadError('');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      // Content-Type must be unset so the browser sets multipart/form-data with the correct boundary.
+      // The api instance default of application/json would otherwise be sent, causing a 422.
+      const res = await api.post<{ url: string }>(API_ENDPOINTS.ADMIN_BLOGS_UPLOAD_IMAGE, fd, {
+        headers: { 'Content-Type': undefined },
+      });
+      setField('image_url', res.data.url);
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      let msg: string;
+      if (typeof detail === 'string') {
+        msg = detail;
+      } else if (Array.isArray(detail) && detail.length > 0) {
+        msg = (detail[0] as { msg?: string })?.msg ?? 'Upload failed.';
+      } else {
+        msg = 'Upload failed. Please try again.';
+      }
+      setUploadError(msg);
+    } finally {
+      setUploadLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }
 
@@ -223,13 +258,66 @@ function FormPanel({ editing, onClose, onSaved }: FormPanelProps) {
             </div>
 
             <div className="col-span-2">
-              <label className={labelCls}>Image URL</label>
-              <input
-                value={form.image_url}
-                onChange={e => setField('image_url', e.target.value)}
-                placeholder="https://... or /assets/..."
-                className={inputCls}
-              />
+              <div className="flex items-center justify-between mb-1">
+                <label className={labelCls}>Cover Image</label>
+                <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setImageMode('url')}
+                    className={`px-3 py-1 transition-colors ${imageMode === 'url' ? 'bg-teal-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                  >
+                    URL
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setImageMode('upload')}
+                    className={`px-3 py-1 border-l border-gray-200 transition-colors ${imageMode === 'upload' ? 'bg-teal-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                  >
+                    Upload
+                  </button>
+                </div>
+              </div>
+
+              {imageMode === 'url' ? (
+                <input
+                  value={form.image_url}
+                  onChange={e => setField('image_url', e.target.value)}
+                  placeholder="https://... or /assets/..."
+                  className={inputCls}
+                />
+              ) : (
+                <div className="flex items-center gap-3">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    className="hidden"
+                    onChange={handleImageUpload}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadLoading}
+                    className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors text-gray-700"
+                  >
+                    {uploadLoading
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : <Upload className="w-4 h-4" />}
+                    {uploadLoading ? 'Uploading…' : form.image_url ? 'Replace image' : 'Choose file'}
+                  </button>
+                  {uploadError && (
+                    <p className="text-xs text-red-500">{uploadError}</p>
+                  )}
+                </div>
+              )}
+
+              {form.image_url && (
+                <img
+                  src={form.image_url}
+                  alt="Preview"
+                  className="mt-2 h-20 rounded-lg object-cover border border-gray-200"
+                />
+              )}
             </div>
 
             <div className="col-span-2">

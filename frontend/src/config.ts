@@ -54,6 +54,7 @@ export const API_ENDPOINTS = {
 
   // Admin — Orders
   ADMIN_ORDERS: `${API_BASE_URL}/admin/orders`,
+  ADMIN_ORDERS_SERVICE_STATS: `${API_BASE_URL}/admin/orders/service-stats`,
 
   // Admin — Routing Config
   ADMIN_ROUTING_CONFIG: `${API_BASE_URL}/admin/routing`,
@@ -92,6 +93,7 @@ export const API_ENDPOINTS = {
 
   // Admin — Blogs
   ADMIN_BLOGS: `${API_BASE_URL}/admin/blogs`,
+  ADMIN_BLOGS_UPLOAD_IMAGE: `${API_BASE_URL}/admin/blogs/upload-image`,
 
   // Public — Blogs
   PUBLIC_BLOGS: `${API_BASE_URL}/blogs`,
@@ -102,6 +104,14 @@ export const API_ENDPOINTS = {
   // Pricing
   ADMIN_PRICING: `${API_BASE_URL}/admin/pricing`,
   PUBLIC_PRICING: `${API_BASE_URL}/pricing`,
+
+  // Admin — Notifications
+  ADMIN_NOTIFICATIONS: `${API_BASE_URL}/admin/notifications`,
+
+  // User — Notifications
+  USER_NOTIFICATIONS: `${API_BASE_URL}/notifications`,
+  USER_NOTIFICATIONS_UNREAD: `${API_BASE_URL}/notifications/unread-count`,
+  USER_NOTIFICATIONS_READ_ALL: `${API_BASE_URL}/notifications/read-all`,
 
   // Cross-domain checkout portal
   CHECKOUT_INIT: `${API_BASE_URL}/checkout/init`,

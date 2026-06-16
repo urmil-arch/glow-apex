@@ -20,18 +20,31 @@ class RoutingConfigRepository:
         self,
         category_id: str,
         category_name: str,
-        default_service_id: str,
-        fallback_service_ids: list[str],
+        value_default_service_id: str,
+        value_fallback_service_ids: list[str],
+        bulk_default_service_id: str = "",
+        bulk_fallback_service_ids: list[str] | None = None,
     ) -> None:
-        """Create or replace the routing config for a category."""
+        """Create or replace the routing config for a category.
+
+        Keeps legacy default_service_id / fallback_service_ids in sync with the
+        value config so existing order routing code continues working unchanged.
+        """
+        if bulk_fallback_service_ids is None:
+            bulk_fallback_service_ids = []
         await self._col.update_one(
             {"category_id": category_id},
             {
                 "$set": {
                     "category_id": category_id,
                     "category_name": category_name,
-                    "default_service_id": default_service_id,
-                    "fallback_service_ids": fallback_service_ids,
+                    "value_default_service_id": value_default_service_id,
+                    "value_fallback_service_ids": value_fallback_service_ids,
+                    "bulk_default_service_id": bulk_default_service_id,
+                    "bulk_fallback_service_ids": bulk_fallback_service_ids,
+                    # Legacy fields kept in sync with value routing
+                    "default_service_id": value_default_service_id,
+                    "fallback_service_ids": value_fallback_service_ids,
                     "updated_at": datetime.now(timezone.utc),
                 }
             },
