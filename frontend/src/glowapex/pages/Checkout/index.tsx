@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  AlertCircle, ArrowRight, CheckCircle, Clock, Lock,
-  Loader, Mail, Package, ShieldCheck, Zap,
+  AlertCircle, ArrowRight, CheckCircle, CreditCard, ListOrdered,
+  Loader, Lock, Mail, ShieldCheck, TrendingUp, Zap,
 } from 'lucide-react'
 import api from '../../lib/api'
 import { resolveReturnOriginValue, storeNameFromOrigin } from '../../lib/returnOrigin'
@@ -21,10 +21,15 @@ interface SessionData {
   link: string
   description: string
   return_origin?: string
+  // Stripe
   checkout_url?: string
+  // Razorpay
   razorpay_order_id?: string
   key_id?: string
   amount_paise?: number
+  // Cryptomus (populated after POST /checkout/create-cryptomus-invoice)
+  cryptomus_invoice_id?: string
+  cryptomus_payment_url?: string
 }
 
 interface VerifyRazorpayBody {
@@ -88,17 +93,17 @@ function RedirectBanner({ storeName }: { storeName: string }) {
 function CheckoutInfoPanel() {
   const steps = [
     {
-      icon: <CheckCircle className="w-4 h-4 text-emerald-400" />,
+      icon: <CreditCard className="w-4 h-4 text-emerald-400" />,
       title: 'Payment Confirmed',
       desc: 'An order ID is generated and a confirmation is sent to your email.',
     },
     {
-      icon: <Package className="w-4 h-4 text-emerald-400" />,
+      icon: <ListOrdered className="w-4 h-4 text-emerald-400" />,
       title: 'Order Queued',
       desc: 'Delivery is dispatched through our network within minutes of payment.',
     },
     {
-      icon: <Clock className="w-4 h-4 text-emerald-400" />,
+      icon: <TrendingUp className="w-4 h-4 text-emerald-400" />,
       title: 'Results Delivered',
       desc: 'Growth arrives within your service\'s estimated timeframe — no drop guarantee.',
     },
@@ -256,6 +261,22 @@ function SessionPage({ token, d1Url }: { token: string; d1Url: string }) {
     new Razorpay(options).open()
   }
 
+  async function handleCryptomus() {
+    setPaying(true)
+    setPayError('')
+    try {
+      const res = await api.post<{ payment_url: string }>('/checkout/create-cryptomus-invoice', {
+        session_token: token,
+      })
+      window.location.href = res.data.payment_url
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+      const msg = typeof detail === 'string' ? detail : 'Failed to create Cryptomus invoice. Please try again.'
+      setPayError(msg)
+      setPaying(false)
+    }
+  }
+
   if (fetchError) return <ErrorPage message={fetchError} d1Url={d1Url} />
 
   if (!session) {
@@ -267,6 +288,7 @@ function SessionPage({ token, d1Url }: { token: string; d1Url: string }) {
   }
 
   const isStripe = session.payment_method === 'stripe'
+  const isCryptomus = session.payment_method === 'cryptomus'
   const label = session.category_name || session.service_name
 
   return (
@@ -346,19 +368,19 @@ function SessionPage({ token, d1Url }: { token: string; d1Url: string }) {
                   )}
 
                   <button
-                    onClick={isStripe ? handleStripe : handleRazorpay}
+                    onClick={isStripe ? handleStripe : isCryptomus ? handleCryptomus : handleRazorpay}
                     disabled={paying}
                     className="w-full flex items-center justify-center gap-2.5 px-6 py-4 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold text-sm rounded-xl transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-emerald-500/25"
                   >
                     {paying ? (
                       <>
                         <Loader className="w-4 h-4 animate-spin" />
-                        {isStripe ? 'Redirecting to Stripe…' : 'Opening Razorpay…'}
+                        {isStripe ? 'Redirecting to Stripe…' : isCryptomus ? 'Creating invoice…' : 'Opening Razorpay…'}
                       </>
                     ) : (
                       <>
                         <Lock className="w-4 h-4" />
-                        Pay ${session.charge.toFixed(2)} via {isStripe ? 'Stripe' : 'Razorpay'}
+                        Pay ${session.charge.toFixed(2)} via {isStripe ? 'Stripe' : isCryptomus ? 'Cryptomus' : 'Razorpay'}
                       </>
                     )}
                   </button>

@@ -57,8 +57,10 @@ export interface RoutingConfigServiceInfo {
 export interface RoutingConfig {
   category_id: string;
   category_name: string;
-  default: RoutingConfigServiceInfo | null;
-  fallbacks: RoutingConfigServiceInfo[];
+  value_default: RoutingConfigServiceInfo | null;
+  value_fallbacks: RoutingConfigServiceInfo[];
+  bulk_default: RoutingConfigServiceInfo | null;
+  bulk_fallbacks: RoutingConfigServiceInfo[];
 }
 
 export interface UserOrder {

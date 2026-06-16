@@ -1,5 +1,5 @@
 import { useAuth } from "@/context/AuthContext";
-import { CreditCard, Home, LogOut, Menu, Package, Ticket, User, X } from "lucide-react";
+import { Bell, CreditCard, Home, LogOut, Menu, Package, Ticket, User, X } from "lucide-react";
 import { Link, useLocation, useNavigate, Outlet } from "react-router-dom";
 import React, { useEffect, useState } from "react";
 import { api } from "@/lib/api";
@@ -12,16 +12,18 @@ interface NavItemConfig {
 }
 
 const NAV_ITEMS: NavItemConfig[] = [
-  { label: "My Orders", icon: <Package className="w-5 h-5" />, to: "/dashboard/orders" },
-  { label: "Payments", icon: <CreditCard className="w-5 h-5" />, to: "/dashboard/payments" },
-  { label: "Support", icon: <Ticket className="w-5 h-5" />, to: "/dashboard/tickets" },
-  { label: "Profile", icon: <User className="w-5 h-5" />, to: "/dashboard/profile" },
+  { label: "My Orders",     icon: <Package   className="w-5 h-5" />, to: "/dashboard/orders" },
+  { label: "Payments",      icon: <CreditCard className="w-5 h-5" />, to: "/dashboard/payments" },
+  { label: "Support",       icon: <Ticket    className="w-5 h-5" />, to: "/dashboard/tickets" },
+  { label: "Notifications", icon: <Bell      className="w-5 h-5" />, to: "/dashboard/notifications" },
+  { label: "Profile",       icon: <User      className="w-5 h-5" />, to: "/dashboard/profile" },
 ];
 
 const getPageTitle = (pathname: string): string => {
-  if (pathname.includes("payments")) return "Payments";
-  if (pathname.includes("tickets")) return "Support Tickets";
-  if (pathname.includes("profile")) return "Profile Settings";
+  if (pathname.includes("payments"))      return "Payments";
+  if (pathname.includes("tickets"))       return "Support Tickets";
+  if (pathname.includes("notifications")) return "Notifications";
+  if (pathname.includes("profile"))       return "Profile Settings";
   return "My Orders";
 };
 
@@ -32,6 +34,7 @@ const DashboardLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLarge, setIsLarge] = useState(false);
   const [hasUnreadTicket, setHasUnreadTicket] = useState(false);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
   useEffect(() => {
     const check = () => {
@@ -51,6 +54,13 @@ const DashboardLayout: React.FC = () => {
         const tickets: { user_has_unread: boolean }[] = res.data.tickets ?? [];
         setHasUnreadTicket(tickets.some((t) => t.user_has_unread));
       })
+      .catch(() => {/* non-critical, silent */});
+  }, [user, location.pathname]);
+
+  useEffect(() => {
+    if (!user) return;
+    api.get<{ count: number }>(API_ENDPOINTS.USER_NOTIFICATIONS_UNREAD)
+      .then(res => setUnreadNotifCount(res.data.count ?? 0))
       .catch(() => {/* non-critical, silent */});
   }, [user, location.pathname]);
 
@@ -150,13 +160,15 @@ const DashboardLayout: React.FC = () => {
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {NAV_ITEMS.map((item) => {
-            const showDot = item.to === "/dashboard/tickets" && hasUnreadTicket && !isActive(item.to);
+            const showTicketDot  = item.to === "/dashboard/tickets"       && hasUnreadTicket    && !isActive(item.to);
+            const notifBadge     = item.to === "/dashboard/notifications"  && unreadNotifCount > 0 && !isActive(item.to) ? unreadNotifCount : 0;
             return (
               <Link
                 key={item.to}
                 to={item.to}
                 onClick={() => {
-                  if (item.to === "/dashboard/tickets") setHasUnreadTicket(false);
+                  if (item.to === "/dashboard/tickets")       setHasUnreadTicket(false);
+                  if (item.to === "/dashboard/notifications") setUnreadNotifCount(0);
                   closeSidebarOnMobile();
                 }}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
@@ -167,8 +179,13 @@ const DashboardLayout: React.FC = () => {
               >
                 {item.icon}
                 {item.label}
-                {showDot && (
+                {showTicketDot && (
                   <span className="ml-auto w-2 h-2 rounded-full bg-teal-500" />
+                )}
+                {notifBadge > 0 && (
+                  <span className="ml-auto min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-emerald-500 text-white text-[10px] font-bold px-1">
+                    {notifBadge > 99 ? '99+' : notifBadge}
+                  </span>
                 )}
               </Link>
             );
@@ -244,12 +261,14 @@ const DashboardLayout: React.FC = () => {
         {/* Mobile bottom nav */}
         <nav className="lg:hidden sticky bottom-0 bg-white border-t border-gray-100 flex z-10">
           {NAV_ITEMS.map((item) => {
-            const showDot = item.to === "/dashboard/tickets" && hasUnreadTicket && !isActive(item.to);
+            const showTicketDot = item.to === "/dashboard/tickets"       && hasUnreadTicket    && !isActive(item.to);
+            const showNotifDot  = item.to === "/dashboard/notifications"  && unreadNotifCount > 0 && !isActive(item.to);
             return (
               <button
                 key={item.to}
                 onClick={() => {
-                  if (item.to === "/dashboard/tickets") setHasUnreadTicket(false);
+                  if (item.to === "/dashboard/tickets")       setHasUnreadTicket(false);
+                  if (item.to === "/dashboard/notifications") setUnreadNotifCount(0);
                   navigate(item.to);
                 }}
                 className={`flex-1 flex flex-col items-center py-3 gap-1 text-xs font-medium transition-colors ${
@@ -258,8 +277,8 @@ const DashboardLayout: React.FC = () => {
               >
                 <span className="relative">
                   {item.icon}
-                  {showDot && (
-                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-teal-500 border border-white" />
+                  {(showTicketDot || showNotifDot) && (
+                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-white" />
                   )}
                 </span>
                 {item.label}

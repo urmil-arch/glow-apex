@@ -11,6 +11,7 @@ backend/**/*.pyc
 backend/*.pyc
 backend/.venv/
 backend/venv/
+backend/static/
 
 # Environment files — NEVER commit secrets
 .env

@@ -17,6 +17,7 @@ PERM_SUPPORT = "support"
 PERM_PRICING = "pricing"
 PERM_BLOGS = "blogs"
 PERM_SETTINGS = "settings"
+PERM_NOTIFICATIONS = "notifications"
 
 ALL_PERMISSIONS: frozenset[str] = frozenset(
     {
@@ -31,6 +32,7 @@ ALL_PERMISSIONS: frozenset[str] = frozenset(
         PERM_PRICING,
         PERM_BLOGS,
         PERM_SETTINGS,
+        PERM_NOTIFICATIONS,
     }
 )
 

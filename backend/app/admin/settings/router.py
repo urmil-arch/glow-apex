@@ -3,7 +3,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.admin.settings.repository import SettingsRepository
 from app.admin.settings.schemas import PlatformSettings, UpdateSettingsRequest
-from app.user_management.utils.dependencies import require_permission
+from app.user_management.utils.dependencies import require_admin_role, require_permission
 from app.user_management.utils.permissions import PERM_SETTINGS
 
 router = APIRouter()

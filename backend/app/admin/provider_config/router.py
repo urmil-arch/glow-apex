@@ -54,22 +54,39 @@ async def _resolve_service_info(
 
 
 async def _config_to_response(cfg: dict, db: AsyncIOMotorDatabase) -> RoutingConfigResponse:
-    """Convert a routing_configs document to its response shape."""
-    default_info = None
-    if cfg.get("default_service_id"):
-        default_info = await _resolve_service_info(cfg["default_service_id"], db)
+    """Convert a routing_configs document to its response shape.
 
-    fallbacks: list[RoutingConfigServiceInfo] = []
-    for sid in cfg.get("fallback_service_ids", []):
+    Reads the new value_* / bulk_* fields when present; falls back to the legacy
+    default_service_id / fallback_service_ids for documents not yet re-saved.
+    """
+    # Value config (prefer new field, fall back to legacy)
+    value_default_sid = cfg.get("value_default_service_id") or cfg.get("default_service_id", "")
+    value_default_info = await _resolve_service_info(value_default_sid, db) if value_default_sid else None
+
+    value_fallback_sids = cfg.get("value_fallback_service_ids") if "value_fallback_service_ids" in cfg else cfg.get("fallback_service_ids", [])
+    value_fallbacks: list[RoutingConfigServiceInfo] = []
+    for sid in value_fallback_sids:
         info = await _resolve_service_info(sid, db)
         if info:
-            fallbacks.append(info)
+            value_fallbacks.append(info)
+
+    # Bulk config (new fields only — no legacy fallback)
+    bulk_default_sid = cfg.get("bulk_default_service_id", "")
+    bulk_default_info = await _resolve_service_info(bulk_default_sid, db) if bulk_default_sid else None
+
+    bulk_fallbacks: list[RoutingConfigServiceInfo] = []
+    for sid in cfg.get("bulk_fallback_service_ids", []):
+        info = await _resolve_service_info(sid, db)
+        if info:
+            bulk_fallbacks.append(info)
 
     return RoutingConfigResponse(
         category_id=cfg["category_id"],
         category_name=cfg.get("category_name", ""),
-        default=default_info,
-        fallbacks=fallbacks,
+        value_default=value_default_info,
+        value_fallbacks=value_fallbacks,
+        bulk_default=bulk_default_info,
+        bulk_fallbacks=bulk_fallbacks,
     )
 
 
@@ -125,18 +142,27 @@ async def upsert_routing_config(
     if not category:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Category not found")
 
-    if not await ServiceRepository(db).find_by_id(body.default_service_id):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Default service not found")
+    if not await ServiceRepository(db).find_by_id(body.value_default_service_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Value default service not found")
 
-    for sid in body.fallback_service_ids:
+    if body.bulk_default_service_id and not await ServiceRepository(db).find_by_id(body.bulk_default_service_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Bulk default service not found")
+
+    for sid in body.value_fallback_service_ids:
         if not await ServiceRepository(db).find_by_id(sid):
-            raise HTTPException(status.HTTP_404_NOT_FOUND, f"Fallback service {sid} not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"Value fallback service {sid} not found")
+
+    for sid in body.bulk_fallback_service_ids:
+        if not await ServiceRepository(db).find_by_id(sid):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"Bulk fallback service {sid} not found")
 
     await RoutingConfigRepository(db).upsert(
         category_id=category_id,
         category_name=category.get("name", ""),
-        default_service_id=body.default_service_id,
-        fallback_service_ids=body.fallback_service_ids,
+        value_default_service_id=body.value_default_service_id,
+        value_fallback_service_ids=body.value_fallback_service_ids,
+        bulk_default_service_id=body.bulk_default_service_id,
+        bulk_fallback_service_ids=body.bulk_fallback_service_ids,
     )
 
     cfg = await RoutingConfigRepository(db).find_by_category_id(category_id)

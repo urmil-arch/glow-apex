@@ -78,6 +78,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     validate();
   }, []);
 
+  // Poll /auth/me every 60 s so server-side changes (suspension, role updates)
+  // are reflected without requiring a page refresh.
+  useEffect(() => {
+    if (!user?.id) return;
+    const interval = setInterval(async () => {
+      const token = localStorage.getItem("auth_token");
+      if (!token) return;
+      try {
+        const { data } = await api.get<User>(API_ENDPOINTS.AUTH_ME);
+        setUser(data);
+        localStorage.setItem("user", JSON.stringify(data));
+      } catch { /* 401 handled by interceptor; other errors are transient */ }
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, [user?.id]);
+
   const login = async (identifier: string, password: string): Promise<User> => {
     const { data } = await axios.post(API_ENDPOINTS.AUTH_LOGIN, { identifier, password });
     localStorage.setItem("auth_token", data.access_token);

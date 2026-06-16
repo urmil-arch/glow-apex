@@ -64,7 +64,7 @@ interface EditForm {
   personal_discount: string;
 }
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 
 const toUtc = (d: string) => d && !d.endsWith('Z') && !d.includes('+') ? `${d}Z` : d;
 
@@ -77,6 +77,7 @@ const UsersPage = () => {
   const [stats, setStats] = useState<Stats>({ total: 0, verified: 0, suspended: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<typeof PAGE_SIZE_OPTIONS[number]>(25);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
@@ -92,6 +93,7 @@ const UsersPage = () => {
   const [suspendTarget, setSuspendTarget] = useState<AdminUser | null>(null);
   const [roleTarget, setRoleTarget] = useState<AdminUser | null>(null);
   const [menuState, setMenuState] = useState<{ id: string; top: number; right: number } | null>(null);
+  const [exportModal, setExportModal] = useState<{ emailsOnly: boolean } | null>(null);
 
   const [addForm, setAddForm] = useState<AddForm>({
     full_name: '', username: '', email: '', password: '', role: 'user', extra_permissions: [],
@@ -109,7 +111,7 @@ const UsersPage = () => {
     setIsLoading(true);
     try {
       const { data } = await api.get(API_ENDPOINTS.ADMIN_USERS, {
-        params: { page, page_size: PAGE_SIZE, search, filter_by: filterBy, sort_by: sortBy, sort_order: sortOrder },
+        params: { page, page_size: pageSize, search, filter_by: filterBy, sort_by: sortBy, sort_order: sortOrder },
       });
       setUsers(data.users);
       setTotal(data.total);
@@ -119,7 +121,7 @@ const UsersPage = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [page, search, filterBy, sortBy, sortOrder]);
+  }, [page, pageSize, search, filterBy, sortBy, sortOrder]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -138,6 +140,7 @@ const UsersPage = () => {
   const handleSearch = () => { setSearch(searchInput); setPage(1); };
 
   const handleFilterChange = (f: string) => { setFilterBy(f); setPage(1); };
+  const handlePageSizeChange = (size: typeof PAGE_SIZE_OPTIONS[number]) => { setPageSize(size); setPage(1); };
 
   const handleSpentSort = () => {
     if (sortBy === 'total_spent') {
@@ -166,10 +169,16 @@ const UsersPage = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleExport = async (emailsOnly: boolean) => {
+  const handleExport = async (emailsOnly: boolean, fromDate?: string, toDate?: string) => {
     try {
-      const { data } = await api.get(API_ENDPOINTS.ADMIN_USERS_EXPORT);
-      triggerDownload(toCSV(data, emailsOnly), emailsOnly ? 'emails.csv' : 'users.csv');
+      const params: Record<string, string> = {};
+      if (fromDate) params.created_from = fromDate;
+      if (toDate) params.created_to = toDate;
+      const { data } = await api.get(API_ENDPOINTS.ADMIN_USERS_EXPORT, { params });
+      const suffix = fromDate || toDate
+        ? `_${fromDate ?? 'start'}_to_${toDate ?? 'end'}`
+        : '';
+      triggerDownload(toCSV(data, emailsOnly), emailsOnly ? `emails${suffix}.csv` : `users${suffix}.csv`);
     } catch { /* silent */ }
   };
 
@@ -247,10 +256,10 @@ const UsersPage = () => {
         </div>
         {!isSOM && (
           <div className="flex gap-2">
-            <button onClick={() => handleExport(true)} className={outlineBtnCls}>
+            <button onClick={() => setExportModal({ emailsOnly: true })} className={outlineBtnCls}>
               <Download className="h-4 w-4" /> Export Emails
             </button>
-            <button onClick={() => handleExport(false)} className={outlineBtnCls}>
+            <button onClick={() => setExportModal({ emailsOnly: false })} className={outlineBtnCls}>
               <Download className="h-4 w-4" /> Export Users
             </button>
             <button onClick={() => { setAddModal(true); setModalError(''); }} className={primaryBtnCls}>
@@ -399,14 +408,46 @@ const UsersPage = () => {
           </tbody>
         </table>
 
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
-            <p className="text-gray-400 text-sm">Page {page} of {totalPages}</p>
-            <div className="flex gap-1">
-              <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+        {total > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-gray-100">
+            {/* Showing X–Y of Z */}
+            <p className="text-gray-400 text-sm whitespace-nowrap">
+              Showing {((page - 1) * pageSize + 1).toLocaleString()}–{Math.min(page * pageSize, total).toLocaleString()} of {total.toLocaleString()} users
+            </p>
+
+            {/* Page size selector */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400">Show:</span>
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <button
+                  key={size}
+                  onClick={() => handlePageSizeChange(size)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors border ${
+                    pageSize === size
+                      ? 'bg-teal-50 text-teal-700 border-teal-200'
+                      : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
+
+            {/* Prev / Next */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+              <span className="text-xs text-gray-500 px-1">{page} / {totalPages}</span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
@@ -610,7 +651,91 @@ const UsersPage = () => {
           onSaved={() => { setRoleTarget(null); fetchUsers(); }}
         />
       )}
+
+      {/* ── Export Modal ── */}
+      {exportModal && (
+        <ExportModal
+          emailsOnly={exportModal.emailsOnly}
+          onClose={() => setExportModal(null)}
+          onExport={handleExport}
+        />
+      )}
     </div>
+  );
+};
+
+// ── Export Modal ──────────────────────────────────
+
+interface ExportModalProps {
+  emailsOnly: boolean;
+  onClose: () => void;
+  onExport: (emailsOnly: boolean, fromDate?: string, toDate?: string) => Promise<void>;
+}
+
+const ExportModal = ({ emailsOnly, onClose, onExport }: ExportModalProps) => {
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async () => {
+    if (fromDate && toDate && fromDate > toDate) {
+      setError('Start date must be before end date.');
+      return;
+    }
+    setExporting(true);
+    setError('');
+    await onExport(emailsOnly, fromDate || undefined, toDate || undefined);
+    setExporting(false);
+    onClose();
+  };
+
+  const title = emailsOnly ? 'Export Emails' : 'Export Users';
+
+  return (
+    <Modal title={title} onClose={onClose}>
+      <div className="space-y-4">
+        <p className="text-sm text-gray-500">
+          Leave dates empty to export all users. Fill one or both to filter by registration date.
+        </p>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="From date">
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => { setFromDate(e.target.value); setError(''); }}
+              className={inputCls}
+            />
+          </Field>
+          <Field label="To date">
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => { setToDate(e.target.value); setError(''); }}
+              className={inputCls}
+            />
+          </Field>
+        </div>
+
+        {(fromDate || toDate) && (
+          <p className="text-xs text-teal-600 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2">
+            Exporting users registered
+            {fromDate && toDate ? ` from ${fromDate} to ${toDate}` : fromDate ? ` from ${fromDate}` : ` up to ${toDate}`}.
+          </p>
+        )}
+
+        {error && <p className="text-sm text-red-500">{error}</p>}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button onClick={onClose} className={cancelCls}>Cancel</button>
+          <button onClick={handleSubmit} disabled={exporting} className={`flex items-center gap-2 ${primaryCls}`}>
+            <Download className="h-4 w-4" />
+            {exporting ? 'Exporting…' : title}
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 };
 

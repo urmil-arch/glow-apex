@@ -89,6 +89,15 @@ class CryptomusVerifyViaTokenRequest(BaseModel):
     session_token: str
 
 
+class CreateCryptomusInvoiceRequest(BaseModel):
+    """
+    Request body for lazily creating a Cryptomus invoice from Glow Apex.
+    The invoice is deferred from CHECKOUT_INIT so GlowApex is always reached first.
+    """
+
+    session_token: str
+
+
 class PreAuthRequest(BaseModel):
     """
     Request body for creating a cross-domain pre-auth token.

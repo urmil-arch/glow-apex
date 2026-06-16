@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -63,11 +64,25 @@ async def get_stats(
 
 @router.get("/export")
 async def export_users(
+    created_from: Optional[str] = Query(None, description="Start date (YYYY-MM-DD, UTC inclusive)"),
+    created_to: Optional[str] = Query(None, description="End date (YYYY-MM-DD, UTC inclusive)"),
     _: dict = Depends(require_admin_role),
     db: AsyncIOMotorDatabase = Depends(_get_db),
 ) -> list[AdminUserResponse]:
-    """Return all users as a flat list for CSV export."""
-    users = await UserRepository(db).admin_export_users()
+    """Return all users as a flat list for CSV export, optionally filtered by creation date."""
+    from_dt: Optional[datetime] = None
+    to_dt: Optional[datetime] = None
+    try:
+        if created_from:
+            from_dt = datetime.strptime(created_from, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        if created_to:
+            to_dt = datetime.strptime(created_to, "%Y-%m-%d").replace(
+                hour=23, minute=59, second=59, tzinfo=timezone.utc
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {exc}") from exc
+
+    users = await UserRepository(db).admin_export_users(created_from=from_dt, created_to=to_dt)
     return [_user_to_response(u) for u in users]
 
 

@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import SectionHeader from "./section-header";
-import { useParams } from "react-router-dom";
 
 export type FlowCardProps = {
   number: number;
@@ -32,7 +31,7 @@ const FlowCard: React.FC<
           isActive ? "text-[#0eca6d]" : "text-gray-800"
         }`}
         animate={{ scale: isActive ? 1.05 : 1 }}
-        transition={{ duration: 0.3 }}
+        transition={{ duration: 0.15 }}
       >
         {title}
       </motion.h4>
@@ -47,7 +46,7 @@ const FlowCard: React.FC<
             ? "0 0 25px rgba(14, 202, 109, 0.5)"
             : "0 0 0px rgba(0, 0, 0, 0)",
         }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.2 }}
       >
         <motion.span
           className={`text-xl font-bold ${
@@ -92,10 +91,10 @@ const ProgressBar: React.FC<{ activeStep: number; totalSteps: number }> = ({
           initial={{ width: "0%" }}
           animate={{ width: `${(activeStep / (totalSteps - 1)) * 100}%` }}
           transition={{
-            duration: 0.5,
+            duration: 0.2,
             type: "spring",
-            stiffness: 100,
-            damping: 20,
+            stiffness: 200,
+            damping: 25,
           }}
         />
       </div>
@@ -108,38 +107,30 @@ const PurchaseFlow: React.FC<{ data: FlowCardProps[]; btnText?: string }> = ({
   btnText,
 }) => {
   const [activeStep, setActiveStep] = useState(0);
-  const [autoAnimate, setAutoAnimate] = useState(true);
-  const { service_id } = useParams();
+  const sectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Auto-animate through steps
-    if (autoAnimate) {
-      const interval = setInterval(() => {
-        setActiveStep((prev) => (prev + 1) % data.length);
-      }, 3000);
+    const handleScroll = () => {
+      if (!sectionRef.current) return;
+      const rect = sectionRef.current.getBoundingClientRect();
+      const vh = window.innerHeight;
+      // 0 when section bottom enters viewport, 1 when section top reaches viewport top
+      const progress = (vh - rect.top) / vh;
+      const clamped = Math.max(0, Math.min(1, progress));
+      setActiveStep(Math.min(data.length - 1, Math.floor(clamped * data.length)));
+    };
 
-      return () => clearInterval(interval);
-    }
-  }, [data.length, autoAnimate]);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [data.length]);
 
   const handleHover = (index: number) => {
     setActiveStep(index);
-    setAutoAnimate(false);
   };
 
-  // When user stops interacting, resume animation after 5 seconds
-  useEffect(() => {
-    if (!autoAnimate) {
-      const timeout = setTimeout(() => {
-        setAutoAnimate(true);
-      }, 2000);
-
-      return () => clearTimeout(timeout);
-    }
-  }, [autoAnimate]);
-
   return (
-    <div className="relative mt-16 container">
+    <div ref={sectionRef} className="relative mt-16 container">
       {/* Progress bar */}
       <ProgressBar activeStep={activeStep} totalSteps={data.length} />
 

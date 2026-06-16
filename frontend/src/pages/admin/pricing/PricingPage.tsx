@@ -412,7 +412,7 @@ const PricingPage: React.FC = () => {
       api.get<{ service_type: string; display_name: string; price_per_1000: number; value_packages: LocalPackage[]; bulk_packages: LocalPackage[]; is_active: boolean }[]>(
         API_ENDPOINTS.ADMIN_PRICING,
       ),
-      api.get<{ category_name: string; default: { min: number; max: number } | null }[]>(
+      api.get<{ category_name: string; value_default: { min: number; max: number } | null }[]>(
         API_ENDPOINTS.ADMIN_ROUTING_CONFIG,
       ),
     ])
@@ -424,7 +424,7 @@ const PricingPage: React.FC = () => {
         const mmMap: Record<string, ServiceMinMax> = {};
         routingRes.data.forEach((r) => {
           const st = CATEGORY_TO_SERVICE_TYPE[r.category_name];
-          if (st && r.default) mmMap[st] = { min: r.default.min, max: r.default.max };
+          if (st && r.value_default) mmMap[st] = { min: r.value_default.min, max: r.value_default.max };
         });
         setMinMax(mmMap);
       })

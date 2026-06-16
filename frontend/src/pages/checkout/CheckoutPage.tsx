@@ -45,6 +45,16 @@ const CATEGORY_TO_SERVICE_TYPE: Record<string, string> = {
   "Country Targeted Subscribers": "country_targeted_subscribers",
 };
 
+const CATEGORY_TO_UNIT: Record<string, string> = {
+  "YouTube Views":                "Views",
+  "YouTube Likes":                "Likes",
+  "YouTube Subscribers":          "Subscribers",
+  "YouTube Comments":             "Comments",
+  "YouTube Shorts Views":         "Shorts Views",
+  "YouTube Shorts Likes":         "Shorts Likes",
+  "Country Targeted Subscribers": "Subscribers",
+};
+
 const YOUTUBE_REGEX = /^https?:\/\/(www\.|m\.)?(youtube\.com\/(watch\?.*v=[\w-]+|shorts\/[\w-]+|live\/[\w-]+|channel\/[\w-]+|c\/[\w-]+|user\/[\w-]+|@[\w.-]+)|youtu\.be\/[\w-]+)/i;
 
 function isValidYouTubeLink(url: string): boolean {
@@ -161,6 +171,10 @@ const CheckoutPage = () => {
   const selectedPkg = packageOptions.find((o) => o.key === effectivePackageKey);
   const selectedQuantity = selectedPkg?.quantity ?? categoryOrder?.quantity ?? 1;
 
+  const unitLabel = isCategoryFlow
+    ? (CATEGORY_TO_UNIT[categoryOrder!.categoryName] ?? "units")
+    : "units";
+
   const serviceName = isCategoryFlow ? categoryOrder!.categoryName : serviceOrder!.serviceName;
   const description = isCategoryFlow ? "" : serviceOrder!.description;
   const displayQuantity = isCategoryFlow ? selectedQuantity : quantity;
@@ -221,9 +235,8 @@ const CheckoutPage = () => {
     return body;
   }
 
-  // Stripe / Razorpay: create the session then redirect to the Glow Apex portal,
-  // telling the backend which store to return the user to after payment.
-  async function redirectToGlowApex(method: "stripe" | "razorpay") {
+  // All payment methods redirect to the Glow Apex portal via a short-lived token.
+  async function redirectToGlowApex(method: PaymentMethod) {
     setLoading(true);
     setError(null);
     try {
@@ -239,32 +252,10 @@ const CheckoutPage = () => {
     }
   }
 
-  async function startCryptomus() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.post<CheckoutInitResponse>(API_ENDPOINTS.CHECKOUT_INIT, {
-        ...buildOrderBody(),
-        payment_method: "cryptomus",
-        return_origin: window.location.origin,
-      });
-      if (res.data.payment_url) {
-        window.location.href = res.data.payment_url;
-      } else {
-        setError("Failed to create Cryptomus payment. Please try again.");
-        setLoading(false);
-      }
-    } catch (err) {
-      setError(extractError(err));
-      setLoading(false);
-    }
-  }
-
   async function handlePlaceOrder() {
     if (!link.trim()) return;
     if (!isCategoryFlow && (quantity < serviceOrder!.min || quantity > serviceOrder!.max)) return;
-    if (paymentMethod === "cryptomus") await startCryptomus();
-    else await redirectToGlowApex(paymentMethod);
+    await redirectToGlowApex(paymentMethod);
   }
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -308,7 +299,7 @@ const CheckoutPage = () => {
                         <optgroup label="Value Packages">
                           {valueOptions.map((opt) => (
                             <option key={opt.key} value={opt.key}>
-                              {opt.quantity.toLocaleString()} units
+                              {opt.quantity.toLocaleString()} {unitLabel}
                             </option>
                           ))}
                         </optgroup>
@@ -317,7 +308,7 @@ const CheckoutPage = () => {
                         <optgroup label="Bulk Packages">
                           {bulkOptions.map((opt) => (
                             <option key={opt.key} value={opt.key}>
-                              {opt.quantity.toLocaleString()} units
+                              {opt.quantity.toLocaleString()} {unitLabel}
                             </option>
                           ))}
                         </optgroup>
@@ -331,7 +322,7 @@ const CheckoutPage = () => {
                   </>
                 ) : (
                   <div className="bg-gray-50 rounded-xl px-4 py-3 text-sm font-medium text-gray-700">
-                    {displayQuantity.toLocaleString()} units
+                    {displayQuantity.toLocaleString()} {unitLabel}
                   </div>
                 )
               ) : (
@@ -513,11 +504,7 @@ const CheckoutPage = () => {
                     {loading ? (
                       <>
                         <Loader className="w-4 h-4 animate-spin" />
-                        {paymentMethod === "cryptomus"
-                          ? "Generating invoice…"
-                          : paymentMethod === "razorpay"
-                            ? "Opening Payment…"
-                            : "Redirecting…"}
+                        {paymentMethod === "razorpay" ? "Opening Payment…" : "Redirecting…"}
                       </>
                     ) : (
                       <>
@@ -568,7 +555,7 @@ const CheckoutPage = () => {
                     )}
                   </div>
                   <p className="text-2xl font-bold text-gray-900 mt-1">{selectedPkg.quantity.toLocaleString()}</p>
-                  <p className="text-xs text-gray-500">units</p>
+                  <p className="text-xs text-gray-500">{unitLabel}</p>
                 </div>
               )}
 

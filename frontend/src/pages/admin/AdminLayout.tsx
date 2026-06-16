@@ -17,6 +17,7 @@ import {
   DollarSign,
   Newspaper,
   UserCog,
+  Bell,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
@@ -38,9 +39,10 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/admin/payments', icon: <CreditCard className="h-5 w-5" />, label: 'Payments', perm: 'payments' },
   { to: '/admin/services', icon: <Package className="h-5 w-5" />, label: 'Services', perm: 'services' },
   { to: '/admin/routing', icon: <GitBranch className="h-5 w-5" />, label: 'Routing', perm: 'routing' },
-  { to: '/admin/support', icon: <HeadphonesIcon className="h-5 w-5" />, label: 'Support', perm: 'support' },
   { to: '/admin/pricing', icon: <DollarSign className="h-5 w-5" />, label: 'Pricing', perm: 'pricing' },
+  { to: '/admin/support', icon: <HeadphonesIcon className="h-5 w-5" />, label: 'Support', perm: 'support' },
   { to: '/admin/blogs', icon: <Newspaper className="h-5 w-5" />, label: 'Blogs', perm: 'blogs' },
+  { to: '/admin/notifications', icon: <Bell className="h-5 w-5" />, label: 'Notifications', perm: 'notifications' },
   { to: '/admin/settings', icon: <Settings className="h-5 w-5" />, label: 'Settings', perm: 'settings' },
 ];
 
