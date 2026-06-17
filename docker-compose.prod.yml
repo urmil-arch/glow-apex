@@ -38,6 +38,8 @@ services:
       # These override whatever is in backend/.env so Docker service names resolve
       MONGODB_URI: mongodb://mongo:27017
       REDIS_URL: redis://redis:6379
+    volumes:
+      - blog_images:/app/static/blog-images
     depends_on:
       mongo:
         condition: service_healthy
@@ -99,3 +101,4 @@ services:
 volumes:
   mongo_data:
   redis_data:
+  blog_images:

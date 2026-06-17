@@ -17,6 +17,7 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - blog_images:/app/static/blog-images
     env_file:
       - ./backend/.env
     environment:
@@ -41,3 +42,4 @@ services:
 
 volumes:
   mongo_data:
+  blog_images:

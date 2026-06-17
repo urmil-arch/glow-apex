@@ -243,7 +243,7 @@ async def _fetch_order_rows(db, match: dict, group_by: str) -> list[dict]:
             "quantity":     doc.get("quantity", 0),
             "charges":      charges,
             "server_price": server_price,
-            "revenue":      revenue,
+            "revenue":      charges,
             "status":       doc.get("status", ""),
             # ReportRow-compatible fields so TAB_COLS still work
             "orders":         1,
@@ -297,13 +297,12 @@ async def get_reports(
 
         charges      = round(od.get("charges",      0.0), 4)
         server_price = round(od.get("server_cost",  0.0), 4)
-        revenue      = round(charges - server_price,       4)   # our margin
-        profit       = revenue                                   # same — kept for API compat
+        profit       = round(charges - server_price,       4)   # our margin (profit)
 
         rows.append({
             "period":          period_key,
             "payments":        pd.get("payments",       0),
-            "revenue":         revenue,
+            "revenue":         charges,
             "orders":          od.get("orders",         0),
             "quantity":        od.get("quantity",       0),
             "charges":         charges,

@@ -811,3 +811,23 @@
 
 [2026-06-16 15:00] | modify | frontend/src/App.tsx | Added DashboardNotificationsPage import and /dashboard/notifications route.
 
+
+[2026-06-17 00:00] | modify | docker-compose.yml, docker-compose.prod.yml | Added named Docker volume `blog_images` mounted at `/app/static/blog-images` in the backend container. Persists uploaded blog images across container rebuilds and `docker-compose down/up` cycles. Root cause of image loss was backend storing files on container ephemeral filesystem; volume survives rebuilds.
+
+[2026-06-17 12:00] | add | frontend/src/pages/admin/services/WorkingServicesSection.tsx | Extracted WorkingServicesSection and ChainEntry from old monolithic ServicesPage. Shows per-category routing chain health (working/untested/error counts) with a summary strip and grid of category cards. Exports RoutingConfigData, ServiceStat, Category interfaces used by other sub-files.
+
+[2026-06-17 12:00] | add | frontend/src/pages/admin/services/modals.tsx | Extracted all modal components and shared styles from old ServicesPage into a standalone file. Exports: Modal, AddCategoryModal, ServiceFormModal (preserved exactly), SubscriptionFormModal, DeleteModal, DropdownMenu (portal-positioned to avoid overflow clipping). Also exports shared CSS class strings (inputCls, primaryCls, ghostCls, cancelCls) and the Provider, Category, Service, ProviderServiceItem interfaces.
+
+[2026-06-17 12:00] | add | frontend/src/pages/admin/services/CategoryCard.tsx | New combined per-category card component replacing the separate Routing and Pricing pages. Each card has three inner tabs: Services (service table with sort/select/actions + Add Service button), Routing (value/bulk sub-tabs with default + ordered fallback service dropdowns, save/clear), Pricing (price_per_1000 + value/bulk package quantity tables with discount config, save). Routing saves to PUT /admin/routing/{categoryId}; pricing saves to PUT /admin/pricing/{serviceType}. Both call onSaved() to trigger parent fetchAll().
+
+[2026-06-17 12:00] | modify | frontend/src/pages/admin/services/ServicesPage.tsx | Rewrote from 2115-line monolith to ~380-line orchestration page. Now fetches pricingConfigs in addition to existing data and renders 6 fixed CategoryCards (YouTube Views/Likes/Subscribers/Comments/Shorts Views/Shorts Likes). Global toolbar handles: Add Category, bulk delete, sync, export, filter/search. Global modals manage add/edit/delete service and category. Two top-level tabs: Configuration (CategoryCards) and Working Services (WorkingServicesSection).
+
+[2026-06-17 12:00] | delete | frontend/src/pages/admin/routing/ProviderConfigPage.tsx | Removed — routing config is now in the Routing tab inside each CategoryCard.
+
+[2026-06-17 12:00] | delete | frontend/src/pages/admin/pricing/PricingPage.tsx | Removed — pricing config is now in the Pricing tab inside each CategoryCard.
+
+[2026-06-17 12:00] | modify | frontend/src/App.tsx | Removed imports and routes for ProviderConfigPage (/admin/routing) and PricingPage (/admin/pricing).
+
+[2026-06-17 12:00] | modify | frontend/src/pages/admin/AdminLayout.tsx | Removed Routing and Pricing entries from NAV_ITEMS; removed unused GitBranch and DollarSign icon imports.
+
+[2026-06-17 12:00] | modify | frontend/src/config/permissions.ts | Removed /admin/routing and /admin/pricing from ADMIN_NAV_ORDER (the nav-based first-page resolver). Backend permission keys 'routing' and 'pricing' remain — they still guard API endpoints.

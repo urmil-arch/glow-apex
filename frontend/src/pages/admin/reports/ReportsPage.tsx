@@ -65,7 +65,7 @@ interface ReportResponse {
 
 type PeriodKey = 'today' | 'week' | 'month' | '3months' | 'year' | 'all';
 type GroupBy   = 'day' | 'month';
-type TabKey    = 'payments' | 'orders' | 'tickets' | 'replies' | 'profit' | 'charges' | 'quantity' | 'server_price' | 'refiller';
+type TabKey    = 'payments' | 'orders' | 'tickets' | 'replies' | 'profit' | 'revenue' | 'quantity' | 'server_price' | 'refiller';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -84,14 +84,14 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'tickets',      label: 'Tickets'         },
   { key: 'replies',      label: 'Ticket Replies'  },
   { key: 'profit',       label: 'Profit'          },
-  { key: 'charges',      label: 'Charges'         },
+  { key: 'revenue',      label: 'Revenue'         },
   { key: 'quantity',     label: 'Quantity'        },
   { key: 'server_price', label: 'Server Price'    },
   { key: 'refiller',     label: 'Refiller'        },
 ];
 
 // Tabs that use individual expandable rows (not aggregated)
-const EXPANDABLE_TABS = new Set<TabKey>(['orders', 'charges', 'quantity', 'server_price', 'profit', 'payments']);
+const EXPANDABLE_TABS = new Set<TabKey>(['orders', 'revenue', 'quantity', 'server_price', 'profit', 'payments']);
 
 interface ColDef {
   header: string;
@@ -112,7 +112,7 @@ const TAB_COLS: Record<TabKey, ColDef[]> = {
   orders: [
     { header: 'Orders',   getValue: r => r.orders,   format: v => num(v as number) },
     { header: 'Quantity', getValue: r => r.quantity,  format: v => num(v as number) },
-    { header: 'Charges',  getValue: r => r.charges,   format: v => $(v as number),  cls: () => 'text-orange-600' },
+    { header: 'Revenue',  getValue: r => r.revenue,   format: v => $(v as number),  cls: () => 'text-orange-600' },
   ],
   tickets: [
     { header: 'Tickets', getValue: r => r.tickets,        format: v => num(v as number) },
@@ -122,12 +122,12 @@ const TAB_COLS: Record<TabKey, ColDef[]> = {
     { header: 'Total Replies', getValue: r => r.ticket_replies, format: v => num(v as number) },
   ],
   profit: [
-    { header: 'Charges',      getValue: r => r.charges,      format: v => $(v as number),  cls: () => 'text-gray-700 font-medium' },
+    { header: 'Revenue',      getValue: r => r.revenue,      format: v => $(v as number),  cls: () => 'text-gray-700 font-medium' },
     { header: 'Server Price', getValue: r => r.server_price, format: v => $(v as number),  cls: () => 'text-orange-600' },
-    { header: 'Revenue',      getValue: r => r.revenue,      format: v => $(v as number),  cls: v => (v as number) >= 0 ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold' },
+    { header: 'Profit',       getValue: r => r.profit,       format: v => $(v as number),  cls: v => (v as number) >= 0 ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold' },
   ],
-  charges: [
-    { header: 'Charges',  getValue: r => r.charges,  format: v => $(v as number), cls: () => 'text-orange-600 font-medium' },
+  revenue: [
+    { header: 'Revenue',  getValue: r => r.revenue,  format: v => $(v as number), cls: () => 'text-orange-600 font-medium' },
     { header: 'Quantity', getValue: r => r.quantity, format: v => num(v as number) },
   ],
   quantity: [
@@ -480,16 +480,16 @@ const ReportsPage = () => {
           iconColor="text-blue-500"
         />
         <StatCard
-          label={`Revenue ${periodLabel}`}
-          value={$(summary.total_revenue)}
+          label={`Profit ${periodLabel}`}
+          value={$(summary.total_profit)}
           sub={`Server: ${$(summary.total_server_price)}`}
           icon={<TrendingUp className="w-4 h-4" />}
           iconBg="bg-teal-50"
           iconColor="text-teal-500"
         />
         <StatCard
-          label={`Charges ${periodLabel}`}
-          value={$(summary.total_charges)}
+          label={`Revenue ${periodLabel}`}
+          value={$(summary.total_revenue)}
           sub={`${summary.total_payments} payments`}
           icon={<DollarSign className="w-4 h-4" />}
           iconBg="bg-green-50"
@@ -801,9 +801,9 @@ const ReportsPage = () => {
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="flex items-center gap-2 mb-3">
               <Layers className="w-4 h-4 text-gray-400" />
-              <p className="text-sm font-medium text-gray-700">Charges (User Billing)</p>
+              <p className="text-sm font-medium text-gray-700">Revenue (User Billing)</p>
             </div>
-            <p className="text-xl font-bold text-gray-800">{$(summary.total_charges)}</p>
+            <p className="text-xl font-bold text-gray-800">{$(summary.total_revenue)}</p>
             <p className="text-xs text-gray-400 mt-1">{num(summary.total_quantity)} total units</p>
           </div>
 
