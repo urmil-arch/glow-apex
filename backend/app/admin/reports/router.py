@@ -269,8 +269,7 @@ async def get_reports(
     Return aggregated report data for the given period, grouped by day or month.
 
     Data is sourced from the live orders, payments, and tickets collections.
-    server_price and refills are not yet tracked per-order and are returned as 0.
-    profit = revenue (since server_price = 0).
+    revenue = sum of order charges; profit = revenue - server_price.
     """
     db = request.app.state.db
     start, end = _date_range(period)
@@ -317,15 +316,15 @@ async def get_reports(
     # Summary totals
     total_charges      = round(sum(r["charges"]      for r in rows), 4)
     total_server_price = round(sum(r["server_price"] for r in rows), 4)
-    total_revenue      = round(total_charges - total_server_price,    4)
+    total_profit       = round(total_charges - total_server_price,    4)
 
     summary = {
         "total_payments":       sum(r["payments"]       for r in rows),
-        "total_revenue":        total_revenue,
+        "total_revenue":        total_charges,
         "total_orders":         sum(r["orders"]         for r in rows),
         "total_quantity":       sum(r["quantity"]       for r in rows),
         "total_charges":        total_charges,
-        "total_profit":         total_revenue,
+        "total_profit":         total_profit,
         "total_server_price":   total_server_price,
         "total_tickets":        sum(r["tickets"]        for r in rows),
         "total_ticket_replies": sum(r["ticket_replies"] for r in rows),
