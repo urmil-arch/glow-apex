@@ -2,29 +2,18 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.concurrency import run_in_threadpool
 
-from app.admin.pricing.repository import PricingRepository
-from app.admin.provider_config.repository import RoutingConfigRepository
 from app.admin.providers.repository import ProviderRepository
-from app.admin.services.repository import CategoryRepository, ServiceRepository
 from app.admin.tasks.repository import TaskRepository
+from app.notifications.repository import NotificationRepository
 from app.user_management.repositories.user_repository import UserRepository
-from app.common.config import settings
 from app.orders.provider_api import call_provider
 from app.orders.repository import OrderRepository
 from app.orders.schemas import (
-    InitiateStripeOrderRequest,
     OrderListResponse,
     OrderResponse,
-    PlaceOrderByCategoryRequest,
-    PlaceOrderRequest,
     RefillResponse,
-    StripeInitiateResponse,
 )
-from app.orders.pricing_utils import CATEGORY_TO_SERVICE_TYPE, calc_pricing_charge
-from app.payments.ledger_repository import PaymentLedgerRepository
-from app.payments.stripe import service as stripe_service
 from app.user_management.utils.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -77,207 +66,6 @@ async def _get_order_and_provider(
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Provider not available")
 
     return order, provider
-
-
-@router.post("", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
-async def place_order(
-    body: PlaceOrderRequest,
-    request: Request,
-    user: dict = Depends(get_current_user),
-) -> OrderResponse:
-    """
-    Place an order with the SMM provider and store it in the database.
-    Validates quantity against service min/max bounds.
-    charge = rate * quantity / 1000
-    """
-    db = request.app.state.db
-
-    service = await ServiceRepository(db).find_by_id(body.service_id)
-    if not service:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Service not found")
-    if not service.get("is_active", True):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Service is not available")
-
-    min_qty: int = service.get("min", 1)
-    max_qty: int = service.get("max", 1_000_000)
-    if body.quantity < min_qty or body.quantity > max_qty:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f"Quantity must be between {min_qty} and {max_qty}",
-        )
-
-    category_id = service.get("category_id", "")
-    candidates = (
-        await ServiceRepository(db).find_active_by_category_id(category_id)
-        if category_id
-        else [service]
-    )
-
-    last_error = "No provider available"
-    provider_result: dict | None = None
-    fulfilled_provider: dict | None = None
-
-    for candidate in candidates:
-        candidate_provider = await ProviderRepository(db).find_by_id(candidate["provider_id"])
-        if not candidate_provider:
-            continue
-        result = await call_provider(
-            candidate_provider["url"],
-            candidate_provider["api_key"],
-            {
-                "action": "add",
-                "service": candidate["provider_service_id"],
-                "link": body.link,
-                "quantity": body.quantity,
-            },
-        )
-        if "error" not in result:
-            provider_result = result
-            fulfilled_provider = candidate_provider
-            break
-        last_error = result["error"]
-        logger.warning(
-            "Provider '%s' failed for service '%s': %s",
-            candidate_provider.get("name", "unknown"),
-            candidate.get("name", "unknown"),
-            last_error,
-        )
-
-    if provider_result is None or fulfilled_provider is None:
-        logger.error("All providers exhausted for service_id=%s. Last error: %s", body.service_id, last_error)
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Service is currently unavailable. Please try again later.")
-
-    provider_order_id = str(provider_result.get("order", ""))
-    server_cost = round(service["rate"] * body.quantity / 1000, 6)
-    charge = server_cost  # direct orders: user price = provider cost (no pricing page involved)
-    user_id = str(user["_id"])
-
-    category = await CategoryRepository(db).find_by_id(service.get("category_id", ""))
-    category_name = category.get("name", "") if category else ""
-
-    doc = {
-        "user_id": user_id,
-        "service_id": body.service_id,
-        "service_name": service.get("name", ""),
-        "category_name": category_name,
-        "provider_id": str(fulfilled_provider["_id"]),
-        "provider_order_id": provider_order_id,
-        "link": body.link,
-        "quantity": body.quantity,
-        "charge": charge,
-        "server_cost": server_cost,
-        "status": "Pending",
-        "start_count": "",
-        "remains": "",
-        "currency": "USD",
-        "created_at": datetime.now(timezone.utc),
-    }
-    inserted_id = await OrderRepository(db).insert(doc)
-    doc["_id"] = inserted_id
-
-    return _serialize_order(doc)
-
-
-@router.post("/by-category", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
-async def place_order_by_category(
-    body: PlaceOrderByCategoryRequest,
-    request: Request,
-    user: dict = Depends(get_current_user),
-) -> OrderResponse:
-    """
-    Place an order by category name.
-    The backend auto-selects the first active service in the category by provider_service_id
-    (ascending numeric order) and falls back to subsequent services on failure.
-    charge = winning_service.rate * quantity / 1000
-    """
-    db = request.app.state.db
-
-    category = await CategoryRepository(db).find_by_name(body.category_name)
-    if not category:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Category not found")
-
-    routing_config = await RoutingConfigRepository(db).find_by_category_id(str(category["_id"]))
-
-    if routing_config:
-        service_ids: list[str] = []
-        if routing_config.get("default_service_id"):
-            service_ids.append(routing_config["default_service_id"])
-        service_ids.extend(routing_config.get("fallback_service_ids", []))
-
-        candidates: list[dict] = []
-        for sid in service_ids:
-            svc = await ServiceRepository(db).find_by_id(sid)
-            if svc and svc.get("is_active", True):
-                candidates.append(svc)
-    else:
-        candidates = await ServiceRepository(db).find_active_by_category_id(str(category["_id"]))
-
-    if not candidates:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "No services available in this category")
-
-    last_error = "No provider available"
-    provider_result: dict | None = None
-    fulfilled_provider: dict | None = None
-    fulfilled_service: dict | None = None
-
-    for candidate in candidates:
-        candidate_provider = await ProviderRepository(db).find_by_id(candidate["provider_id"])
-        if not candidate_provider:
-            continue
-        result = await call_provider(
-            candidate_provider["url"],
-            candidate_provider["api_key"],
-            {
-                "action": "add",
-                "service": candidate["provider_service_id"],
-                "link": body.link,
-                "quantity": body.quantity,
-            },
-        )
-        if "error" not in result:
-            provider_result = result
-            fulfilled_provider = candidate_provider
-            fulfilled_service = candidate
-            break
-        last_error = result["error"]
-        logger.warning(
-            "Provider '%s' failed for service '%s' (category '%s'): %s",
-            candidate_provider.get("name", "unknown"),
-            candidate.get("name", "unknown"),
-            body.category_name,
-            last_error,
-        )
-
-    if provider_result is None or fulfilled_provider is None or fulfilled_service is None:
-        logger.error("All providers exhausted for category='%s'. Last error: %s", body.category_name, last_error)
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Service is currently unavailable. Please try again later.")
-
-    provider_order_id = str(provider_result.get("order", ""))
-    server_cost = round(fulfilled_service["rate"] * body.quantity / 1000, 6)
-    charge = server_cost  # direct orders: user price = provider cost
-    user_id = str(user["_id"])
-
-    doc = {
-        "user_id": user_id,
-        "service_id": str(fulfilled_service["_id"]),
-        "service_name": fulfilled_service.get("name", ""),
-        "category_name": body.category_name,
-        "provider_id": str(fulfilled_provider["_id"]),
-        "provider_order_id": provider_order_id,
-        "link": body.link,
-        "quantity": body.quantity,
-        "charge": charge,
-        "server_cost": server_cost,
-        "status": "Pending",
-        "start_count": "",
-        "remains": "",
-        "currency": "USD",
-        "created_at": datetime.now(timezone.utc),
-    }
-    inserted_id = await OrderRepository(db).insert(doc)
-    doc["_id"] = inserted_id
-
-    return _serialize_order(doc)
 
 
 @router.get("", response_model=OrderListResponse)
@@ -337,11 +125,13 @@ async def get_order(
             if not await task_repo.exists_for_order(order_id, "failed_order"):
                 now = datetime.now(timezone.utc)
                 user_doc = await UserRepository(db).find_by_id(user_id) if user_id else None
+                service_label = order.get("category_name") or order.get("service_name", "Unknown")
+                quantity = order.get("quantity", 0)
                 await task_repo.insert({
                     "type": "failed_order",
                     "status": "open",
                     "priority": "high",
-                    "title": f"Order error ({new_status}) — {order.get('category_name') or order.get('service_name', 'Unknown')} × {order.get('quantity', 0):,}",
+                    "title": f"Order error ({new_status}) — {service_label} × {quantity:,}",
                     "description": f"Order #{order_id[-8:]} status changed to '{new_status}' (was '{old_status}'). Detected during user status sync.",
                     "notes": "",
                     "order_id": order_id,
@@ -351,13 +141,26 @@ async def get_order(
                     "order_link": order.get("link", ""),
                     "service_name": order.get("service_name", ""),
                     "category_name": order.get("category_name", ""),
-                    "quantity": order.get("quantity"),
+                    "quantity": quantity,
                     "charge": order.get("charge"),
                     "currency": order.get("currency", "USD"),
                     "seen_by_admin": False,
                     "resolved_at": None,
                     "created_at": now,
                     "updated_at": now,
+                })
+                await NotificationRepository(db).insert({
+                    "title": "Order Error Detected",
+                    "message": (
+                        f"Your order for {service_label} × {quantity:,} has encountered an error "
+                        f"({new_status}). Our team has been notified and will look into it."
+                    ),
+                    "type": "error",
+                    "target": "selective",
+                    "user_ids": [user_id],
+                    "read_by": [],
+                    "created_by": "system",
+                    "created_at": now,
                 })
     except Exception:
         pass
@@ -438,13 +241,17 @@ async def cancel_order(
     # Auto-create a refund request task so the admin knows to process the refund manually.
     task_repo = TaskRepository(db)
     if not await task_repo.exists_for_order(order_id, "refund_request"):
+        service_label = order.get("category_name") or order.get("service_name", "Unknown")
+        quantity = order.get("quantity", 0)
+        charge = order.get("charge", 0)
+        currency = order.get("currency", "USD")
         now = datetime.now(timezone.utc)
         await task_repo.insert({
             "type": "refund_request",
             "status": "open",
             "priority": "medium",
-            "title": f"Refund request — {order.get('category_name') or order.get('service_name', 'Unknown')} × {order.get('quantity', 0):,}",
-            "description": f"Order #{order_id[-8:]} was cancelled by the user and confirmed by the provider. Refund of {order.get('currency', 'USD')} {order.get('charge', 0):.4f} needs to be processed manually.",
+            "title": f"Refund request — {service_label} × {quantity:,}",
+            "description": f"Order #{order_id[-8:]} was cancelled by the user and confirmed by the provider. Refund of {currency} {charge:.4f} needs to be processed manually.",
             "notes": "",
             "order_id": order_id,
             "user_id": user_id,
@@ -453,192 +260,28 @@ async def cancel_order(
             "order_link": order.get("link", ""),
             "service_name": order.get("service_name", ""),
             "category_name": order.get("category_name", ""),
-            "quantity": order.get("quantity"),
-            "charge": order.get("charge"),
-            "currency": order.get("currency", "USD"),
+            "quantity": quantity,
+            "charge": charge,
+            "currency": currency,
             "seen_by_admin": False,
             "resolved_at": None,
             "created_at": now,
             "updated_at": now,
         })
+        await NotificationRepository(db).insert({
+            "title": "Order Cancelled — Refund Requested",
+            "message": (
+                f"Your order for {service_label} × {quantity:,} has been cancelled. "
+                f"A refund of {currency} {charge:.2f} will be processed by our team."
+            ),
+            "type": "info",
+            "target": "selective",
+            "user_ids": [user_id],
+            "read_by": [],
+            "created_by": "system",
+            "created_at": now,
+        })
 
     return {"message": "Order cancelled successfully"}
 
 
-@router.post("/stripe/initiate", response_model=StripeInitiateResponse, status_code=status.HTTP_201_CREATED)
-async def initiate_stripe_order(
-    body: InitiateStripeOrderRequest,
-    request: Request,
-    user: dict = Depends(get_current_user),
-) -> StripeInitiateResponse:
-    """
-    Create a pending order in the database and return a Stripe Checkout URL.
-    The SMM order is placed by the Stripe webhook after payment is confirmed.
-    Accepts either service_id or category_name.
-    """
-    if not body.service_id and not body.category_name:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Provide service_id or category_name")
-
-    db = request.app.state.db
-    user_id = str(user["_id"])
-    logger.info(
-        "[INITIATE] user=%s | %s",
-        user.get("username", user_id),
-        f"service_id={body.service_id}" if body.service_id else f"category='{body.category_name}'",
-    )
-
-    # Resolve the service — use routing config default when resolving by category
-    if body.service_id:
-        service = await ServiceRepository(db).find_by_id(body.service_id)
-        if not service:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Service not found")
-        cat = await CategoryRepository(db).find_by_id(service.get("category_id", ""))
-        category_name_val = cat.get("name", "") if cat else ""
-        logger.info("[INITIATE] Service resolved directly: '%s' (id=%s, rate=$%.4f/1k)",
-                    service.get("name"), body.service_id, service.get("rate", 0))
-    else:
-        category = await CategoryRepository(db).find_by_name(body.category_name)
-        if not category:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Category not found")
-        category_name_val = body.category_name
-        routing_cfg = await RoutingConfigRepository(db).find_by_category_id(str(category["_id"]))
-        if routing_cfg and routing_cfg.get("default_service_id"):
-            service = await ServiceRepository(db).find_by_id(routing_cfg["default_service_id"])
-            logger.info("[INITIATE] Default service from routing config: '%s' (id=%s)",
-                        service.get("name") if service else "?", routing_cfg["default_service_id"])
-        else:
-            services = await ServiceRepository(db).find_active_by_category_id(str(category["_id"]))
-            service = services[0] if services else None
-            logger.info("[INITIATE] No routing config — picked first active service: '%s'",
-                        service.get("name") if service else "none")
-        if not service:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "No active service in category")
-
-    if not service.get("is_active", True):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Service is not available")
-
-    min_qty: int = service.get("min", 1)
-    max_qty: int = service.get("max", 1_000_000)
-    if body.quantity < min_qty or body.quantity > max_qty:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f"Quantity must be between {min_qty} and {max_qty}",
-        )
-
-    # Use the admin pricing page price when a matching package is configured.
-    # This ensures users are charged exactly what the frontend showed them.
-    # Falls back to SMM service rate if no pricing is set for this category/quantity.
-    admin_charge: float | None = None
-    service_type_key = CATEGORY_TO_SERVICE_TYPE.get(category_name_val)
-    if service_type_key:
-        pricing_doc = await PricingRepository(db).find_by_service_type(service_type_key)
-        if pricing_doc:
-            admin_charge = calc_pricing_charge(pricing_doc, body.quantity)
-
-    if admin_charge is not None:
-        charge = max(round(admin_charge, 6), 0.50)
-        logger.info(
-            "[INITIATE] Using admin pricing: $%.4f for %s × %s (category=%s)",
-            charge, service_type_key, body.quantity, category_name_val,
-        )
-    else:
-        charge = max(round(service["rate"] * body.quantity / 1000, 6), 0.50)
-        logger.info(
-            "[INITIATE] No pricing package found — using service rate: $%.4f for qty=%s",
-            charge, body.quantity,
-        )
-
-    user_id = str(user["_id"])
-
-    # Apply user's personal discount (set by admin) on top of the package price
-    personal_discount = float(user.get("personal_discount", 0) or 0)
-    if personal_discount > 0:
-        charge = max(round(charge * (1 - personal_discount / 100), 6), 0.50)
-        logger.info(
-            "[INITIATE] Personal discount %.1f%% applied — final charge=$%.4f | user=%s",
-            personal_discount, charge, user.get("username", user_id),
-        )
-
-    # server_cost = what we pay the SMM provider (provider rate, independent of our markup)
-    server_cost = round(service["rate"] * body.quantity / 1000, 6)
-
-    # Create pending order record
-    order_doc = {
-        "user_id": user_id,
-        "service_id": str(service["_id"]),
-        "service_name": service.get("name", ""),
-        "category_name": category_name_val,
-        "provider_id": "",
-        "provider_order_id": "",
-        "link": body.link,
-        "quantity": body.quantity,
-        "charge": charge,
-        "server_cost": server_cost,
-        "status": "pending_payment",
-        "start_count": "",
-        "remains": str(body.quantity),
-        "currency": "USD",
-        "payment_method": "stripe",
-        "payment_status": "pending",
-        "created_at": datetime.now(timezone.utc),
-    }
-    order_id = await OrderRepository(db).insert(order_doc)
-
-    # Create Stripe Checkout session
-    frontend_origin = settings.FRONTEND_ORIGIN.rstrip("/")
-    try:
-        session_result = await run_in_threadpool(
-            stripe_service.create_checkout_session,
-            order_id=order_id,
-            order_amount=str(charge),
-            order_currency="USD",
-            customer_details={
-                "customer_id": user_id,
-                "customer_name": user.get("full_name", "Customer"),
-                "customer_email": user.get("email", ""),
-                "customer_phone": user.get("phone", "0000000000"),
-            },
-            order_description=f"{category_name_val or service.get('name', 'Order')} × {body.quantity:,}",
-            return_url=f"{frontend_origin}/checkout/success?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{frontend_origin}/checkout/cancel?session_id={{CHECKOUT_SESSION_ID}}",
-        )
-    except Exception as exc:
-        logger.error("Stripe session creation failed for order %s: %s", order_id, exc)
-        await OrderRepository(db).update(order_id, {"status": "failed", "payment_status": "failed"})
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Failed to create payment session. Please try again.")
-
-    # Create the payment record in the separate payments collection
-    now = datetime.now(timezone.utc)
-    payment_doc = {
-        "order_id": order_id,
-        "user_id": user_id,
-        "user_email": user.get("email", ""),
-        "user_username": user.get("username", ""),
-        "user_balance": 0.0,
-        "amount": charge,
-        "currency": "USD",
-        "method": "Stripe",
-        "type": "credit",
-        "status": "pending",
-        "stripe_session_id": session_result["session_id"],
-        "service_name": service.get("name", ""),
-        "category_name": category_name_val,
-        "quantity": body.quantity,
-        "memo": f"{category_name_val or service.get('name', 'Order')} × {body.quantity:,}",
-        "created_at": now,
-        "updated_at": now,
-    }
-    await PaymentLedgerRepository(db).insert(payment_doc)
-
-    logger.info(
-        "[INITIATE] Pending order created — order_id=%s | service='%s' | qty=%s | charge=$%.4f | user=%s",
-        order_id, service.get("name"), body.quantity, charge, user.get("username", user_id),
-    )
-    logger.info("[INITIATE] Stripe session ready — redirecting user to payment | session=%s", session_result["session_id"])
-    return StripeInitiateResponse(
-        order_id=order_id,
-        checkout_url=session_result["checkout_url"],
-        session_id=session_result["session_id"],
-        charge=charge,
-        currency="USD",
-    )

@@ -43,7 +43,8 @@ const DynamicPackageSelector: React.FC<DynamicPackageSelectorProps> = ({
   const effectiveQuantity = selectedQuantity ?? activePackages[0]?.quantity ?? null;
   const selectedPkg = activePackages.find((p) => p.quantity === effectiveQuantity);
   const price = pricing && selectedPkg ? calcPackagePrice(pricing, selectedPkg.quantity, effectiveType) : 0;
-  const basePrice = pricing && selectedPkg ? (selectedPkg.quantity / 1000) * pricing.price_per_1000 : 0;
+  const pkgPortalRate = selectedPkg ? (selectedPkg.portal_rate || pricing?.price_per_1000 || 0) : 0;
+  const basePrice = selectedPkg ? (selectedPkg.quantity / 1000) * pkgPortalRate : 0;
   const hasDiscount = selectedPkg && selectedPkg.discount_type !== "none";
   const discountLabel = hasDiscount
     ? selectedPkg.discount_type === "percentage"
@@ -191,8 +192,8 @@ const DynamicPackageSelector: React.FC<DynamicPackageSelectorProps> = ({
 
             <div className="text-center text-gray-500 text-sm mb-6">
               {effectiveQuantity?.toLocaleString()} units at {currency.symbol}
-              {pricing.price_per_1000 > 0
-                ? ((pricing.price_per_1000 / 1000) * rate).toFixed(4)
+              {pkgPortalRate > 0
+                ? ((pkgPortalRate / 1000) * rate).toFixed(4)
                 : "0.0000"}{" "}
               each
               {hasDiscount && (

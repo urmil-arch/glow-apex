@@ -6,9 +6,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.concurrency import run_in_threadpool
 
-from app.admin.pricing.repository import PricingRepository
-from app.admin.provider_config.repository import RoutingConfigRepository
-from app.admin.services.repository import CategoryRepository, ServiceRepository
+from app.admin.service_packages.repository import ServicePackageRepository
 from app.checkout.schemas import (
     CheckoutInitRequest,
     CheckoutInitResponse,
@@ -16,15 +14,11 @@ from app.checkout.schemas import (
     CreateCryptomusInvoiceRequest,
     CryptomusVerifyViaTokenRequest,
     GuestInitRequest,
-    InitWithPreAuthRequest,
-    PreAuthInfo,
-    PreAuthRequest,
-    PreAuthResponse,
     RazorpayVerifyViaTokenRequest,
 )
 from app.common.config import settings
 from app.orders.fulfillment import place_smm_order
-from app.orders.pricing_utils import CATEGORY_TO_SERVICE_TYPE, calc_pricing_charge
+from app.orders.pricing_utils import CATEGORY_TO_SERVICE_TYPE, calc_service_package_charge
 from app.orders.repository import OrderRepository
 from app.payments.cryptomus import service as cryptomus_service
 from app.payments.ledger_repository import PaymentLedgerRepository
@@ -37,64 +31,38 @@ router = APIRouter()
 
 _SESSION_TTL = 900  # 15 minutes
 _KEY_PREFIX = "checkout:portal:"
-_PRE_AUTH_PREFIX = "checkout:preauth:"
 
 
 async def _resolve_service_and_charge(
     body: CheckoutInitRequest,
     user: dict,
     db,
-) -> tuple[dict, str, float, float]:
+) -> tuple[str, float, float, str]:
     """
-    Resolve the service document, validate quantity, and compute the charge.
+    Resolve service package info and compute the charge.
 
-    Returns (service, category_name, charge_usd, server_cost).
-    Applies admin pricing overrides and the user's personal discount.
+    Returns (category_name, charge_usd, server_cost, service_package_id).
+    Applies the user's personal discount.
     """
-    if not body.service_id and not body.category_name:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Provide service_id or category_name")
+    if not body.category_name:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "category_name is required")
 
-    if body.service_id:
-        service = await ServiceRepository(db).find_by_id(body.service_id)
-        if not service:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Service not found")
-        cat = await CategoryRepository(db).find_by_id(service.get("category_id", ""))
-        category_name = cat.get("name", "") if cat else ""
-    else:
-        category = await CategoryRepository(db).find_by_name(body.category_name)
-        if not category:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Category not found")
-        category_name = body.category_name
-        routing_cfg = await RoutingConfigRepository(db).find_by_category_id(str(category["_id"]))
-        if routing_cfg and routing_cfg.get("default_service_id"):
-            service = await ServiceRepository(db).find_by_id(routing_cfg["default_service_id"])
-        else:
-            services = await ServiceRepository(db).find_active_by_category_id(str(category["_id"]))
-            service = services[0] if services else None
-        if not service:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "No active service in category")
+    category_name = body.category_name
+    service_type = CATEGORY_TO_SERVICE_TYPE.get(category_name)
+    if not service_type:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"Unknown service category: {category_name}")
 
-    if not service.get("is_active", True):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Service is not available")
-
-    min_qty: int = service.get("min", 1)
-    max_qty: int = service.get("max", 1_000_000)
-    if body.quantity < min_qty or body.quantity > max_qty:
+    pkg = await ServicePackageRepository(db).find_by_service_and_quantity(
+        service_type, body.quantity, body.package_type
+    )
+    if not pkg:
         raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f"Quantity must be between {min_qty} and {max_qty}",
+            status.HTTP_404_NOT_FOUND,
+            f"No active package for {category_name} × {body.quantity:,}",
         )
 
-    server_cost = round(service["rate"] * body.quantity / 1000, 6)
-
-    admin_charge: float | None = None
-    service_type_key = CATEGORY_TO_SERVICE_TYPE.get(category_name)
-    if service_type_key:
-        pricing_doc = await PricingRepository(db).find_by_service_type(service_type_key)
-        if pricing_doc:
-            admin_charge = calc_pricing_charge(pricing_doc, body.quantity)
-
-    charge = max(round(admin_charge if admin_charge is not None else server_cost, 6), 0.50)
+    server_cost = round(pkg.get("provider_rate", 0.0) * body.quantity / 1000, 6)
+    charge = max(round(calc_service_package_charge(pkg), 6), 0.50)
 
     personal_discount = float(user.get("personal_discount", 0) or 0)
     if personal_discount > 0:
@@ -104,7 +72,7 @@ async def _resolve_service_and_charge(
             personal_discount, charge, user.get("username", str(user.get("_id"))),
         )
 
-    return service, category_name, charge, server_cost
+    return category_name, charge, server_cost, pkg["id"]
 
 
 def _validated_return_origin(return_origin: str | None) -> str:
@@ -144,13 +112,14 @@ async def _create_checkout_session(
     user_id = str(user["_id"])
     resolved_origin = _validated_return_origin(return_origin)
 
-    service, category_name, charge, server_cost = await _resolve_service_and_charge(body, user, db)
-    description = f"{category_name or service.get('name', 'Order')} × {body.quantity:,}"
+    category_name, charge, server_cost, service_package_id = await _resolve_service_and_charge(body, user, db)
+    description = f"{category_name} × {body.quantity:,}"
 
     order_doc = {
         "user_id": user_id,
-        "service_id": str(service["_id"]),
-        "service_name": service.get("name", ""),
+        "service_id": "",
+        "service_package_id": service_package_id,
+        "service_name": category_name,
         "category_name": category_name,
         "provider_id": "",
         "provider_order_id": "",
@@ -173,7 +142,7 @@ async def _create_checkout_session(
     session_data: dict = {
         "payment_method": body.payment_method,
         "order_id": order_id,
-        "service_name": service.get("name", ""),
+        "service_name": category_name,
         "category_name": category_name,
         "quantity": body.quantity,
         "charge": charge,
@@ -217,7 +186,7 @@ async def _create_checkout_session(
             "type": "credit",
             "status": "pending",
             "stripe_session_id": stripe_result["session_id"],
-            "service_name": service.get("name", ""),
+            "service_name": category_name,
             "category_name": category_name,
             "quantity": body.quantity,
             "memo": description,
@@ -253,7 +222,7 @@ async def _create_checkout_session(
             "type": "credit",
             "status": "pending",
             "razorpay_order_id": rzp_order["id"],
-            "service_name": service.get("name", ""),
+            "service_name": category_name,
             "category_name": category_name,
             "quantity": body.quantity,
             "memo": description,
@@ -278,7 +247,7 @@ async def _create_checkout_session(
             "method": "Cryptomus",
             "type": "credit",
             "status": "pending",
-            "service_name": service.get("name", ""),
+            "service_name": category_name,
             "category_name": category_name,
             "quantity": body.quantity,
             "memo": description,
@@ -330,143 +299,6 @@ async def get_checkout_session(token: str, request: Request) -> CheckoutSessionD
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Session not found or expired")
     return CheckoutSessionData(**json.loads(raw))
 
-
-# ---------------------------------------------------------------------------
-# Pre-auth flow: BRV (D1) creates a pre-auth token so the full checkout form
-# can be hosted on Glow Apex (D2) without requiring a JWT on D2.
-# ---------------------------------------------------------------------------
-
-@router.post("/pre-auth", response_model=PreAuthResponse, status_code=status.HTTP_201_CREATED)
-async def create_pre_auth(
-    body: PreAuthRequest,
-    request: Request,
-    user: dict = Depends(get_current_user),
-) -> PreAuthResponse:
-    """
-    Create a short-lived pre-auth token for a specific service.
-    Called by BuyRealViews (D1) when the user clicks 'Order Now'.
-    Glow Apex (D2) uses this token to render the checkout form and, on submission,
-    to call /init-with-pre-auth without a JWT.
-    """
-    if not body.service_id and not body.category_name:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Provide service_id or category_name")
-
-    db = request.app.state.db
-    redis = request.app.state.redis
-
-    if body.service_id:
-        service = await ServiceRepository(db).find_by_id(body.service_id)
-        if not service:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Service not found")
-        cat = await CategoryRepository(db).find_by_id(service.get("category_id", ""))
-        category_name = cat.get("name", "") if cat else ""
-    else:
-        category = await CategoryRepository(db).find_by_name(body.category_name)
-        if not category:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Category not found")
-        category_name = body.category_name
-        routing_cfg = await RoutingConfigRepository(db).find_by_category_id(str(category["_id"]))
-        if routing_cfg and routing_cfg.get("default_service_id"):
-            service = await ServiceRepository(db).find_by_id(routing_cfg["default_service_id"])
-        else:
-            services = await ServiceRepository(db).find_active_by_category_id(str(category["_id"]))
-            service = services[0] if services else None
-        if not service:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "No active service in category")
-
-    if not service.get("is_active", True):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Service is not available")
-
-    pre_auth_data = {
-        "user_id": str(user["_id"]),
-        "user_email": user.get("email", ""),
-        "user_name": user.get("full_name", "Customer"),
-        "user_phone": user.get("phone", "0000000000"),
-        "user_username": user.get("username", ""),
-        "personal_discount": float(user.get("personal_discount", 0) or 0),
-        "service_id": str(service["_id"]),
-        "category_name": category_name,
-        "service_name": service.get("name", ""),
-        "min": service.get("min", 1),
-        "max": service.get("max", 1_000_000),
-    }
-
-    token = secrets.token_urlsafe(32)
-    await redis.set(f"{_PRE_AUTH_PREFIX}{token}", json.dumps(pre_auth_data), ex=_SESSION_TTL)
-
-    logger.info("[CHECKOUT-PREAUTH] Token created — service=%s user=%s", str(service["_id"]), str(user["_id"]))
-    return PreAuthResponse(pre_auth_token=token, expires_in=_SESSION_TTL)
-
-
-@router.get("/pre-auth/{token}", response_model=PreAuthInfo)
-async def get_pre_auth_info(token: str, request: Request) -> PreAuthInfo:
-    """
-    Return public service info for a pre-auth token.
-    Called by Glow Apex (D2) to populate the checkout form — no JWT needed.
-    Does not expose user data.
-    """
-    redis = request.app.state.redis
-    raw = await redis.get(f"{_PRE_AUTH_PREFIX}{token}")
-    if not raw:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pre-auth token not found or expired")
-    data = json.loads(raw)
-    return PreAuthInfo(
-        service_name=data.get("service_name", ""),
-        category_name=data.get("category_name", ""),
-        min=data.get("min", 1),
-        max=data.get("max", 1_000_000),
-    )
-
-
-@router.post("/init-with-pre-auth", response_model=CheckoutInitResponse, status_code=status.HTTP_201_CREATED)
-async def checkout_init_with_pre_auth(
-    body: InitWithPreAuthRequest,
-    request: Request,
-) -> CheckoutInitResponse:
-    """
-    Complete checkout from the Glow Apex form using a pre-auth token instead of a JWT.
-    Validates the pre-auth token, builds user and service context from stored data,
-    then delegates to the shared _create_checkout_session helper.
-    The pre-auth token is invalidated after use.
-    """
-    redis = request.app.state.redis
-    raw = await redis.get(f"{_PRE_AUTH_PREFIX}{body.pre_auth_token}")
-    if not raw:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pre-auth token not found or expired")
-
-    pre_auth = json.loads(raw)
-
-    init_body = CheckoutInitRequest(
-        link=body.link,
-        quantity=body.quantity,
-        service_id=pre_auth["service_id"],
-        payment_method=body.payment_method,
-    )
-
-    # Reconstruct user dict from stored pre-auth data — avoids a DB lookup while
-    # keeping the same interface expected by _create_checkout_session.
-    user = {
-        "_id": pre_auth["user_id"],
-        "email": pre_auth["user_email"],
-        "full_name": pre_auth["user_name"],
-        "phone": pre_auth["user_phone"],
-        "username": pre_auth.get("user_username", ""),
-        "personal_discount": pre_auth.get("personal_discount", 0),
-    }
-
-    result = await _create_checkout_session(
-        init_body, user,
-        request.app.state.db,
-        redis,
-        settings.GLOWAPEX_ORIGIN.rstrip("/"),
-        return_origin=body.return_origin,
-    )
-
-    # Single-use: invalidate after a session is successfully created.
-    await redis.delete(f"{_PRE_AUTH_PREFIX}{body.pre_auth_token}")
-
-    logger.info("[CHECKOUT-PREAUTH] Session created from pre-auth — user=%s", pre_auth["user_id"])
-    return result
 
 
 @router.post("/guest-init", response_model=CheckoutInitResponse, status_code=status.HTTP_201_CREATED)

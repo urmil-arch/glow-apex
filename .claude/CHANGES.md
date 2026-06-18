@@ -831,3 +831,79 @@
 [2026-06-17 12:00] | modify | frontend/src/pages/admin/AdminLayout.tsx | Removed Routing and Pricing entries from NAV_ITEMS; removed unused GitBranch and DollarSign icon imports.
 
 [2026-06-17 12:00] | modify | frontend/src/config/permissions.ts | Removed /admin/routing and /admin/pricing from ADMIN_NAV_ORDER (the nav-based first-page resolver). Backend permission keys 'routing' and 'pricing' remain — they still guard API endpoints.
+
+[2026-06-17 18:00] | fix | backend/app/admin/reports/router.py | Fixed profit/revenue calculation in summary. total_revenue was using (total_charges - total_server_price) formula (same as profit). Fixed: total_revenue = total_charges, total_profit = total_charges - total_server_price.
+
+[2026-06-17 18:00] | delete | frontend/src/pages/admin/routing/ProviderConfigPage.tsx, frontend/src/pages/admin/pricing/PricingPage.tsx | Removed old separate routing and pricing pages. Replaced by the new unified Services page.
+
+[2026-06-17 18:00] | add | backend/app/admin/service_packages/__init__.py, schemas.py, repository.py, router.py | New service_packages module. MongoDB collection: service_packages. Schema: service_type (6 hardcoded YouTube types), package_type (value/bulk), quantity, default provider service, portal_rate ($/1000), discount (none/fixed/%), fallbacks array. CRUD endpoints at /admin/service-packages. Fallback endpoints: add, update by index, delete by index, reorder (PUT /fallbacks/reorder accepts full ordered array). All routes require PERM_SERVICES.
+
+[2026-06-17 18:00] | modify | backend/app/app_components.py | Registered service_packages_router at /admin/service-packages prefix.
+
+[2026-06-17 18:00] | modify | frontend/src/config.ts | Removed ADMIN_ROUTING_CONFIG. Added ADMIN_SERVICE_PACKAGES pointing to /admin/service-packages.
+
+[2026-06-17 18:00] | add | frontend/src/pages/admin/services/PackageModals.tsx | Shared modal components for the new Services page: AddQuantityModal (full form with quantity, provider/service select, provider price, portal rate $/1000 with live price preview, discount, min/max, active toggle, admin note), AddFallbackModal (prefilled quantity/price, provider/service select), DeleteModal. Also exports shared types (ServicePackage, FallbackService, Provider, ProviderService) and calcPrice utility.
+
+[2026-06-17 18:00] | modify | frontend/src/pages/admin/services/ServicesPage.tsx | Complete rewrite. Six hardcoded sections (YouTube Views/Likes/Subscribers/Comments/Shorts Views/Shorts Likes). Each section has Value/Bulk package type tab switcher. Quantity rows show provider, service ID+name, provider cost, portal price, priority, active badge, fallback count. Expandable row reveals default service summary + fallback list with HTML5 drag-drop reorder (PUT /fallbacks/reorder). Action menu per row: edit and delete. Add Fallback button inline in expanded row.
+
+[2026-06-17 19:00] | modify | backend/app/public_pricing/router.py | Replaced data source from service_pricing collection to service_packages collection. Now reads all active packages, groups by service_type, and returns ServicePricingResponse shape. Per-package portal_rate is included; price_per_1000 set to 0.0 (no longer used). Buy pages now reflect only admin-configured quantities.
+
+[2026-06-17 19:00] | modify | backend/app/admin/pricing/schemas.py | Added portal_rate: float = 0.0 to PricingPackage model to carry per-package $/1000 rate through the public pricing response.
+
+[2026-06-17 19:00] | modify | frontend/src/context/PricingContext.tsx | Added portal_rate: number to PricingPackage interface. Updated calcPackagePrice to derive base price from pkg.portal_rate (falling back to pricing.price_per_1000 for backward compatibility) instead of always using the service-level price_per_1000.
+
+[2026-06-17 19:00] | modify | frontend/src/components/sections/hero/DynamicPackageSelector.tsx | Updated basePrice and per-unit display to use per-package pkgPortalRate (selectedPkg.portal_rate) instead of the service-level pricing.price_per_1000.
+
+[2026-06-17 20:00] | fix | backend/app/checkout/router.py, backend/app/orders/fulfillment.py | Fixed order routing to use new service_packages system instead of old routing_config. Root cause: checkout resolver and fulfillment both still read from legacy services/routing_config collections. Fix: checkout now tries ServicePackageRepository.find_by_service_and_quantity first; if found, charges are derived from portal_rate and service_package_id is stored on the order. Fulfillment checks service_package_id first and calls new _resolve_candidates_from_package (default provider + ordered fallbacks from the package doc). Old routing path preserved as fallback for pre-auth and legacy orders.
+
+[2026-06-17 20:00] | modify | backend/app/admin/service_packages/repository.py | Added find_by_service_and_quantity(service_type, quantity, package_type=None) method.
+
+[2026-06-17 20:00] | modify | backend/app/orders/pricing_utils.py | Added calc_service_package_charge(pkg) function — computes portal price from portal_rate + discount for a service_packages document.
+
+[2026-06-17 20:00] | modify | backend/app/checkout/schemas.py | Added package_type: Optional[str] = None to CheckoutInitRequest.
+
+[2026-06-17 20:00] | modify | frontend/src/pages/checkout/CheckoutPage.tsx | buildOrderBody() now includes package_type when selectedPkg is available, so the backend can match the exact value/bulk package the user selected.
+
+[2026-06-17 21:00] | modify | backend/app/orders/fulfillment.py | Removed _resolve_candidates_from_routing function and RoutingConfigRepository/ServiceRepository imports. place_smm_order now requires service_package_id on every order; orders missing it are immediately failed instead of falling back to legacy routing.
+
+[2026-06-17 21:00] | modify | backend/app/checkout/router.py | Removed pre-auth flow (create_pre_auth, get_pre_auth_info, checkout_init_with_pre_auth) and _PRE_AUTH_PREFIX constant. Removed legacy service_id path and old routing fallback from _resolve_service_and_charge — now requires category_name and resolves only via service_packages. Removed imports: PricingRepository, RoutingConfigRepository, CategoryRepository, ServiceRepository, calc_pricing_charge, InitWithPreAuthRequest, PreAuthInfo, PreAuthRequest, PreAuthResponse.
+
+[2026-06-17 21:00] | modify | backend/app/checkout/schemas.py | Removed service_id field from CheckoutInitRequest. Removed PreAuthRequest, PreAuthResponse, PreAuthInfo, InitWithPreAuthRequest schemas.
+
+[2026-06-17 21:00] | modify | backend/app/orders/router.py | Removed place_order, place_order_by_category, initiate_stripe_order endpoints (all dead — frontend never called them). Removed imports: PricingRepository, RoutingConfigRepository, CategoryRepository, ServiceRepository, run_in_threadpool, CATEGORY_TO_SERVICE_TYPE, calc_pricing_charge, PaymentLedgerRepository, stripe_service, PlaceOrderRequest, PlaceOrderByCategoryRequest, InitiateStripeOrderRequest, StripeInitiateResponse, settings.
+
+[2026-06-17 21:00] | modify | backend/app/admin/router.py | Removed provider_config_router import and /routing registration.
+
+[2026-06-17 21:00] | modify | backend/app/main.py | Removed CategoryRepository and ServiceRepository imports and their create_index() calls from lifespan.
+
+[2026-06-17 21:00] | modify | backend/app/app_components.py | Removed razorpay_router import and /payments/razorpay registration (entire old Razorpay flow was dead — new checkout uses /checkout/verify/razorpay).
+
+[2026-06-17 21:00] | modify | frontend/src/pages/checkout/CheckoutPage.tsx | Removed useServices import and activeRate variable; rawCharge in category flow now uses selectedPkg.price directly or 0 when no package selected.
+
+[2026-06-17 22:00] | fix | backend/app/orders/fulfillment.py | After creating a failed_order task in _open_failed_order_task, now also inserts a "selective" notification for the order's user_id — surfaces in the user's bell icon and in admin notifications list.
+
+[2026-06-17 22:00] | fix | backend/app/orders/router.py | get_order: after creating a failed_order task on error status transition, now also inserts a notification for the user. cancel_order: after creating a refund_request task, now also inserts a notification for the user.
+
+[2026-06-17 23:00] | fix | frontend/src/pages/admin/services/PackageModals.tsx | DuplicateModal: after creating the new package, now loops through pkg.fallbacks and POSTs each one to the new package's /fallbacks endpoint — sequential calls so the last response (with all fallbacks) is passed to onSaved. Updated "Copying from" panel to show portal price and fallback count. Updated hint text to correctly state all settings are copied.
+
+[2026-06-17 23:30] | modify | backend/app/admin/service_packages/schemas.py | Added description, service_label, mode (manual/auto), start_count_type (supplier/custom/zero) to ServicePackageCreate, ServicePackageUpdate, and ServicePackageOut. Added RoutingEntry and RoutingReorderRequest schemas for the combined routing reorder endpoint.
+
+[2026-06-17 23:30] | modify | backend/app/admin/service_packages/router.py | Added PUT /{pkg_id}/routing/reorder endpoint (placed before fallback routes to avoid conflicts) — atomically updates default provider fields and fallbacks array in one MongoDB $set call. Updated create_package to persist description/service_label/mode/start_count_type. Updated _to_out to map these four new fields from doc with sensible defaults.
+
+[2026-06-17 23:30] | modify | frontend/src/pages/admin/services/PackageModals.tsx | ServicePackage interface: added description, service_label, mode, start_count_type fields. AddQuantityModal: added pkgLabel/mode/startCountType/description state; added section with textarea, service label dropdown (Standard/Premium/HQ/Organic/Real/Bot/Instant/Drip Feed/Guaranteed), Manual/Auto toggle, and start count type dropdown. DuplicateModal: copies new fields in POST payload. SERVICE_LABELS constant defined at module level.
+
+[2026-06-17 23:30] | modify | frontend/src/pages/admin/services/ServicesPage.tsx | Replaced FallbackList component with RoutingList — combines default (index 0, teal "Default" badge) and all fallbacks in one draggable list; drag reorder calls PUT /{pkg_id}/routing/reorder so the default can be promoted to a fallback and vice versa. QuantityRow expanded section simplified to just RoutingList + Add fallback button. Removed max-w-5xl page width constraint so services section uses full admin layout width.
+
+[2026-06-17 23:45] | modify | backend/app/admin/service_packages/schemas.py | Added description, service_label, mode, start_count_type to FallbackServiceCreate (inherited by FallbackServiceOut) and to RoutingEntry — ensures per-fallback client-facing metadata is preserved through routing reorders.
+
+[2026-06-17 23:45] | modify | frontend/src/pages/admin/services/PackageModals.tsx | FallbackService interface: added description, service_label, mode, start_count_type fields. AddFallbackModal: added same four client-facing state variables plus form section identical to AddQuantityModal — description textarea, service label dropdown, Manual/Auto toggle, start count type dropdown. Fields included in POST payload.
+
+[2026-06-17 23:45] | modify | frontend/src/pages/admin/services/ServicesPage.tsx | buildRoutingEntries: default entry (index 0) now carries description/service_label/mode/start_count_type from package top-level fields so metadata is preserved when the default is dragged into a fallback position.
+
+[2026-06-18 00:00] | modify | frontend/src/pages/admin/services/ServicesPage.tsx | RoutingList: default entry (index 0) visually distinguished — larger padding, filled teal-600 "Default" badge, teal-500 border + shadow, bolder provider name, larger grip icon. Fallbacks remain compact for clear visual hierarchy.
+
+[2026-06-18 00:15] | add | frontend/src/pages/admin/services/ServicesPage.tsx | ServiceDetailPopup: eye button on every routing entry opens a popup that fetches GET /admin/providers/{id}/services live and shows Service ID, Name, Type, Rate, Min, Max. Shows spinner while loading and error message on failure.
+
+[2026-06-18 00:30] | modify | frontend/src/pages/admin/services/ServicesPage.tsx | Full UI redesign. Sections: thin colored accent bar, colored icon badge with ring halo (TrendingUp/ThumbsUp/Users/MessageSquare/Film/Heart mapped per service type), V·B·active count badges always visible, icon-centered empty state, SECTION_META constant maps keys to colors and icons. Quantity rows: text-xl quantity with vertical rule divider, two-line provider block, discount badge inline, fallback count as +N teal badge, hover shadow. Page header: Total and Active counts as large numbers. Loading spinner uses teal. Section gap reduced from space-y-6 to space-y-4.
+
+[2026-06-17 12:00] | modify | frontend/src/pages/checkout/CheckoutPage.tsx | Added SERVICE_UNIT map and unitLabel derived value. Package select options, the no-package quantity display, the package details card, and the price breakdown Quantity row now show the service unit label (Likes/Views/Subscribers/Comments/Shorts Views/Shorts Likes) instead of generic "units".

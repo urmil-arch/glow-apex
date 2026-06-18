@@ -1,2111 +1,833 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ChevronDown,
-  ChevronUp,
-  Download,
-  Filter,
+  ChevronRight,
+  Copy,
+  Eye,
+  Film,
   GripVertical,
+  Heart,
   Loader2,
+  MessageSquare,
+  MoreVertical,
+  Pencil,
   Plus,
   RefreshCw,
-  Search,
-  Tag,
+  ThumbsUp,
   Trash2,
+  TrendingUp,
+  Users,
   X,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config';
+import {
+  AddFallbackModal,
+  AddQuantityModal,
+  calcPrice,
+  DeleteModal,
+  DuplicateModal,
+  type FallbackService,
+  type Provider,
+  type ProviderService,
+  type ServicePackage,
+} from './PackageModals';
 
-// ---- Types ----
+// ── Hardcoded sections ────────────────────────────────────────────────────────
 
-interface Provider {
-  id: string;
-  name: string;
-  url: string;
-  api_key: string;
-}
-
-interface Category {
-  id: string;
-  name: string;
-  created_at: string;
-}
-
-interface Service {
-  id: string;
-  name: string;
+interface ServiceSection {
+  key: string;
+  label: string;
   description: string;
-  service_kind: string;
-  subscription_name: string;
-  comments_section: boolean;
-  provider_id: string;
-  provider_name: string;
-  provider_service_id: string;
-  category_id: string;
-  category_name: string;
-  type: string;
-  mode: string;
-  start_count_type: string;
-  drip_feed: boolean;
-  price_visible: boolean;
-  rate: number;
-  overflow: number;
-  downflow: number;
-  min: number;
-  max: number;
-  provider_rate: number;
-  provider_min: number;
-  provider_max: number;
-  is_active: boolean;
-  admin_note: string;
-  created_at: string;
 }
 
-interface ProviderServiceItem {
-  service: string;
-  name: string;
-  type: string;
-  category: string;
-  rate: string;
-  min: string;
-  max: string;
-}
+const SECTIONS: ServiceSection[] = [
+  { key: 'youtube_views',        label: 'YouTube Views',        description: 'Video view count packages' },
+  { key: 'youtube_likes',        label: 'YouTube Likes',        description: 'Video like count packages' },
+  { key: 'youtube_subscribers',  label: 'YouTube Subscribers',  description: 'Channel subscriber packages' },
+  { key: 'youtube_comments',     label: 'YouTube Comments',     description: 'Video comment packages' },
+  { key: 'youtube_shorts_views', label: 'YouTube Shorts Views', description: 'Shorts video view packages' },
+  { key: 'youtube_shorts_likes', label: 'YouTube Shorts Likes', description: 'Shorts video like packages' },
+];
 
-interface RoutingConfigServiceInfo {
-  service_id: string;
-  service_name: string;
-  provider_id: string;
-  provider_name: string;
-  provider_service_id: string;
-  rate: number;
-  min: number;
-  max: number;
-}
+type SectionMeta = {
+  Icon: React.FC<{ className?: string }>;
+  iconColor: string;
+  iconBg: string;
+  accent: string;
+  ring: string;
+};
 
-interface RoutingConfigData {
-  category_id: string;
-  category_name: string;
-  value_default: RoutingConfigServiceInfo | null;
-  value_fallbacks: RoutingConfigServiceInfo[];
-  bulk_default: RoutingConfigServiceInfo | null;
-  bulk_fallbacks: RoutingConfigServiceInfo[];
-}
+const SECTION_META: Record<string, SectionMeta> = {
+  youtube_views:        { Icon: TrendingUp,   iconColor: 'text-blue-600',   iconBg: 'bg-blue-50',   accent: 'bg-blue-500',   ring: 'ring-blue-100' },
+  youtube_likes:        { Icon: ThumbsUp,     iconColor: 'text-pink-600',   iconBg: 'bg-pink-50',   accent: 'bg-pink-500',   ring: 'ring-pink-100' },
+  youtube_subscribers:  { Icon: Users,        iconColor: 'text-violet-600', iconBg: 'bg-violet-50', accent: 'bg-violet-500', ring: 'ring-violet-100' },
+  youtube_comments:     { Icon: MessageSquare,iconColor: 'text-emerald-600',iconBg: 'bg-emerald-50',accent: 'bg-emerald-500',ring: 'ring-emerald-100' },
+  youtube_shorts_views: { Icon: Film,         iconColor: 'text-orange-600', iconBg: 'bg-orange-50', accent: 'bg-orange-500', ring: 'ring-orange-100' },
+  youtube_shorts_likes: { Icon: Heart,        iconColor: 'text-red-600',    iconBg: 'bg-red-50',    accent: 'bg-red-500',    ring: 'ring-red-100' },
+};
 
-interface ServiceStat {
-  service_id: string;
-  total_orders: number;
-  working_orders: number;
-}
+// ── Service detail popup ──────────────────────────────────────────────────────
 
-// ---- Shared styles ----
-
-const inputCls =
-  'w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent';
-const primaryCls =
-  'flex items-center gap-2 px-3 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
-const ghostCls =
-  'flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 font-medium hover:bg-gray-50 transition-colors';
-const cancelCls =
-  'px-4 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors';
-
-// ---- Modal ----
-
-interface ModalProps {
-  title: string;
+interface ServiceDetailPopupProps {
+  entry: FallbackService;
   onClose: () => void;
-  children: React.ReactNode;
-  wide?: boolean;
 }
 
-const Modal = ({ title, onClose, children, wide }: ModalProps) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-    <div className="absolute inset-0 bg-gray-900/40" onClick={onClose} />
-    <div
-      className={`relative bg-white border border-gray-200 rounded-2xl shadow-xl flex flex-col max-h-[90vh] ${
-        wide ? 'w-full max-w-2xl' : 'w-full max-w-md'
-      }`}
-    >
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-        <h2 className="font-semibold text-gray-900">{title}</h2>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-          <X className="h-5 w-5" />
-        </button>
-      </div>
-      <div className="overflow-y-auto flex-1 px-6 py-4">{children}</div>
-    </div>
-  </div>
-);
-
-// ---- Add Category Modal ----
-
-interface AddCategoryModalProps {
-  onClose: () => void;
-  onCreated: (cat: Category) => void;
-}
-
-const AddCategoryModal = ({ onClose, onCreated }: AddCategoryModalProps) => {
-  const [name, setName] = useState('');
-  const [saving, setSaving] = useState(false);
+const ServiceDetailPopup = ({ entry, onClose }: ServiceDetailPopupProps) => {
+  const [data, setData] = useState<ProviderService | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  useEffect(() => {
+    api
+      .get<ProviderService[]>(`${API_ENDPOINTS.ADMIN_PROVIDERS}/${entry.provider_id}/services`)
+      .then((r) => {
+        const svc = r.data.find((s) => s.service === entry.provider_service_id);
+        if (svc) {
+          setData(svc);
+        } else {
+          setError('Service not found in provider list.');
+        }
+      })
+      .catch(() => setError('Failed to load service details.'))
+      .finally(() => setLoading(false));
+  }, [entry.provider_id, entry.provider_service_id]);
+
+  const row = (label: string, value: React.ReactNode) => (
+    <div className="flex justify-between items-start gap-4 py-2.5 border-b border-gray-50 last:border-0">
+      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide flex-shrink-0 pt-0.5">
+        {label}
+      </span>
+      <span className="text-xs text-gray-800 text-right">{value}</span>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-gray-900/40" onClick={onClose} />
+      <div className="relative bg-white border border-gray-200 rounded-2xl shadow-xl w-full max-w-sm">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div>
+            <p className="font-semibold text-gray-900 text-sm">Service Details</p>
+            <p className="text-xs text-gray-400 mt-0.5">{entry.provider_name}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="px-5 py-1 pb-4">
+          {loading && (
+            <div className="flex items-center justify-center gap-2 text-xs text-gray-400 py-8">
+              <Loader2 className="h-4 w-4 animate-spin" /> Fetching from provider…
+            </div>
+          )}
+          {error && <p className="text-sm text-red-600 py-4 text-center">{error}</p>}
+          {data && (
+            <div>
+              {row('Service ID', <span className="font-mono text-teal-700">#{data.service}</span>)}
+              {row('Name', data.name)}
+              {row('Type', <span className="capitalize">{data.type}</span>)}
+              {row('Rate', <span className="font-mono text-orange-600">${data.rate} / 1 000</span>)}
+              {row('Min order', <span className="font-mono">{parseInt(data.min).toLocaleString()}</span>)}
+              {row('Max order', <span className="font-mono">{parseInt(data.max).toLocaleString()}</span>)}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Combined routing list (default as item 0 + fallbacks) ────────────────────
+
+interface RoutingListProps {
+  pkg: ServicePackage;
+  onUpdated: (p: ServicePackage) => void;
+  onRequestDeleteFallback: (fallbackIdx: number) => void;
+}
+
+const buildRoutingEntries = (p: ServicePackage): FallbackService[] => [
+  {
+    provider_id: p.provider_id,
+    provider_service_id: p.provider_service_id,
+    provider_service_name: p.provider_service_name,
+    provider_name: p.provider_name,
+    provider_rate: p.provider_rate,
+    min: p.min,
+    max: p.max,
+    is_active: true,
+    description: p.description,
+    service_label: p.service_label,
+    mode: p.mode,
+    start_count_type: p.start_count_type,
+  },
+  ...p.fallbacks,
+];
+
+const RoutingList = ({ pkg, onUpdated, onRequestDeleteFallback }: RoutingListProps) => {
+  const [entries, setEntries] = useState<FallbackService[]>(() => buildRoutingEntries(pkg));
+  const [saving, setSaving] = useState(false);
+  const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [viewEntry, setViewEntry] = useState<FallbackService | null>(null);
+  const dragIdxRef = useRef<number | null>(null);
+
+  useEffect(() => { setEntries(buildRoutingEntries(pkg)); }, [pkg]);
+
+  const handleDragStart = (e: React.DragEvent, idx: number) => {
+    dragIdxRef.current = idx;
+    setDraggingIdx(idx);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, idx: number) => {
     e.preventDefault();
+    setDragOverIdx(idx);
+  };
+
+  const resetDrag = () => {
+    dragIdxRef.current = null;
+    setDraggingIdx(null);
+    setDragOverIdx(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, toIdx: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const from = dragIdxRef.current;
+    resetDrag();
+    if (from === null || from === toIdx) return;
+
+    const next = [...entries];
+    const [moved] = next.splice(from, 1);
+    next.splice(toIdx, 0, moved);
+    setEntries(next);
     setSaving(true);
-    setError('');
     try {
-      const res = await api.post<Category>(API_ENDPOINTS.ADMIN_CATEGORIES, { name });
-      onCreated(res.data);
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(typeof msg === 'string' ? msg : 'Failed to create category');
+      const res = await api.put<ServicePackage>(
+        `${API_ENDPOINTS.ADMIN_SERVICE_PACKAGES}/${pkg.id}/routing/reorder`,
+        { entries: next },
+      );
+      onUpdated(res.data);
+    } catch {
+      setEntries(buildRoutingEntries(pkg));
     } finally {
       setSaving(false);
     }
   };
 
+  const isDragging = draggingIdx !== null;
+
   return (
-    <Modal title="Add Category" onClose={onClose}>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Category Name</label>
-          <input
-            className={inputCls}
-            placeholder="e.g. YouTube Views"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            autoFocus
-            required
-          />
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" className={cancelCls} onClick={onClose}>Cancel</button>
-          <button type="submit" className={primaryCls} disabled={saving}>
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            Create
-          </button>
-        </div>
-      </form>
-    </Modal>
+    <div className="space-y-1.5" onDragOver={(e) => e.preventDefault()}>
+      {saving && (
+        <p className="text-xs text-teal-600 flex items-center gap-1 mb-1">
+          <Loader2 className="h-3 w-3 animate-spin" /> Saving order…
+        </p>
+      )}
+      {entries.map((entry, i) => {
+        const isDefault = i === 0;
+        const isSource = draggingIdx === i;
+        const isTarget = isDragging && dragOverIdx === i && !isSource;
+        return (
+          <div key={`${entry.provider_id}-${entry.provider_service_id}-${i}`} className="relative">
+            <div
+              className={`absolute -top-0.5 left-0 right-0 h-0.5 rounded-full transition-opacity duration-100 ${
+                isTarget ? 'bg-teal-500 opacity-100' : 'opacity-0'
+              }`}
+            />
+            <div
+              draggable
+              onDragStart={(e) => handleDragStart(e, i)}
+              onDragOver={(e) => handleDragOver(e, i)}
+              onDrop={(e) => handleDrop(e, i)}
+              onDragEnd={resetDrag}
+              className={`flex items-center gap-2 rounded-xl text-xs cursor-grab active:cursor-grabbing border transition-all duration-100 ${
+                isDefault ? 'px-3 py-3' : 'px-2.5 py-2'
+              } ${
+                isSource
+                  ? 'opacity-40 bg-gray-50 border-dashed border-gray-300 scale-[0.98]'
+                  : isTarget
+                  ? 'bg-teal-50 border-teal-400 shadow-sm'
+                  : isDefault
+                  ? 'bg-teal-50 border-teal-500 shadow-sm'
+                  : 'bg-white border-gray-200 hover:border-teal-300'
+              }`}
+            >
+              <GripVertical
+                className={`flex-shrink-0 pointer-events-none ${
+                  isDefault ? 'h-4 w-4 text-teal-400' : 'h-3.5 w-3.5 text-gray-400'
+                }`}
+              />
+              <span
+                className={`flex-shrink-0 font-semibold rounded pointer-events-none ${
+                  isDefault
+                    ? 'bg-teal-600 text-white text-xs px-2 py-0.5'
+                    : 'bg-gray-100 text-gray-500 text-[10px] px-1.5 py-0.5'
+                }`}
+              >
+                {isDefault ? 'Default' : `#${i}`}
+              </span>
+              <div className="flex-1 min-w-0 pointer-events-none">
+                <span className={`${isDefault ? 'font-bold text-gray-900' : 'font-medium text-gray-800'}`}>
+                  {entry.provider_name}
+                </span>
+                <span className={`mx-1 ${isDefault ? 'text-teal-300' : 'text-gray-400'}`}>·</span>
+                <span className={`font-mono ${isDefault ? 'text-teal-600' : 'text-gray-500'}`}>
+                  #{entry.provider_service_id}
+                </span>
+                <span className={`mx-1 ${isDefault ? 'text-teal-300' : 'text-gray-400'}`}>—</span>
+                <span className={`truncate ${isDefault ? 'text-teal-800' : 'text-gray-600'}`}>
+                  {entry.provider_service_name}
+                </span>
+              </div>
+              <span
+                className={`font-mono flex-shrink-0 pointer-events-none ${
+                  isDefault ? 'text-orange-500 font-semibold' : 'text-orange-600'
+                }`}
+              >
+                ${entry.provider_rate.toFixed(4)}/1k
+              </span>
+              {!isDefault && (
+                <span
+                  className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium pointer-events-none ${
+                    entry.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                  }`}
+                >
+                  {entry.is_active ? 'on' : 'off'}
+                </span>
+              )}
+              <button
+                onClick={() => setViewEntry(entry)}
+                className="flex-shrink-0 text-gray-300 hover:text-teal-500 transition-colors"
+                title="View provider details"
+              >
+                <Eye className="h-3.5 w-3.5" />
+              </button>
+              {!isDefault && (
+                <button
+                  onClick={() => onRequestDeleteFallback(i - 1)}
+                  className="flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+      {viewEntry && (
+        <ServiceDetailPopup entry={viewEntry} onClose={() => setViewEntry(null)} />
+      )}
+    </div>
   );
 };
 
-// ---- Add / Edit Service Modal ----
+// ── Quantity row ──────────────────────────────────────────────────────────────
 
-interface ServiceFormModalProps {
-  service?: Service;
+interface QuantityRowProps {
+  pkg: ServicePackage;
   providers: Provider[];
-  categories: Category[];
-  defaultCategoryId?: string;
-  onClose: () => void;
-  onSaved: () => void;
+  existingQuantities: number[];
+  onUpdated: (p: ServicePackage) => void;
+  onDeleted: (id: string) => void;
+  onAdded: (p: ServicePackage) => void;
 }
 
-const ServiceFormModal = ({
-  service,
-  providers,
-  categories,
-  defaultCategoryId,
-  onClose,
-  onSaved,
-}: ServiceFormModalProps) => {
-  const isEdit = Boolean(service);
-
-  const [form, setForm] = useState({
-    name: service?.name ?? '',
-    description: service?.description ?? '',
-    provider_id: service?.provider_id ?? '',
-    provider_service_id: service?.provider_service_id ?? '',
-    category_id: service?.category_id ?? defaultCategoryId ?? '',
-    type: service?.type ?? 'Default',
-    mode: service?.mode ?? 'Manual',
-    start_count_type: service?.start_count_type ?? 'Catch from supplier',
-    drip_feed: service?.drip_feed ?? false,
-    price_visible: service?.price_visible ?? true,
-    rate: service?.rate?.toString() ?? '',
-    overflow: service?.overflow?.toString() ?? '0',
-    downflow: service?.downflow?.toString() ?? '0',
-    min: service?.min?.toString() ?? '',
-    max: service?.max?.toString() ?? '',
-    provider_rate: service?.provider_rate?.toString() ?? '0',
-    provider_min: service?.provider_min?.toString() ?? '0',
-    provider_max: service?.provider_max?.toString() ?? '0',
-    is_active: service?.is_active ?? true,
-    admin_note: service?.admin_note ?? '',
-  });
-
-  const [providerServices, setProviderServices] = useState<ProviderServiceItem[]>([]);
-  const [loadingProviderSvcs, setLoadingProviderSvcs] = useState(false);
-  const [showProviderList, setShowProviderList] = useState(false);
-  const [providerSearch, setProviderSearch] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const dropdownRef = useRef<HTMLDivElement>(null);
+const QuantityRow = ({ pkg, providers, existingQuantities, onUpdated, onDeleted, onAdded }: QuantityRowProps) => {
+  const [expanded, setExpanded] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const [addFallback, setAddFallback] = useState(false);
+  const [deleteFbIdx, setDeleteFbIdx] = useState<number | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setShowProviderList(false);
-      }
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  useEffect(() => {
-    if (form.provider_id) fetchProviderServices(form.provider_id);
-  }, []);
-
-  const fetchProviderServices = async (providerId: string) => {
-    if (!providerId) return;
-    setLoadingProviderSvcs(true);
-    setProviderServices([]);
-    try {
-      const res = await api.get<ProviderServiceItem[]>(
-        `${API_ENDPOINTS.ADMIN_PROVIDERS}/${providerId}/services`
-      );
-      setProviderServices(res.data);
-    } catch {
-      // user can still type manually
-    } finally {
-      setLoadingProviderSvcs(false);
-    }
-  };
-
-  const handleProviderChange = (providerId: string) => {
-    setForm((f) => ({ ...f, provider_id: providerId, provider_service_id: '' }));
-    setProviderSearch('');
-    fetchProviderServices(providerId);
-  };
-
-  const handleSelectProviderSvc = (item: ProviderServiceItem) => {
-    setForm((f) => ({
-      ...f,
-      provider_service_id: item.service,
-      name: f.name || item.name,
-      type: item.type || f.type,
-      rate: item.rate,
-      min: item.min,
-      max: item.max,
-      provider_rate: item.rate,
-      provider_min: item.min,
-      provider_max: item.max,
-    }));
-    setShowProviderList(false);
-    setProviderSearch('');
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setSaving(true);
-    setError('');
-    const payload = {
-      name: form.name,
-      description: form.description,
-      provider_id: form.provider_id,
-      provider_service_id: form.provider_service_id,
-      category_id: form.category_id,
-      type: form.type,
-      mode: form.mode,
-      start_count_type: form.start_count_type,
-      drip_feed: form.drip_feed,
-      price_visible: form.price_visible,
-      rate: parseFloat(form.rate) || 0,
-      overflow: parseFloat(form.overflow) || 0,
-      downflow: parseFloat(form.downflow) || 0,
-      min: parseInt(form.min) || 1,
-      max: parseInt(form.max) || 1,
-      provider_rate: parseFloat(form.provider_rate) || 0,
-      provider_min: parseInt(form.provider_min) || 0,
-      provider_max: parseInt(form.provider_max) || 0,
-      is_active: form.is_active,
-      admin_note: form.admin_note,
-    };
-    try {
-      if (isEdit && service) {
-        await api.patch(`${API_ENDPOINTS.ADMIN_SERVICES}/${service.id}`, payload);
-      } else {
-        await api.post(API_ENDPOINTS.ADMIN_SERVICES, payload);
-      }
-      onSaved();
-    } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data
-        ?.detail;
-      if (Array.isArray(detail)) {
-        setError(detail.map((d: { msg?: string }) => d.msg).join(', '));
-      } else {
-        setError(typeof detail === 'string' ? detail : 'Failed to save service');
-      }
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const filteredProviderSvcs = providerSearch
-    ? providerServices.filter(
-        (s) =>
-          s.name.toLowerCase().includes(providerSearch.toLowerCase()) ||
-          s.service.includes(providerSearch)
-      )
-    : providerServices;
-
-  const selectedItem = providerServices.find((s) => s.service === form.provider_service_id);
-  const isAutoLocked = form.mode === 'Auto' && !!selectedItem;
-
-  useEffect(() => {
-    if (form.mode !== 'Auto') return;
-    const item = providerServices.find((s) => s.service === form.provider_service_id);
-    if (!item) return;
-    setForm((f) => ({
-      ...f,
-      name: item.name,
-      type: item.type || f.type,
-      rate: item.rate,
-      min: item.min,
-      max: item.max,
-      provider_rate: item.rate,
-      provider_min: item.min,
-      provider_max: item.max,
-    }));
-  }, [form.mode, form.provider_service_id, providerServices]);
-
-  return (
-    <Modal title={isEdit ? 'Edit Service' : 'Add Service'} onClose={onClose} wide>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
-
-        <div className="grid grid-cols-2 gap-4">
-          {/* Provider */}
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-gray-600 mb-1">Provider</label>
-            <select
-              className={inputCls}
-              value={form.provider_id}
-              onChange={(e) => handleProviderChange(e.target.value)}
-              required
-            >
-              <option value="">Select provider…</option>
-              {providers.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Provider service picker */}
-          {form.provider_id && (
-            <div className="col-span-2" ref={dropdownRef}>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Provider Service
-                {loadingProviderSvcs && (
-                  <span className="ml-2 text-gray-400 inline-flex items-center gap-1">
-                    <Loader2 className="h-3 w-3 animate-spin" /> Loading…
-                  </span>
-                )}
-              </label>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowProviderList((v) => !v)}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 text-left"
-                >
-                  <span className={selectedItem ? 'text-gray-900' : 'text-gray-400'}>
-                    {selectedItem
-                      ? `#${selectedItem.service} — ${selectedItem.name}`
-                      : 'Pick from provider list…'}
-                  </span>
-                  <ChevronDown className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                </button>
-
-                {showProviderList && providerServices.length > 0 && (
-                  <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-hidden flex flex-col">
-                    <div className="p-2 border-b border-gray-100">
-                      <input
-                        className={inputCls}
-                        placeholder="Search by name or ID…"
-                        value={providerSearch}
-                        onChange={(e) => setProviderSearch(e.target.value)}
-                        autoFocus
-                      />
-                    </div>
-                    <div className="overflow-y-auto">
-                      {filteredProviderSvcs.map((item) => (
-                        <button
-                          key={item.service}
-                          type="button"
-                          onClick={() => handleSelectProviderSvc(item)}
-                          className={`w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 flex justify-between items-start gap-3 ${
-                            form.provider_service_id === item.service
-                              ? 'bg-teal-50 text-teal-700'
-                              : 'text-gray-700'
-                          }`}
-                        >
-                          <span className="truncate">{item.name}</span>
-                          <span className="text-xs text-gray-400 flex-shrink-0 mt-0.5">
-                            #{item.service} · ${item.rate}/1k
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <input
-                className={`${inputCls} mt-2`}
-                placeholder="Or type provider service ID manually"
-                value={form.provider_service_id}
-                onChange={(e) => setForm((f) => ({ ...f, provider_service_id: e.target.value }))}
-                required
-              />
-
-              {selectedItem && (
-                <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2.5 grid grid-cols-2 gap-x-6 gap-y-1.5">
-                  <span className="col-span-2 text-xs font-semibold text-blue-700 mb-0.5">
-                    Provider data for #{selectedItem.service}
-                  </span>
-                  <span className="text-xs text-gray-500">Name</span>
-                  <span className="text-xs text-gray-800 font-medium truncate">{selectedItem.name}</span>
-                  <span className="text-xs text-gray-500">Type</span>
-                  <span className="text-xs text-gray-800 font-medium">{selectedItem.type || '—'}</span>
-                  <span className="text-xs text-gray-500">Category</span>
-                  <span className="text-xs text-gray-800 font-medium">{selectedItem.category || '—'}</span>
-                  <span className="text-xs text-gray-500">Rate / 1k</span>
-                  <span className="text-xs text-gray-800 font-medium">${selectedItem.rate}</span>
-                  <span className="text-xs text-gray-500">Min</span>
-                  <span className="text-xs text-gray-800 font-medium">{selectedItem.min}</span>
-                  <span className="text-xs text-gray-500">Max</span>
-                  <span className="text-xs text-gray-800 font-medium">{selectedItem.max}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Service name */}
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-gray-600 mb-1">Service Name</label>
-            <input
-              className={`${inputCls} disabled:opacity-60 disabled:bg-gray-50 disabled:cursor-not-allowed`}
-              placeholder="e.g. YouTube Views — High Quality"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              disabled={isAutoLocked}
-              required
-            />
-            {selectedItem && (
-              <p className="mt-1 text-xs text-blue-500">Provider: {selectedItem.name}</p>
-            )}
-          </div>
-
-          {/* Description */}
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Description <span className="text-gray-400 font-normal">(optional)</span>
-            </label>
-            <textarea
-              className={`${inputCls} resize-none`}
-              rows={3}
-              placeholder="Describe what this service delivers, quality, speed, etc."
-              value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-            />
-          </div>
-
-          {/* Category */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Category</label>
-            <select
-              className={inputCls}
-              value={form.category_id}
-              onChange={(e) => setForm((f) => ({ ...f, category_id: e.target.value }))}
-              required
-            >
-              <option value="">Select category…</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            {selectedItem?.category && (
-              <p className="mt-1 text-xs text-blue-500">Provider: {selectedItem.category}</p>
-            )}
-          </div>
-
-          {/* Type */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Service Type</label>
-            <select
-              className={`${inputCls} disabled:opacity-60 disabled:bg-gray-50 disabled:cursor-not-allowed`}
-              value={form.type}
-              onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
-              disabled={isAutoLocked}
-            >
-              <option>Default</option>
-              <option>Custom Comments</option>
-              <option>Mentions</option>
-              <option>Mentions with Hashtags</option>
-              <option>Comment Likes</option>
-              <option>Poll</option>
-              <option>Invites from Groups</option>
-              <option>Subscriptions</option>
-            </select>
-            {selectedItem?.type && (
-              <p className="mt-1 text-xs text-blue-500">Provider: {selectedItem.type}</p>
-            )}
-          </div>
-
-          {/* Mode */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Mode</label>
-            <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setForm((f) => ({ ...f, mode: 'Manual' }))}
-                className={`px-5 py-2 text-sm font-medium transition-colors ${
-                  form.mode === 'Manual'
-                    ? 'bg-teal-600 text-white'
-                    : 'bg-white text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                Manual
-              </button>
-              <button
-                type="button"
-                onClick={() => setForm((f) => ({ ...f, mode: 'Auto' }))}
-                className={`px-5 py-2 text-sm font-medium transition-colors border-l border-gray-300 ${
-                  form.mode === 'Auto'
-                    ? 'bg-teal-600 text-white'
-                    : 'bg-white text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                Auto
-              </button>
-            </div>
-          </div>
-
-          {/* Start Count Type */}
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-gray-600 mb-1">Start Count Type</label>
-            <select
-              className={inputCls}
-              value={form.start_count_type}
-              onChange={(e) => setForm((f) => ({ ...f, start_count_type: e.target.value }))}
-            >
-              <option>Catch from supplier</option>
-              <option>Custom</option>
-              <option>Zero</option>
-            </select>
-          </div>
-
-          {/* Rate */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Rate (per 1000)</label>
-            <input
-              type="number"
-              step="0.0001"
-              min="0"
-              className={`${inputCls} disabled:opacity-60 disabled:bg-gray-50 disabled:cursor-not-allowed`}
-              placeholder="0.0000"
-              value={form.rate}
-              onChange={(e) => setForm((f) => ({ ...f, rate: e.target.value }))}
-              disabled={isAutoLocked}
-              required
-            />
-            {selectedItem && (
-              <p className="mt-1 text-xs text-blue-500">Provider: ${selectedItem.rate} / 1k</p>
-            )}
-          </div>
-
-          {/* Price Visibility */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Price Visibility</label>
-            <select
-              className={inputCls}
-              value={form.price_visible ? 'Enable' : 'Disable'}
-              onChange={(e) => setForm((f) => ({ ...f, price_visible: e.target.value === 'Enable' }))}
-            >
-              <option>Enable</option>
-              <option>Disable</option>
-            </select>
-          </div>
-
-          {/* Min */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Min Order</label>
-            <input
-              type="number"
-              min="1"
-              className={`${inputCls} disabled:opacity-60 disabled:bg-gray-50 disabled:cursor-not-allowed`}
-              placeholder="100"
-              value={form.min}
-              onChange={(e) => setForm((f) => ({ ...f, min: e.target.value }))}
-              disabled={isAutoLocked}
-              required
-            />
-            {selectedItem && (
-              <p className="mt-1 text-xs text-blue-500">Provider: {selectedItem.min}</p>
-            )}
-          </div>
-
-          {/* Max */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Max Order</label>
-            <input
-              type="number"
-              min="1"
-              className={`${inputCls} disabled:opacity-60 disabled:bg-gray-50 disabled:cursor-not-allowed`}
-              placeholder="100000"
-              value={form.max}
-              onChange={(e) => setForm((f) => ({ ...f, max: e.target.value }))}
-              disabled={isAutoLocked}
-              required
-            />
-            {selectedItem && (
-              <p className="mt-1 text-xs text-blue-500">Provider: {selectedItem.max}</p>
-            )}
-          </div>
-
-          {/* Overflow */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Overflow %</label>
-            <div className="relative">
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                max="100"
-                className={`${inputCls} pr-8`}
-                placeholder="0"
-                value={form.overflow}
-                onChange={(e) => setForm((f) => ({ ...f, overflow: e.target.value }))}
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">%</span>
-            </div>
-          </div>
-
-          {/* Downflow */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Downflow %</label>
-            <div className="relative">
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                max="100"
-                className={`${inputCls} pr-8`}
-                placeholder="0"
-                value={form.downflow}
-                onChange={(e) => setForm((f) => ({ ...f, downflow: e.target.value }))}
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">%</span>
-            </div>
-          </div>
-
-          {/* DripFeed + Active toggles */}
-          <div className="col-span-2 flex flex-wrap gap-6 pt-1">
-            <label className="flex items-center gap-2.5 cursor-pointer">
-              <button
-                type="button"
-                onClick={() => setForm((f) => ({ ...f, drip_feed: !f.drip_feed }))}
-                className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${
-                  form.drip_feed ? 'bg-teal-600' : 'bg-gray-200'
-                }`}
-              >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${form.drip_feed ? 'translate-x-4' : 'translate-x-0'}`} />
-              </button>
-              <span className="text-sm text-gray-700">DripFeed</span>
-              <span className={`text-xs font-medium ${form.drip_feed ? 'text-teal-600' : 'text-gray-400'}`}>
-                {form.drip_feed ? 'Active' : 'Non Active'}
-              </span>
-            </label>
-
-            <label className="flex items-center gap-2.5 cursor-pointer">
-              <button
-                type="button"
-                onClick={() => setForm((f) => ({ ...f, is_active: !f.is_active }))}
-                className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${
-                  form.is_active ? 'bg-teal-600' : 'bg-gray-200'
-                }`}
-              >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${form.is_active ? 'translate-x-4' : 'translate-x-0'}`} />
-              </button>
-              <span className="text-sm text-gray-700">Active</span>
-              <span className={`text-xs font-medium ${form.is_active ? 'text-teal-600' : 'text-gray-400'}`}>
-                {form.is_active ? 'Enabled' : 'Disabled'}
-              </span>
-            </label>
-          </div>
-
-          {/* Admin Note */}
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Admin Secret Note <span className="text-gray-400 font-normal">(not visible to customers)</span>
-            </label>
-            <textarea
-              className={`${inputCls} resize-none`}
-              rows={2}
-              placeholder="Internal notes about this service…"
-              value={form.admin_note}
-              onChange={(e) => setForm((f) => ({ ...f, admin_note: e.target.value }))}
-            />
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" className={cancelCls} onClick={onClose}>Cancel</button>
-          <button type="submit" className={primaryCls} disabled={saving}>
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            {isEdit ? 'Save Changes' : 'Add Service'}
-          </button>
-        </div>
-      </form>
-    </Modal>
+  const { final: portalPrice } = calcPrice(
+    pkg.quantity,
+    pkg.portal_rate,
+    pkg.discount_type,
+    pkg.discount_value,
   );
-};
+  const providerCost = Math.round((pkg.quantity / 1000) * pkg.provider_rate * 10000) / 10000;
 
-// ---- Subscription form modal ----
-
-interface SubscriptionFormModalProps {
-  subscription?: Service;
-  providers: Provider[];
-  categories: Category[];
-  defaultCategoryId?: string;
-  onClose: () => void;
-  onSaved: () => void;
-}
-
-const SubscriptionFormModal = ({
-  subscription,
-  providers,
-  categories,
-  defaultCategoryId,
-  onClose,
-  onSaved,
-}: SubscriptionFormModalProps) => {
-  const isEdit = Boolean(subscription);
-  const [form, setForm] = useState({
-    category_id: subscription?.category_id ?? defaultCategoryId ?? '',
-    subscription_name: subscription?.subscription_name ?? '',
-    name: subscription?.name ?? '',
-    rate: subscription?.rate?.toString() ?? '',
-    min: subscription?.min?.toString() ?? '',
-    max: subscription?.max?.toString() ?? '',
-    overflow: subscription?.overflow?.toString() ?? '0',
-    downflow: subscription?.downflow?.toString() ?? '0',
-    description: subscription?.description ?? '',
-    provider_id: subscription?.provider_id ?? '',
-    provider_service_id: subscription?.provider_service_id ?? '',
-    comments_section: subscription?.comments_section ?? false,
-    is_active: subscription?.is_active ?? true,
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setSaving(true);
-    setError('');
-    const payload = {
-      service_kind: 'subscription',
-      category_id: form.category_id,
-      subscription_name: form.subscription_name,
-      name: form.name,
-      rate: parseFloat(form.rate) || 0,
-      min: parseInt(form.min) || 1,
-      max: parseInt(form.max) || 1,
-      overflow: parseFloat(form.overflow) || 0,
-      downflow: parseFloat(form.downflow) || 0,
-      description: form.description,
-      provider_id: form.provider_id,
-      provider_service_id: form.provider_service_id,
-      comments_section: form.comments_section,
-      is_active: form.is_active,
-      // defaults for unused service fields
-      type: 'Default',
-      mode: 'Auto',
-      start_count_type: 'Catch from supplier',
-      drip_feed: false,
-      price_visible: true,
-      admin_note: '',
-    };
-    try {
-      if (isEdit && subscription) {
-        await api.patch(`${API_ENDPOINTS.ADMIN_SERVICES}/${subscription.id}`, payload);
-      } else {
-        await api.post(API_ENDPOINTS.ADMIN_SERVICES, payload);
-      }
-      onSaved();
-    } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-      if (Array.isArray(detail)) {
-        setError(detail.map((d: { msg?: string }) => d.msg).join(', '));
-      } else {
-        setError(typeof detail === 'string' ? detail : 'Failed to save subscription');
-      }
-    } finally {
-      setSaving(false);
-    }
+  const handleDeletePkg = async () => {
+    await api.delete(`${API_ENDPOINTS.ADMIN_SERVICE_PACKAGES}/${pkg.id}`);
+    onDeleted(pkg.id);
   };
 
-  return (
-    <Modal title={isEdit ? 'Edit Subscription' : 'Add Subscription'} onClose={onClose} wide>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
-
-        <div className="grid grid-cols-2 gap-4">
-          {/* Category */}
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-gray-600 mb-1">Category</label>
-            <select
-              className={inputCls}
-              value={form.category_id}
-              onChange={(e) => setForm((f) => ({ ...f, category_id: e.target.value }))}
-              required
-            >
-              <option value="">Select category…</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Subscription name */}
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-gray-600 mb-1">Subscription</label>
-            <input
-              className={inputCls}
-              placeholder="e.g. Instagram Auto Likes"
-              value={form.subscription_name}
-              onChange={(e) => setForm((f) => ({ ...f, subscription_name: e.target.value }))}
-              required
-            />
-          </div>
-
-          {/* Service name */}
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-gray-600 mb-1">Service Name</label>
-            <input
-              className={inputCls}
-              placeholder="e.g. Auto Likes — High Quality"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              required
-            />
-          </div>
-
-          {/* Service Price */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Service Price</label>
-            <input
-              type="number"
-              step="0.0001"
-              min="0"
-              className={inputCls}
-              placeholder="0.0000"
-              value={form.rate}
-              onChange={(e) => setForm((f) => ({ ...f, rate: e.target.value }))}
-              required
-            />
-          </div>
-
-          {/* Provider */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Select API</label>
-            <select
-              className={inputCls}
-              value={form.provider_id}
-              onChange={(e) => setForm((f) => ({ ...f, provider_id: e.target.value }))}
-              required
-            >
-              <option value="">Select API…</option>
-              {providers.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Min */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Min Amount</label>
-            <input
-              type="number"
-              min="1"
-              className={inputCls}
-              placeholder="100"
-              value={form.min}
-              onChange={(e) => setForm((f) => ({ ...f, min: e.target.value }))}
-              required
-            />
-          </div>
-
-          {/* Max */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Max Amount</label>
-            <input
-              type="number"
-              min="1"
-              className={inputCls}
-              placeholder="100000"
-              value={form.max}
-              onChange={(e) => setForm((f) => ({ ...f, max: e.target.value }))}
-              required
-            />
-          </div>
-
-          {/* Overflow */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Overflow %</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              max="100"
-              className={inputCls}
-              placeholder="0"
-              value={form.overflow}
-              onChange={(e) => setForm((f) => ({ ...f, overflow: e.target.value }))}
-            />
-          </div>
-
-          {/* Downflow */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Downflow %</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              max="100"
-              className={inputCls}
-              placeholder="0"
-              value={form.downflow}
-              onChange={(e) => setForm((f) => ({ ...f, downflow: e.target.value }))}
-            />
-          </div>
-
-          {/* API Service ID */}
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-gray-600 mb-1">API Service ID</label>
-            <input
-              className={inputCls}
-              placeholder="Service ID from the API provider"
-              value={form.provider_service_id}
-              onChange={(e) => setForm((f) => ({ ...f, provider_service_id: e.target.value }))}
-              required
-            />
-          </div>
-
-          {/* Service Details */}
-          <div className="col-span-2">
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Service Details <span className="text-gray-400 font-normal">(optional)</span>
-            </label>
-            <textarea
-              className={`${inputCls} resize-none`}
-              rows={3}
-              placeholder="Describe what this subscription delivers…"
-              value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-            />
-          </div>
-
-          {/* Comments Section + Status toggles */}
-          <div className="col-span-2 flex flex-wrap gap-6 pt-1">
-            <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-gray-600">Comments Section</span>
-              <label className="flex items-center gap-2.5 cursor-pointer">
-                <button
-                  type="button"
-                  onClick={() => setForm((f) => ({ ...f, comments_section: !f.comments_section }))}
-                  className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${
-                    form.comments_section ? 'bg-teal-600' : 'bg-gray-200'
-                  }`}
-                >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${form.comments_section ? 'translate-x-4' : 'translate-x-0'}`} />
-                </button>
-                <span className={`text-xs font-medium ${form.comments_section ? 'text-teal-600' : 'text-gray-400'}`}>
-                  {form.comments_section ? 'Enabled' : 'Disabled'}
-                </span>
-              </label>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-gray-600">Status</span>
-              <label className="flex items-center gap-2.5 cursor-pointer">
-                <button
-                  type="button"
-                  onClick={() => setForm((f) => ({ ...f, is_active: !f.is_active }))}
-                  className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${
-                    form.is_active ? 'bg-teal-600' : 'bg-gray-200'
-                  }`}
-                >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${form.is_active ? 'translate-x-4' : 'translate-x-0'}`} />
-                </button>
-                <span className={`text-xs font-medium ${form.is_active ? 'text-teal-600' : 'text-gray-400'}`}>
-                  {form.is_active ? 'Active' : 'Inactive'}
-                </span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" className={cancelCls} onClick={onClose}>Cancel</button>
-          <button type="submit" className={primaryCls} disabled={saving}>
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            {isEdit ? 'Save Changes' : 'Add Subscription'}
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
-};
-
-// ---- Delete confirm ----
-
-interface DeleteModalProps {
-  label: string;
-  onClose: () => void;
-  onConfirm: () => Promise<void>;
-}
-
-const DeleteModal = ({ label, onClose, onConfirm }: DeleteModalProps) => {
-  const [deleting, setDeleting] = useState(false);
-  const handle = async () => {
-    setDeleting(true);
-    await onConfirm();
-    setDeleting(false);
-  };
-  return (
-    <Modal title="Confirm Delete" onClose={onClose}>
-      <p className="text-sm text-gray-600 mb-6">
-        Are you sure you want to delete <span className="font-medium text-gray-900">{label}</span>?
-        This cannot be undone.
-      </p>
-      <div className="flex justify-end gap-2">
-        <button className={cancelCls} onClick={onClose}>Cancel</button>
-        <button
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50"
-          onClick={handle}
-          disabled={deleting}
-        >
-          {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
-          Delete
-        </button>
-      </div>
-    </Modal>
-  );
-};
-
-// ---- Dropdown menu helper ----
-
-interface DropdownItem {
-  label: string;
-  onClick: () => void;
-  danger?: boolean;
-}
-
-interface DropdownMenuProps {
-  label: React.ReactNode;
-  items: DropdownItem[];
-  alignRight?: boolean;
-}
-
-const DropdownMenu = ({ label, items, alignRight }: DropdownMenuProps) => {
-  const [pos, setPos] = useState<{ top?: number; bottom?: number; left?: number; right?: number } | null>(null);
-
-  const handleOpen = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (pos) { setPos(null); return; }
-    const rect = e.currentTarget.getBoundingClientRect();
-    const estimatedMenuHeight = items.length * 36 + 8;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const openUpward = spaceBelow < estimatedMenuHeight && rect.top > estimatedMenuHeight;
-    const vertical = openUpward
-      ? { bottom: window.innerHeight - rect.top + 4 }
-      : { top: rect.bottom + 4 };
-    setPos(
-      alignRight
-        ? { ...vertical, right: window.innerWidth - rect.right }
-        : { ...vertical, left: rect.left }
+  const handleDeleteFallback = async () => {
+    if (deleteFbIdx === null) return;
+    const res = await api.delete<ServicePackage>(
+      `${API_ENDPOINTS.ADMIN_SERVICE_PACKAGES}/${pkg.id}/fallbacks/${deleteFbIdx}`,
     );
+    onUpdated(res.data);
+    setDeleteFbIdx(null);
   };
 
   return (
     <>
-      <button
-        onClick={handleOpen}
-        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white text-xs text-gray-600 font-medium hover:bg-gray-50 transition-colors"
-      >
-        {label}
-        <ChevronDown className="h-3 w-3" />
-      </button>
-      {pos && (
-        <>
-          <div className="fixed inset-0 z-20" onClick={() => setPos(null)} />
-          <div
-            className="fixed z-30 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-40"
-            style={pos}
-          >
-            {items.map((item) => (
-              <button
-                key={item.label}
-                onClick={() => { item.onClick(); setPos(null); }}
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${
-                  item.danger ? 'text-red-600 hover:bg-red-50' : 'text-gray-700'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
+      <div className="border border-gray-200 rounded-2xl bg-white shadow-sm hover:shadow-md transition-shadow duration-200">
+        {/* Row header */}
+        <div
+          className="flex items-center gap-3 px-5 py-4 cursor-pointer select-none"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {/* Expand chevron */}
+          <span className={`flex-shrink-0 transition-colors ${expanded ? 'text-teal-500' : 'text-gray-300'}`}>
+            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </span>
+
+          {/* Quantity — large and bold */}
+          <div className="flex-shrink-0 w-24">
+            <p className="text-xl font-bold text-gray-900 leading-none">
+              {pkg.quantity.toLocaleString()}
+            </p>
+            <p className="text-[10px] text-gray-400 mt-0.5 uppercase tracking-wide">units</p>
           </div>
-        </>
+
+          {/* Vertical rule */}
+          <div className="h-9 w-px bg-gray-100 flex-shrink-0" />
+
+          {/* Provider info — two lines */}
+          <div className="flex-1 min-w-0 hidden sm:block">
+            <p className="text-sm font-semibold text-gray-800 truncate leading-snug">
+              {pkg.provider_name}
+            </p>
+            <p className="text-[11px] text-gray-400 font-mono truncate leading-snug">
+              #{pkg.provider_service_id}
+              {pkg.provider_service_name ? ` — ${pkg.provider_service_name}` : ''}
+            </p>
+          </div>
+
+          {/* Pricing block */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <div className="text-right hidden lg:block pr-3">
+              <p className="text-[10px] text-gray-400 uppercase tracking-wide">Cost</p>
+              <p className="text-xs font-mono text-orange-500 font-medium">${providerCost.toFixed(4)}</p>
+            </div>
+            <div className="h-7 w-px bg-gray-100 hidden lg:block mr-3" />
+            <div className="text-right">
+              <p className="text-[10px] text-gray-400 uppercase tracking-wide">Price</p>
+              <p className="text-base font-bold text-teal-600">${portalPrice.toFixed(2)}</p>
+            </div>
+          </div>
+
+          {/* Status badges */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span
+              className={`text-[10px] font-semibold px-2 py-1 rounded-full ${
+                pkg.is_active
+                  ? 'bg-green-100 text-green-700'
+                  : 'bg-gray-100 text-gray-500'
+              }`}
+            >
+              {pkg.is_active ? 'Active' : 'Off'}
+            </span>
+            {pkg.fallbacks.length > 0 && (
+              <span className="text-[10px] font-semibold px-2 py-1 rounded-full bg-teal-50 text-teal-600">
+                +{pkg.fallbacks.length}
+              </span>
+            )}
+            {pkg.discount_type !== 'none' && (
+              <span className="text-[10px] font-semibold px-2 py-1 rounded-full bg-amber-50 text-amber-600">
+                {pkg.discount_type === 'fixed'
+                  ? `-$${pkg.discount_value.toFixed(2)}`
+                  : `-${pkg.discount_value}%`}
+              </span>
+            )}
+          </div>
+
+          {/* Action menu */}
+          <div
+            ref={menuRef}
+            className="relative flex-shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setMenuOpen((v) => !v)}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-xl shadow-lg py-1 w-40">
+                <button
+                  onClick={() => { setEditOpen(true); setMenuOpen(false); }}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Edit
+                </button>
+                <button
+                  onClick={() => { setDuplicateOpen(true); setMenuOpen(false); }}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Copy className="h-3.5 w-3.5" /> Duplicate
+                </button>
+                <div className="border-t border-gray-100 my-1" />
+                <button
+                  onClick={() => { setDeleteOpen(true); setMenuOpen(false); }}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Delete
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Expanded: routing + controls */}
+        {expanded && (
+          <div className="border-t border-gray-100 rounded-b-2xl overflow-hidden">
+            <div className="bg-gray-50/80 px-5 py-4 space-y-3">
+              {/* Routing header */}
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                  Routing order
+                </p>
+                <p className="text-[10px] text-gray-400">
+                  Drag to reorder · index 0 is default
+                </p>
+              </div>
+
+              <RoutingList
+                pkg={pkg}
+                onUpdated={onUpdated}
+                onRequestDeleteFallback={(idx: number) => setDeleteFbIdx(idx)}
+              />
+
+              <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+                <button
+                  onClick={() => setAddFallback(true)}
+                  className="flex items-center gap-1.5 text-xs text-teal-600 font-semibold hover:text-teal-800 transition-colors"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add fallback
+                </button>
+                <div className="flex items-center gap-3 text-[10px] text-gray-400">
+                  {pkg.admin_note && (
+                    <span className="italic truncate max-w-[200px]" title={pkg.admin_note}>
+                      {pkg.admin_note}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Modals */}
+      {editOpen && (
+        <AddQuantityModal
+          serviceType={pkg.service_type}
+          packageType={pkg.package_type as 'value' | 'bulk'}
+          serviceLabel={SECTIONS.find((s) => s.key === pkg.service_type)?.label ?? pkg.service_type}
+          providers={providers}
+          existing={pkg}
+          onClose={() => setEditOpen(false)}
+          onSaved={(updated) => { onUpdated(updated); setEditOpen(false); }}
+        />
+      )}
+      {deleteOpen && (
+        <DeleteModal
+          label={`Delete ${pkg.quantity.toLocaleString()} unit quantity for this service? All fallbacks will be removed.`}
+          onClose={() => setDeleteOpen(false)}
+          onConfirm={async () => { await handleDeletePkg(); setDeleteOpen(false); }}
+        />
+      )}
+      {duplicateOpen && (
+        <DuplicateModal
+          pkg={pkg}
+          existingQuantities={existingQuantities}
+          onClose={() => setDuplicateOpen(false)}
+          onSaved={(newPkg) => { onAdded(newPkg); setDuplicateOpen(false); }}
+        />
+      )}
+      {addFallback && (
+        <AddFallbackModal
+          parent={pkg}
+          providers={providers}
+          onClose={() => setAddFallback(false)}
+          onSaved={(updated) => { onUpdated(updated); setAddFallback(false); }}
+        />
+      )}
+      {deleteFbIdx !== null && (
+        <DeleteModal
+          label={`Remove fallback #${deleteFbIdx + 1} from this quantity row?`}
+          onClose={() => setDeleteFbIdx(null)}
+          onConfirm={async () => { await handleDeleteFallback(); }}
+        />
       )}
     </>
   );
 };
 
-// ---- Category section ----
+// ── Section component ─────────────────────────────────────────────────────────
 
-interface CategorySectionProps {
-  category: Category | null;
-  services: Service[];
-  selected: Set<string>;
-  onToggleSelect: (id: string) => void;
-  onToggleSelectAll: (ids: string[], checked: boolean) => void;
-  onEdit: (svc: Service) => void;
-  onDelete: (svc: Service) => void;
-  onToggleActive: (svc: Service) => void;
-  onAddService: (categoryId: string) => void;
-  onDeleteCategory: (cat: Category) => void;
-  providerSvcMap: Record<string, ProviderServiceItem>;
+interface SectionProps {
+  section: ServiceSection;
+  packages: ServicePackage[];
+  providers: Provider[];
+  onUpdated: (p: ServicePackage) => void;
+  onDeleted: (id: string) => void;
+  onAdded: (p: ServicePackage) => void;
 }
 
-const CategorySection = ({
-  category,
-  services,
-  selected,
-  onToggleSelect,
-  onToggleSelectAll,
-  onEdit,
-  onDelete,
-  onToggleActive,
-  onAddService,
-  onDeleteCategory,
-  providerSvcMap,
-}: CategorySectionProps) => {
-  const [collapsed, setCollapsed] = useState(false);
-  const [sortKey, setSortKey] = useState<keyof Service | null>(null);
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+const Section = ({ section, packages, providers, onUpdated, onDeleted, onAdded }: SectionProps) => {
+  const [tab, setTab] = useState<'value' | 'bulk'>('value');
+  const [collapsed, setCollapsed] = useState(true);
+  const [addOpen, setAddOpen] = useState(false);
 
-  const handleSort = (key: keyof Service) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortKey(key);
-      setSortDir('asc');
-    }
-  };
+  const meta = SECTION_META[section.key] ?? SECTION_META.youtube_views;
+  const { Icon } = meta;
 
-  const displayServices = sortKey
-    ? [...services].sort((a, b) => {
-        const aVal = a[sortKey];
-        const bVal = b[sortKey];
-        if (typeof aVal === 'number' && typeof bVal === 'number') {
-          return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
-        }
-        if (typeof aVal === 'boolean' && typeof bVal === 'boolean') {
-          return sortDir === 'asc' ? (aVal === bVal ? 0 : aVal ? 1 : -1) : (aVal === bVal ? 0 : aVal ? -1 : 1);
-        }
-        const aStr = String(aVal ?? '').toLowerCase();
-        const bStr = String(bVal ?? '').toLowerCase();
-        return sortDir === 'asc' ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
-      })
-    : services;
+  const allRows = packages.filter((p) => p.service_type === section.key);
+  const valueCount = allRows.filter((p) => p.package_type === 'value').length;
+  const bulkCount = allRows.filter((p) => p.package_type === 'bulk').length;
+  const activeCount = allRows.filter((p) => p.is_active).length;
+  const totalCount = allRows.length;
 
-  const ids = displayServices.map((s) => s.id);
-  const allChecked = ids.length > 0 && ids.every((id) => selected.has(id));
-  const someChecked = ids.some((id) => selected.has(id));
+  const rows = allRows
+    .filter((p) => p.package_type === tab)
+    .sort((a, b) => a.priority - b.priority);
+
+  const existingQuantities = rows.map((r) => r.quantity);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-4">
-      {/* Category header row */}
-      <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b border-gray-200">
-        <GripVertical className="h-4 w-4 text-gray-300 flex-shrink-0" />
-        <span className="font-semibold text-gray-800 text-sm flex-1">
-          {category ? category.name : 'Uncategorized'}
-          <span className="ml-2 text-xs font-normal text-gray-400">{services.length} service{services.length !== 1 ? 's' : ''}</span>
-        </span>
+    <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+      {/* Thin colored accent bar */}
+      <div className={`h-1 w-full ${meta.accent}`} />
 
-        {category && (
-          <DropdownMenu
-            label="Actions"
-            items={[
-              {
-                label: 'Add service here',
-                onClick: () => onAddService(category.id),
-              },
-              {
-                label: 'Delete category',
-                onClick: () => onDeleteCategory(category),
-                danger: true,
-              },
-            ]}
-          />
-        )}
-
-        <button
-          onClick={() => setCollapsed((v) => !v)}
-          className="flex items-center gap-1 text-xs text-teal-600 hover:text-teal-800 font-medium"
-        >
-          {collapsed ? (
-            <>Show services <ChevronDown className="h-3 w-3" /></>
-          ) : (
-            <>Hide services <ChevronUp className="h-3 w-3" /></>
-          )}
-        </button>
-      </div>
-
-      {!collapsed && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="border-b border-gray-100">
-              <tr>
-                <th className="px-4 py-2.5 w-8">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
-                    checked={allChecked}
-                    ref={(el) => { if (el) el.indeterminate = someChecked && !allChecked; }}
-                    onChange={(e) => onToggleSelectAll(ids, e.target.checked)}
-                  />
-                </th>
-                {(
-                  [
-                    { label: 'ID',       key: 'provider_service_id' },
-                    { label: 'Service',  key: 'name' },
-                    { label: 'Type',     key: 'type' },
-                    { label: 'Provider', key: 'provider_name' },
-                    { label: 'Rate',     key: 'rate' },
-                    { label: 'Min',      key: 'min' },
-                    { label: 'Max',      key: 'max' },
-                    { label: 'Status',   key: 'is_active' },
-                    { label: '',         key: null },
-                  ] as { label: string; key: keyof Service | null }[]
-                ).map(({ label, key }) => (
-                  <th
-                    key={label || '__actions__'}
-                    onClick={() => key && handleSort(key)}
-                    className={`px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap ${key ? 'cursor-pointer select-none hover:text-gray-700' : ''}`}
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      {label}
-                      {key && sortKey === key && (
-                        sortDir === 'asc'
-                          ? <ChevronUp className="h-3 w-3 text-teal-600" />
-                          : <ChevronDown className="h-3 w-3 text-teal-600" />
-                      )}
-                      {key && sortKey !== key && (
-                        <ChevronDown className="h-3 w-3 text-gray-300" />
-                      )}
-                    </span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {displayServices.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="px-4 py-6 text-center text-sm text-gray-400">
-                    No services in this category.
-                  </td>
-                </tr>
-              ) : (
-                displayServices.map((svc) => (
-                  <tr
-                    key={svc.id}
-                    className={`hover:bg-gray-50/60 transition-colors ${
-                      selected.has(svc.id) ? 'bg-teal-50/40' : ''
-                    }`}
-                  >
-                    <td className="px-4 py-3">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
-                        checked={selected.has(svc.id)}
-                        onChange={() => onToggleSelect(svc.id)}
-                      />
-                    </td>
-                    <td className="px-3 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">
-                      {svc.provider_service_id}
-                    </td>
-                    <td className="px-3 py-3 text-gray-900 max-w-xs">
-                      <span className="font-medium leading-snug block truncate">{svc.name}</span>
-                      {svc.service_kind === 'subscription' && (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-50 text-purple-600 mt-0.5">
-                          Subscription
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-3 text-gray-600 whitespace-nowrap text-xs">
-                      {svc.type || '—'}
-                    </td>
-                    <td className="px-3 py-3 whitespace-nowrap">
-                      <span className="block text-gray-800 text-xs font-medium">{svc.provider_name || '—'}</span>
-                      <span className="block text-gray-400 text-xs">{svc.provider_service_id}</span>
-                    </td>
-                    <td className="px-3 py-3 whitespace-nowrap">
-                      {(() => {
-                        const live = providerSvcMap[`${svc.provider_id}_${svc.provider_service_id}`];
-                        const apiRate = live ? parseFloat(live.rate) : null;
-                        return (
-                          <>
-                            <span className="block text-gray-800 text-xs font-medium">${svc.rate.toFixed(4)}</span>
-                            {apiRate !== null && (
-                              <span className={`block text-xs mt-0.5 ${apiRate !== svc.rate ? 'text-amber-500' : 'text-gray-400'}`}>
-                                API: ${apiRate.toFixed(4)}
-                              </span>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </td>
-                    <td className="px-3 py-3 text-xs whitespace-nowrap">
-                      {(() => {
-                        const live = providerSvcMap[`${svc.provider_id}_${svc.provider_service_id}`];
-                        const apiMin = live ? parseInt(live.min) : null;
-                        return (
-                          <>
-                            <span className="block text-gray-600">{svc.min.toLocaleString()}</span>
-                            {apiMin !== null && (
-                              <span className={`block text-xs mt-0.5 ${apiMin !== svc.min ? 'text-amber-500' : 'text-gray-400'}`}>
-                                API: {apiMin.toLocaleString()}
-                              </span>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </td>
-                    <td className="px-3 py-3 text-xs whitespace-nowrap">
-                      {(() => {
-                        const live = providerSvcMap[`${svc.provider_id}_${svc.provider_service_id}`];
-                        const apiMax = live ? parseInt(live.max) : null;
-                        return (
-                          <>
-                            <span className="block text-gray-600">{svc.max.toLocaleString()}</span>
-                            {apiMax !== null && (
-                              <span className={`block text-xs mt-0.5 ${apiMax !== svc.max ? 'text-amber-500' : 'text-gray-400'}`}>
-                                API: {apiMax.toLocaleString()}
-                              </span>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </td>
-                    <td className="px-3 py-3 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
-                          svc.is_active
-                            ? 'bg-emerald-50 text-emerald-700'
-                            : 'bg-gray-100 text-gray-500'
-                        }`}
-                      >
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full ${
-                            svc.is_active ? 'bg-emerald-500' : 'bg-gray-400'
-                          }`}
-                        />
-                        {svc.is_active ? 'Enabled' : 'Disabled'}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3">
-                      <DropdownMenu
-                        label="Actions"
-                        alignRight
-                        items={[
-                          { label: 'Edit', onClick: () => onEdit(svc) },
-                          {
-                            label: svc.is_active ? 'Disable' : 'Enable',
-                            onClick: () => onToggleActive(svc),
-                          },
-                          { label: 'Delete', onClick: () => onDelete(svc), danger: true },
-                        ]}
-                      />
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ---- Working Services ----
-
-interface ChainEntryProps {
-  svc: RoutingConfigServiceInfo;
-  label: string;
-  isDefault: boolean;
-  isLast: boolean;
-  stat: ServiceStat | undefined;
-}
-
-const ChainEntry = ({ svc, label, isDefault, isLast, stat }: ChainEntryProps) => {
-  const hasOrders = stat && stat.total_orders > 0;
-  const isWorking = stat && stat.working_orders > 0;
-  const isFailedOnly = hasOrders && !isWorking;
-  const isUntested = !hasOrders;
-
-  const statusBadge = isWorking
-    ? <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Working · {stat!.working_orders}</span>
-    : isFailedOnly
-    ? <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-50 text-red-600"><span className="h-1.5 w-1.5 rounded-full bg-red-500" />Errors only · {stat!.total_orders}</span>
-    : <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-500"><span className="h-1.5 w-1.5 rounded-full bg-gray-400" />Not tested</span>;
-
-  return (
-    <div className="relative flex items-start gap-3 pb-3">
-      {!isLast && (
-        <div className="absolute left-[11px] top-7 bottom-0 w-0 border-l-2 border-dashed border-gray-200" />
-      )}
-      {/* Position circle */}
-      <div
-        className={`flex-shrink-0 h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold ring-2 z-10 ${
-          isDefault
-            ? 'bg-teal-100 text-teal-700 ring-teal-200'
-            : 'bg-amber-50 text-amber-700 ring-amber-200'
-        }`}
-      >
-        {isDefault ? '★' : label.replace('Fallback ', '')}
-      </div>
-
-      {/* Content */}
-      <div className="min-w-0 flex-1 pt-0.5">
-        <div className="flex items-center justify-between gap-2 mb-0.5">
-          <span
-            className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-md ${
-              isDefault ? 'bg-teal-50 text-teal-700' : 'bg-amber-50 text-amber-700'
-            }`}
-          >
-            {label}
-          </span>
-          <span className="text-[11px] text-gray-400 font-mono flex-shrink-0">
-            ${svc.rate.toFixed(4)}/1k
-          </span>
-        </div>
-        <p className="text-sm text-gray-800 font-medium truncate leading-snug">
-          {svc.service_name}
-        </p>
-        <p className="text-xs text-gray-400 truncate mb-1">
-          {svc.provider_name} · #{svc.provider_service_id}
-        </p>
-        <div className="flex items-center gap-2">
-          {statusBadge}
-          {isWorking && isUntested === false && (
-            <span className="text-[10px] text-gray-400">
-              {stat!.total_orders} total
-            </span>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-interface WorkingServicesSectionProps {
-  categories: Category[];
-  routingConfigs: RoutingConfigData[];
-  serviceStats: ServiceStat[];
-}
-
-const WorkingServicesSection = ({ categories, routingConfigs, serviceStats }: WorkingServicesSectionProps) => {
-  const configMap = new Map(routingConfigs.map((rc) => [rc.category_id, rc]));
-  const statsMap = new Map(serviceStats.map((s) => [s.service_id, s]));
-
-  if (categories.length === 0 && routingConfigs.length === 0) return null;
-
-  // Collect all unique services across all routing configs for the summary row
-  const allConfiguredServices: RoutingConfigServiceInfo[] = [];
-  for (const rc of routingConfigs) {
-    if (rc.value_default) allConfiguredServices.push(rc.value_default);
-    allConfiguredServices.push(...rc.value_fallbacks);
-    if (rc.bulk_default) allConfiguredServices.push(rc.bulk_default);
-    allConfiguredServices.push(...rc.bulk_fallbacks);
-  }
-  const uniqueServices = [...new Map(allConfiguredServices.map((s) => [s.service_id, s])).values()];
-  const workingCount = uniqueServices.filter((s) => (statsMap.get(s.service_id)?.working_orders ?? 0) > 0).length;
-  const untestedCount = uniqueServices.filter((s) => !statsMap.has(s.service_id)).length;
-  const failedCount = uniqueServices.length - workingCount - untestedCount;
-
-  return (
-    <div className="mt-10">
       {/* Section header */}
-      <div className="flex items-center gap-4 mb-1">
-        <div className="flex-1 h-px bg-gray-200" />
-        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap px-2">
-          Working Services
-        </span>
-        <div className="flex-1 h-px bg-gray-200" />
-      </div>
-      <p className="text-center text-xs text-gray-400 mb-4">
-        Which configured services have successfully placed orders — when the default fails, fallbacks are tried in order
-      </p>
+      <div
+        className="flex items-center justify-between px-6 py-5 cursor-pointer select-none"
+        onClick={() => setCollapsed((v) => !v)}
+      >
+        {/* Left: icon + label + stats */}
+        <div className="flex items-center gap-4">
+          <div className={`h-11 w-11 rounded-2xl flex items-center justify-center flex-shrink-0 ${meta.iconBg} ring-4 ${meta.ring}`}>
+            <Icon className={`h-5 w-5 ${meta.iconColor}`} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-base font-bold text-gray-900">{section.label}</h2>
+              {totalCount > 0 && (
+                <>
+                  <span className="text-[10px] font-semibold bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full">
+                    {valueCount}V
+                  </span>
+                  <span className="text-[10px] font-semibold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                    {bulkCount}B
+                  </span>
+                  {activeCount > 0 && (
+                    <span className="text-[10px] font-semibold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                      {activeCount} active
+                    </span>
+                  )}
+                </>
+              )}
+              {totalCount === 0 && (
+                <span className="text-[10px] text-gray-400">No packages yet</span>
+              )}
+            </div>
+            <p className="text-xs text-gray-400 mt-0.5">{section.description}</p>
+          </div>
+        </div>
 
-      {/* Summary strip */}
-      {uniqueServices.length > 0 && (
-        <div className="flex items-center justify-center gap-6 mb-6 py-3 bg-gray-50 rounded-xl border border-gray-200">
-          <div className="text-center">
-            <p className="text-xl font-bold text-emerald-600">{workingCount}</p>
-            <p className="text-xs text-gray-500 mt-0.5">Working</p>
+        {/* Right: tab switcher + chevron */}
+        <div className="flex items-center gap-3">
+          <div
+            className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {(['value', 'bulk'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all capitalize ${
+                  tab === t
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-400 hover:text-gray-700'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
           </div>
-          <div className="h-8 w-px bg-gray-200" />
-          <div className="text-center">
-            <p className="text-xl font-bold text-gray-400">{untestedCount}</p>
-            <p className="text-xs text-gray-500 mt-0.5">Not Tested</p>
-          </div>
-          <div className="h-8 w-px bg-gray-200" />
-          <div className="text-center">
-            <p className="text-xl font-bold text-red-500">{failedCount}</p>
-            <p className="text-xs text-gray-500 mt-0.5">Errors Only</p>
-          </div>
-          <div className="h-8 w-px bg-gray-200" />
-          <div className="text-center">
-            <p className="text-xl font-bold text-gray-700">{uniqueServices.length}</p>
-            <p className="text-xs text-gray-500 mt-0.5">Total</p>
-          </div>
+          <span className={`transition-colors flex-shrink-0 ${collapsed ? 'text-gray-400' : 'text-teal-500'}`}>
+            {collapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+          </span>
+        </div>
+      </div>
+
+      {/* Expanded content */}
+      {!collapsed && (
+        <div className="border-t border-gray-100 px-6 py-5 space-y-3 bg-gray-50/40">
+          {rows.length === 0 ? (
+            <div className="flex flex-col items-center py-12 text-center">
+              <div className={`h-14 w-14 rounded-2xl ${meta.iconBg} flex items-center justify-center mb-4 opacity-60`}>
+                <Icon className={`h-7 w-7 ${meta.iconColor}`} />
+              </div>
+              <p className="text-sm font-semibold text-gray-500">No {tab} packages yet</p>
+              <p className="text-xs text-gray-400 mt-1">Click below to add the first one</p>
+            </div>
+          ) : (
+            rows.map((pkg) => (
+              <QuantityRow
+                key={pkg.id}
+                pkg={pkg}
+                providers={providers}
+                existingQuantities={existingQuantities}
+                onUpdated={onUpdated}
+                onDeleted={onDeleted}
+                onAdded={onAdded}
+              />
+            ))
+          )}
+
+          <button
+            onClick={() => setAddOpen(true)}
+            className="flex items-center gap-2 text-sm font-semibold text-teal-600 hover:text-teal-800 transition-colors mt-1"
+          >
+            <Plus className="h-4 w-4" />
+            Add {tab} quantity
+          </button>
         </div>
       )}
 
-      {/* Category cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {categories.map((cat) => {
-          const config = configMap.get(cat.id);
-          const hasValue = config?.value_default != null;
-          const hasBulk = config?.bulk_default != null;
-          const hasAny = hasValue || hasBulk;
-
-          if (!hasAny) return null;
-
-          // Count working services in this category's chains
-          const allChainSvcs = [
-            ...(hasValue ? [config!.value_default!, ...config!.value_fallbacks] : []),
-            ...(hasBulk ? [config!.bulk_default!, ...config!.bulk_fallbacks] : []),
-          ];
-          const uniqueChainSvcs = [...new Map(allChainSvcs.map((s) => [s.service_id, s])).values()];
-          const catWorking = uniqueChainSvcs.filter((s) => (statsMap.get(s.service_id)?.working_orders ?? 0) > 0).length;
-
-          return (
-            <div key={cat.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-              {/* Card header */}
-              <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
-                <span className="font-semibold text-gray-800 text-sm">{cat.name}</span>
-                <span className="text-xs text-gray-500">
-                  <span className="font-semibold text-emerald-600">{catWorking}</span>
-                  <span className="text-gray-400">/{uniqueChainSvcs.length} working</span>
-                </span>
-              </div>
-
-              {/* Chains */}
-              <div className="px-4 py-3 space-y-4">
-                {hasValue && (
-                  <div>
-                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                      Value
-                    </p>
-                    {[config!.value_default!, ...config!.value_fallbacks].map((svc, i, arr) => (
-                      <ChainEntry
-                        key={svc.service_id}
-                        svc={svc}
-                        label={i === 0 ? 'Default' : `Fallback ${i}`}
-                        isDefault={i === 0}
-                        isLast={i === arr.length - 1}
-                        stat={statsMap.get(svc.service_id)}
-                      />
-                    ))}
-                  </div>
-                )}
-                {hasBulk && (
-                  <div>
-                    {hasValue && <div className="border-t border-gray-100 mb-3" />}
-                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                      Bulk
-                    </p>
-                    {[config!.bulk_default!, ...config!.bulk_fallbacks].map((svc, i, arr) => (
-                      <ChainEntry
-                        key={svc.service_id}
-                        svc={svc}
-                        label={i === 0 ? 'Default' : `Fallback ${i}`}
-                        isDefault={i === 0}
-                        isLast={i === arr.length - 1}
-                        stat={statsMap.get(svc.service_id)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Empty state when no category has routing config */}
-      {routingConfigs.length === 0 && (
-        <div className="text-center py-10 text-gray-400">
-          <p className="text-sm font-medium text-gray-500 mb-1">No routing config yet</p>
-          <p className="text-xs">Configure service routing on the Routing page — working services will appear here.</p>
-        </div>
+      {addOpen && (
+        <AddQuantityModal
+          serviceType={section.key}
+          packageType={tab}
+          serviceLabel={section.label}
+          providers={providers}
+          existingQuantities={existingQuantities}
+          onClose={() => setAddOpen(false)}
+          onSaved={(pkg) => { onAdded(pkg); setAddOpen(false); }}
+        />
       )}
     </div>
   );
 };
 
-// ---- Main page ----
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 const ServicesPage = () => {
-  const [services, setServices] = useState<Service[]>([]);
-  const servicesRef = useRef<Service[]>([]);
+  const [packages, setPackages] = useState<ServicePackage[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [filterProvider, setFilterProvider] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterRateMin, setFilterRateMin] = useState('');
-  const [filterRateMax, setFilterRateMax] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
-  const [providerSvcMap, setProviderSvcMap] = useState<Record<string, ProviderServiceItem>>({});
+  const [error, setError] = useState('');
 
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-
-  const [showAddService, setShowAddService] = useState(false);
-  const [addServiceCategory, setAddServiceCategory] = useState<string>('');
-  const [editService, setEditService] = useState<Service | null>(null);
-  const [editSubscription, setEditSubscription] = useState<Service | null>(null);
-  const [deleteService, setDeleteService] = useState<Service | null>(null);
-  const [showAddCategory, setShowAddCategory] = useState(false);
-  const [deleteCategory, setDeleteCategory] = useState<Category | null>(null);
-  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
-  const [routingConfigs, setRoutingConfigs] = useState<RoutingConfigData[]>([]);
-  const [serviceStats, setServiceStats] = useState<ServiceStat[]>([]);
-  const [activeTab, setActiveTab] = useState<'services' | 'working'>('services');
-
-  const fetchProviderSvcMap = async (svcs: Service[]) => {
-    const uniqueProviderIds = [...new Set(svcs.map((s) => s.provider_id).filter(Boolean))];
-    const results = await Promise.allSettled(
-      uniqueProviderIds.map((pid) =>
-        api
-          .get<ProviderServiceItem[]>(`${API_ENDPOINTS.ADMIN_PROVIDERS}/${pid}/services`)
-          .then((res) => ({ pid, items: res.data }))
-      )
-    );
-    const map: Record<string, ProviderServiceItem> = {};
-    for (const result of results) {
-      if (result.status === 'fulfilled') {
-        for (const item of result.value.items) {
-          map[`${result.value.pid}_${item.service}`] = item;
-        }
-      }
-    }
-    setProviderSvcMap(map);
-  };
-
-  const fetchAll = async () => {
+  const fetchAll = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
-      const [svcRes, provRes, catRes, routingRes, statsRes] = await Promise.all([
-        api.get<Service[]>(API_ENDPOINTS.ADMIN_SERVICES),
+      const [pkgRes, provRes] = await Promise.all([
+        api.get<ServicePackage[]>(API_ENDPOINTS.ADMIN_SERVICE_PACKAGES),
         api.get<Provider[]>(API_ENDPOINTS.ADMIN_PROVIDERS),
-        api.get<Category[]>(API_ENDPOINTS.ADMIN_CATEGORIES),
-        api.get<RoutingConfigData[]>(API_ENDPOINTS.ADMIN_ROUTING_CONFIG).catch(() => ({ data: [] as RoutingConfigData[] })),
-        api.get<ServiceStat[]>(API_ENDPOINTS.ADMIN_ORDERS_SERVICE_STATS).catch(() => ({ data: [] as ServiceStat[] })),
       ]);
-      setServices(svcRes.data);
-      servicesRef.current = svcRes.data;
+      setPackages(pkgRes.data);
       setProviders(provRes.data);
-      setCategories(catRes.data);
-      setRoutingConfigs(routingRes.data);
-      setServiceStats(statsRes.data);
-      fetchProviderSvcMap(svcRes.data);
+    } catch {
+      setError('Failed to load data. Check backend connection.');
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchAll();
-    const interval = setInterval(() => {
-      fetchProviderSvcMap(servicesRef.current);
-    }, 10 * 60 * 1000);
-    return () => clearInterval(interval);
   }, []);
 
-  const handleToggleActive = async (svc: Service) => {
-    await api.patch(`${API_ENDPOINTS.ADMIN_SERVICES}/${svc.id}`, { is_active: !svc.is_active });
-    setServices((prev) =>
-      prev.map((s) => (s.id === svc.id ? { ...s, is_active: !svc.is_active } : s))
-    );
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const handleUpdated = (updated: ServicePackage) => {
+    setPackages((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
   };
 
-  const handleDeleteService = async () => {
-    if (!deleteService) return;
-    await api.delete(`${API_ENDPOINTS.ADMIN_SERVICES}/${deleteService.id}`);
-    setServices((prev) => prev.filter((s) => s.id !== deleteService.id));
-    setSelected((prev) => { const next = new Set(prev); next.delete(deleteService.id); return next; });
-    setDeleteService(null);
+  const handleDeleted = (id: string) => {
+    setPackages((prev) => prev.filter((p) => p.id !== id));
   };
 
-  const handleDeleteCategory = async () => {
-    if (!deleteCategory) return;
-    await api.delete(`${API_ENDPOINTS.ADMIN_CATEGORIES}/${deleteCategory.id}`);
-    setCategories((prev) => prev.filter((c) => c.id !== deleteCategory.id));
-    setDeleteCategory(null);
+  const handleAdded = (pkg: ServicePackage) => {
+    setPackages((prev) => [...prev, pkg]);
   };
 
-  const handleEdit = (svc: Service) => {
-    if (svc.service_kind === 'subscription') {
-      setEditSubscription(svc);
-    } else {
-      setEditService(svc);
-    }
-  };
-
-  const handleBulkDelete = async () => {
-    await Promise.all(
-      [...selected].map((id) => api.delete(`${API_ENDPOINTS.ADMIN_SERVICES}/${id}`))
-    );
-    setServices((prev) => prev.filter((s) => !selected.has(s.id)));
-    setSelected(new Set());
-    setBulkDeleteConfirm(false);
-  };
-
-  const handleExport = () => {
-    const rows = services.map((s) => ({
-      id: s.provider_service_id,
-      name: s.name,
-      category: s.category_name,
-      provider: s.provider_name,
-      type: s.type,
-      rate: s.rate,
-      min: s.min,
-      max: s.max,
-      status: s.is_active ? 'Enabled' : 'Disabled',
-    }));
-    const header = Object.keys(rows[0] || {}).join(',');
-    const body = rows.map((r) => Object.values(r).join(',')).join('\n');
-    const blob = new Blob([`${header}\n${body}`], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'services.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const toggleSelect = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
-
-  const toggleSelectAll = (ids: string[], checked: boolean) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      ids.forEach((id) => (checked ? next.add(id) : next.delete(id)));
-      return next;
-    });
-  };
-
-  const activeFilterCount = [filterProvider, filterStatus, filterRateMin, filterRateMax].filter(Boolean).length;
-
-  const clearFilters = () => {
-    setFilterProvider('');
-    setFilterStatus('');
-    setFilterRateMin('');
-    setFilterRateMax('');
-  };
-
-  const filtered = services.filter((s) => {
-    if (search && !s.name.toLowerCase().includes(search.toLowerCase()) && !s.provider_service_id.includes(search)) return false;
-    if (filterProvider && s.provider_id !== filterProvider) return false;
-    if (filterStatus === 'active' && !s.is_active) return false;
-    if (filterStatus === 'inactive' && s.is_active) return false;
-    if (filterRateMin && s.rate < parseFloat(filterRateMin)) return false;
-    if (filterRateMax && s.rate > parseFloat(filterRateMax)) return false;
-    return true;
-  });
-
-  const servicesByCategory: { category: Category | null; services: Service[] }[] = [
-    ...categories.map((cat) => ({
-      category: cat,
-      services: filtered.filter((s) => s.category_id === cat.id),
-    })),
-  ];
-
-  const uncategorized = filtered.filter(
-    (s) => !categories.some((c) => c.id === s.category_id)
-  );
-  if (uncategorized.length > 0) {
-    servicesByCategory.push({ category: null, services: uncategorized });
-  }
+  const activeCount = packages.filter((p) => p.is_active).length;
 
   return (
-    <div>
+    <div className="space-y-6">
       {/* Page header */}
-      <div className="mb-0">
-        <h1 className="text-2xl font-bold text-gray-900">Services</h1>
-        <p className="text-gray-500 text-sm mt-1">Manage your SMM services and categories.</p>
-      </div>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Services</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Manage quantity packages, pricing, and fallback routing.
+          </p>
+        </div>
 
-      {/* Tab nav */}
-      <div className="flex gap-1 border-b border-gray-200 mt-4 mb-6">
-        <button
-          onClick={() => setActiveTab('services')}
-          className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${
-            activeTab === 'services'
-              ? 'border-teal-600 text-teal-700'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-          }`}
-        >
-          Services
-        </button>
-        <button
-          onClick={() => setActiveTab('working')}
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${
-            activeTab === 'working'
-              ? 'border-teal-600 text-teal-700'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-          }`}
-        >
-          Working Services
-          {serviceStats.filter((s) => s.working_orders > 0).length > 0 && (
-            <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
-              {serviceStats.filter((s) => s.working_orders > 0).length}
-            </span>
+        <div className="flex items-center gap-4 flex-shrink-0">
+          {!loading && !error && packages.length > 0 && (
+            <>
+              <div className="text-right">
+                <p className="text-[10px] text-gray-400 uppercase tracking-wide">Total</p>
+                <p className="text-xl font-bold text-gray-900">{packages.length}</p>
+              </div>
+              <div className="h-8 w-px bg-gray-200" />
+              <div className="text-right">
+                <p className="text-[10px] text-gray-400 uppercase tracking-wide">Active</p>
+                <p className="text-xl font-bold text-green-600">{activeCount}</p>
+              </div>
+              <div className="h-8 w-px bg-gray-200" />
+            </>
           )}
-        </button>
-      </div>
-
-      {activeTab === 'services' ? (
-      <div>
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 mb-6">
-        {/* Left actions */}
-        <button className={primaryCls} onClick={() => { setAddServiceCategory(''); setShowAddService(true); }}>
-          <Plus className="h-4 w-4" />
-          Add service
-        </button>
-
-        <button className={ghostCls} onClick={() => setShowAddCategory(true)}>
-          <Tag className="h-4 w-4" />
-          Add category
-        </button>
-
-        {selected.size > 0 && (
           <button
-            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-red-300 bg-white text-red-600 text-sm font-medium hover:bg-red-50 transition-colors"
-            onClick={() => setBulkDeleteConfirm(true)}
+            onClick={fetchAll}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm disabled:opacity-50"
           >
-            <Trash2 className="h-4 w-4" />
-            Delete ({selected.size})
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
           </button>
-        )}
-
-        {/* Spacer */}
-        <div className="flex-1" />
-
-        {/* Right actions */}
-        <button className={ghostCls} onClick={fetchAll}>
-          <RefreshCw className="h-4 w-4" />
-          Sync
-        </button>
-
-        <button className={ghostCls} onClick={handleExport} disabled={services.length === 0}>
-          <Download className="h-4 w-4" />
-          Export
-        </button>
-
-        <button
-          className={`${ghostCls} relative`}
-          onClick={() => setShowFilters((v) => !v)}
-        >
-          <Filter className="h-4 w-4" />
-          Filters
-          {activeFilterCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 h-4 w-4 bg-teal-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-              {activeFilterCount}
-            </span>
-          )}
-        </button>
-
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input
-            className="pl-9 pr-3 py-2 rounded-lg border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 w-52"
-            placeholder="Search services…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
         </div>
       </div>
 
-      {/* Filter bar */}
-      {showFilters && (
-        <div className="flex flex-wrap items-center gap-3 mb-4 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl">
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-medium text-gray-500 whitespace-nowrap">Provider</label>
-            <select
-              className="px-2 py-1.5 text-sm rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
-              value={filterProvider}
-              onChange={(e) => setFilterProvider(e.target.value)}
-            >
-              <option value="">All</option>
-              {providers.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
+      {/* Loading */}
+      {loading && (
+        <div className="flex flex-col items-center justify-center py-24 text-gray-400 gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-teal-500" />
+          <p className="text-sm">Loading packages…</p>
+        </div>
+      )}
 
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-medium text-gray-500">Status</label>
-            <select
-              className="px-2 py-1.5 text-sm rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-            >
-              <option value="">All</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </div>
+      {/* Error */}
+      {!loading && error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-medium text-gray-500 whitespace-nowrap">Rate / 1k</label>
-            <input
-              type="number"
-              min="0"
-              step="0.0001"
-              placeholder="Min $"
-              className="w-24 px-2 py-1.5 text-sm rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
-              value={filterRateMin}
-              onChange={(e) => setFilterRateMin(e.target.value)}
+      {/* Sections */}
+      {!loading && !error && (
+        <div className="space-y-4">
+          {SECTIONS.map((section) => (
+            <Section
+              key={section.key}
+              section={section}
+              packages={packages}
+              providers={providers}
+              onUpdated={handleUpdated}
+              onDeleted={handleDeleted}
+              onAdded={handleAdded}
             />
-            <span className="text-gray-400 text-sm">—</span>
-            <input
-              type="number"
-              min="0"
-              step="0.0001"
-              placeholder="Max $"
-              className="w-24 px-2 py-1.5 text-sm rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
-              value={filterRateMax}
-              onChange={(e) => setFilterRateMax(e.target.value)}
-            />
-          </div>
-
-          {activeFilterCount > 0 && (
-            <button
-              onClick={clearFilters}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-sm text-gray-600 hover:bg-gray-100 transition-colors"
-            >
-              <X className="h-3.5 w-3.5" />
-              Clear filters
-            </button>
-          )}
+          ))}
         </div>
-      )}
-
-      {/* Content */}
-      {loading ? (
-        <div className="flex items-center justify-center py-24 text-gray-400">
-          <Loader2 className="h-7 w-7 animate-spin" />
-        </div>
-      ) : categories.length === 0 && services.length === 0 ? (
-        <div className="text-center py-24 text-gray-400">
-          <p className="text-base font-medium text-gray-500 mb-1">No services yet</p>
-          <p className="text-sm">Start by adding a category, then add services under it.</p>
-        </div>
-      ) : (
-        servicesByCategory.map(({ category, services: svcs }) => (
-          <CategorySection
-            key={category?.id ?? '__uncategorized__'}
-            category={category}
-            services={svcs}
-            selected={selected}
-            onToggleSelect={toggleSelect}
-            onToggleSelectAll={toggleSelectAll}
-            onEdit={handleEdit}
-            onDelete={setDeleteService}
-            onToggleActive={handleToggleActive}
-            onAddService={(catId) => { setAddServiceCategory(catId); setShowAddService(true); }}
-            onDeleteCategory={setDeleteCategory}
-            providerSvcMap={providerSvcMap}
-          />
-        ))
-      )}
-      </div>
-      ) : (
-        <WorkingServicesSection categories={categories} routingConfigs={routingConfigs} serviceStats={serviceStats} />
-      )}
-
-      {/* Modals */}
-      {showAddService && (
-        <ServiceFormModal
-          providers={providers}
-          categories={categories}
-          defaultCategoryId={addServiceCategory}
-          onClose={() => setShowAddService(false)}
-          onSaved={() => { setShowAddService(false); fetchAll(); }}
-        />
-      )}
-
-      {editService && (
-        <ServiceFormModal
-          service={editService}
-          providers={providers}
-          categories={categories}
-          onClose={() => setEditService(null)}
-          onSaved={() => { setEditService(null); fetchAll(); }}
-        />
-      )}
-
-      {editSubscription && (
-        <SubscriptionFormModal
-          subscription={editSubscription}
-          providers={providers}
-          categories={categories}
-          onClose={() => setEditSubscription(null)}
-          onSaved={() => { setEditSubscription(null); fetchAll(); }}
-        />
-      )}
-
-      {deleteService && (
-        <DeleteModal
-          label={deleteService.name}
-          onClose={() => setDeleteService(null)}
-          onConfirm={handleDeleteService}
-        />
-      )}
-
-      {showAddCategory && (
-        <AddCategoryModal
-          onClose={() => setShowAddCategory(false)}
-          onCreated={(cat) => { setCategories((prev) => [...prev, cat]); setShowAddCategory(false); }}
-        />
-      )}
-
-      {deleteCategory && (
-        <DeleteModal
-          label={deleteCategory.name}
-          onClose={() => setDeleteCategory(null)}
-          onConfirm={handleDeleteCategory}
-        />
-      )}
-
-      {bulkDeleteConfirm && (
-        <DeleteModal
-          label={`${selected.size} selected service${selected.size !== 1 ? 's' : ''}`}
-          onClose={() => setBulkDeleteConfirm(false)}
-          onConfirm={handleBulkDelete}
-        />
       )}
     </div>
   );

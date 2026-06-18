@@ -3,10 +3,10 @@ from datetime import datetime, timezone
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
-from app.admin.provider_config.repository import RoutingConfigRepository
 from app.admin.providers.repository import ProviderRepository
-from app.admin.services.repository import ServiceRepository
+from app.admin.service_packages.repository import ServicePackageRepository
 from app.admin.tasks.repository import TaskRepository
+from app.notifications.repository import NotificationRepository
 from app.orders.provider_api import call_provider
 from app.orders.repository import OrderRepository
 
@@ -22,7 +22,7 @@ async def place_smm_order(
     """
     Place an SMM order with the resolved provider for an already-paid order.
 
-    Resolves the service's routing config (default + fallbacks in priority order),
+    Resolves the service package's default provider and fallbacks in priority order,
     attempts each active provider candidate until one accepts, and updates the order
     document with the provider order id and status. If every candidate fails, marks
     the order 'provider_error' and opens a high-priority failed_order task for manual
@@ -35,14 +35,17 @@ async def place_smm_order(
     """
     repo = OrderRepository(db)
 
-    service_id = order.get("service_id", "")
-    service = await ServiceRepository(db).find_by_id(service_id) if service_id else None
-    if not service:
-        logger.error("[%s] [ORDER %s] Service %s not found — cannot place SMM order", payment_label, order_id, service_id)
+    service_package_id = order.get("service_package_id", "")
+    if not service_package_id:
+        logger.error(
+            "[%s] [ORDER %s] No service_package_id on order — cannot place SMM order",
+            payment_label, order_id,
+        )
         await repo.update(order_id, {"status": "failed"})
         return False
 
-    candidates = await _resolve_provider_candidates(db, service, order_id, payment_label)
+    candidates = await _resolve_candidates_from_package(db, service_package_id, order_id, payment_label)
+
     logger.info("[%s] [ORDER %s] %d provider candidate(s) in priority order", payment_label, order_id, len(candidates))
 
     for attempt, candidate in enumerate(candidates, start=1):
@@ -93,38 +96,48 @@ async def place_smm_order(
     return False
 
 
-async def _resolve_provider_candidates(
+async def _resolve_candidates_from_package(
     db: AsyncIOMotorDatabase,
-    service: dict,
+    service_package_id: str,
     order_id: str,
     payment_label: str,
 ) -> list[dict]:
-    """Return active provider service candidates in priority order (default first, then fallbacks)."""
-    category_id = service.get("category_id", "")
-    routing_config = await RoutingConfigRepository(db).find_by_category_id(category_id) if category_id else None
+    """
+    Build an ordered candidate list from a service_packages document.
+    The default provider service comes first; active fallbacks follow in stored priority order.
+    Each candidate dict carries provider_id and provider_service_id for call_provider.
+    """
+    pkg = await ServicePackageRepository(db).find_by_id(service_package_id)
+    if not pkg:
+        logger.error(
+            "[%s] [ORDER %s] ServicePackage %s not found — cannot resolve candidates",
+            payment_label, order_id, service_package_id,
+        )
+        return []
 
-    if not routing_config:
-        logger.info("[%s] [ORDER %s] No routing config — using all active services in category", payment_label, order_id)
-        return await ServiceRepository(db).find_active_by_category_id(category_id) if category_id else [service]
-
-    service_ids: list[str] = []
-    if routing_config.get("default_service_id"):
-        service_ids.append(routing_config["default_service_id"])
-    service_ids.extend(routing_config.get("fallback_service_ids", []))
-
-    candidates: list[dict] = []
-    for sid in service_ids:
-        svc = await ServiceRepository(db).find_by_id(sid)
-        if svc and svc.get("is_active", True):
-            candidates.append(svc)
+    candidates: list[dict] = [
+        {
+            "provider_id": pkg["provider_id"],
+            "provider_service_id": pkg["provider_service_id"],
+            "name": pkg.get("provider_service_name", ""),
+        }
+    ]
+    for fb in pkg.get("fallbacks", []):
+        if fb.get("is_active", True):
+            candidates.append({
+                "provider_id": fb["provider_id"],
+                "provider_service_id": fb["provider_service_id"],
+                "name": fb.get("provider_service_name", ""),
+            })
 
     logger.info(
-        "[%s] [ORDER %s] Routing config — default: %s, fallbacks: %s",
+        "[%s] [ORDER %s] ServicePackage routing — default: %s/%s, fallbacks: %d active",
         payment_label, order_id,
-        routing_config.get("default_service_id"),
-        routing_config.get("fallback_service_ids", []),
+        pkg["provider_name"], pkg["provider_service_id"],
+        len(candidates) - 1,
     )
     return candidates
+
 
 
 async def _open_failed_order_task(
@@ -140,25 +153,29 @@ async def _open_failed_order_task(
         return
 
     user_info = (order.get("user_info") or [{}])[0]
+    user_id = order.get("user_id", "")
+    service_label = order.get("category_name") or order.get("service_name", "Unknown")
+    quantity = order.get("quantity", 0)
     now = datetime.now(timezone.utc)
+
     await task_repo.insert({
         "type": "failed_order",
         "status": "open",
         "priority": "high",
-        "title": f"Provider unavailable — {order.get('category_name') or order.get('service_name', 'Unknown')} × {order.get('quantity', 0):,}",
+        "title": f"Provider unavailable — {service_label} × {quantity:,}",
         "description": (
             f"Order #{order_id[-8:]} was paid (${order.get('charge', 0):.4f}) via {payment_label} "
             f"but all {candidate_count} provider(s) rejected the order. Manual fulfilment or refund is required."
         ),
         "notes": "",
         "order_id": order_id,
-        "user_id": order.get("user_id", ""),
+        "user_id": user_id,
         "user_email": user_info.get("email", ""),
         "user_username": user_info.get("username", ""),
         "order_link": order.get("link", ""),
         "service_name": order.get("service_name", ""),
         "category_name": order.get("category_name", ""),
-        "quantity": order.get("quantity"),
+        "quantity": quantity,
         "charge": order.get("charge"),
         "currency": order.get("currency", "USD"),
         "seen_by_admin": False,
@@ -166,3 +183,18 @@ async def _open_failed_order_task(
         "created_at": now,
         "updated_at": now,
     })
+
+    if user_id:
+        await NotificationRepository(db).insert({
+            "title": "Order Failed — We're On It",
+            "message": (
+                f"Your order for {service_label} × {quantity:,} could not be fulfilled automatically. "
+                "Our team has been alerted and will manually process or refund your order shortly."
+            ),
+            "type": "error",
+            "target": "selective",
+            "user_ids": [user_id],
+            "read_by": [],
+            "created_by": "system",
+            "created_at": now,
+        })
