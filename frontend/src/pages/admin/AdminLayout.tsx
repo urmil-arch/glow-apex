@@ -16,6 +16,7 @@ import {
   Newspaper,
   UserCog,
   Bell,
+  BarChart2,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
@@ -33,6 +34,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/admin/users', icon: <Users className="h-5 w-5" />, label: 'Users', perm: 'users' },
   { to: '/admin/staff', icon: <UserCog className="h-5 w-5" />, label: 'Staff', perm: 'admin' },
   { to: '/admin/orders', icon: <ClipboardList className="h-5 w-5" />, label: 'Orders', perm: 'orders' },
+  { to: '/admin/service-stats', icon: <BarChart2 className="h-5 w-5" />, label: 'Service Stats', perm: 'orders' },
   { to: '/admin/tasks', icon: <ListTodo className="h-5 w-5" />, label: 'Tasks', perm: 'tasks' },
   { to: '/admin/payments', icon: <CreditCard className="h-5 w-5" />, label: 'Payments', perm: 'payments' },
   { to: '/admin/services', icon: <Package className="h-5 w-5" />, label: 'Services', perm: 'services' },

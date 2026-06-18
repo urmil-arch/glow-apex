@@ -45,6 +45,7 @@ import AdminSupportPage from './pages/admin/support/SupportPage'
 import AdminBlogsPage from './pages/admin/blogs/BlogsPage'
 import AdminNotificationsPage from './pages/admin/notifications/NotificationsPage'
 import StaffPage from './pages/admin/staff/StaffPage'
+import ServiceStatsPage from './pages/admin/service-stats/ServiceStatsPage'
 import TicketsPage from './pages/dashboard/tickets/TicketsPage'
 import TicketThreadPage from './pages/dashboard/tickets/TicketThreadPage'
 import DashboardNotificationsPage from './pages/dashboard/notifications/NotificationsPage'
@@ -197,6 +198,7 @@ const App: React.FC = () => {
                 <Route path="blogs" element={<RequirePermission permission="blogs"><AdminBlogsPage /></RequirePermission>} />
                 <Route path="notifications" element={<RequirePermission permission="notifications"><AdminNotificationsPage /></RequirePermission>} />
                 <Route path="staff" element={<AdminOnlyRoute><StaffPage /></AdminOnlyRoute>} />
+                <Route path="service-stats" element={<RequirePermission permission="orders"><ServiceStatsPage /></RequirePermission>} />
               </Route>
             </Route>
           </Routes>
