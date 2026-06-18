@@ -4,6 +4,7 @@ import { API_ENDPOINTS } from "@/config";
 
 export interface PricingPackage {
   quantity: number;
+  portal_rate: number;
   discount_type: "none" | "fixed" | "percentage";
   discount_value: number;
   is_active: boolean;
@@ -23,10 +24,11 @@ export function calcPackagePrice(
   quantity: number,
   packageType: "value" | "bulk",
 ): number {
-  const base = (quantity / 1000) * pricing.price_per_1000;
   const list = packageType === "value" ? pricing.value_packages : pricing.bulk_packages;
   const pkg = list.find((p) => p.quantity === quantity && p.is_active);
-  if (!pkg || pkg.discount_type === "none") return base;
+  if (!pkg) return 0;
+  const base = (quantity / 1000) * (pkg.portal_rate || pricing.price_per_1000);
+  if (pkg.discount_type === "none") return base;
   if (pkg.discount_type === "fixed") return Math.max(0, base - pkg.discount_value);
   if (pkg.discount_type === "percentage") return Math.max(0, base * (1 - pkg.discount_value / 100));
   return base;

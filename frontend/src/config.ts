@@ -56,8 +56,8 @@ export const API_ENDPOINTS = {
   ADMIN_ORDERS: `${API_BASE_URL}/admin/orders`,
   ADMIN_ORDERS_SERVICE_STATS: `${API_BASE_URL}/admin/orders/service-stats`,
 
-  // Admin — Routing Config
-  ADMIN_ROUTING_CONFIG: `${API_BASE_URL}/admin/routing`,
+  // Admin — Service Packages (quantity rows with routing + pricing)
+  ADMIN_SERVICE_PACKAGES: `${API_BASE_URL}/admin/service-packages`,
 
   // Admin — Payments
   ADMIN_PAYMENTS: `${API_BASE_URL}/admin/payments`,

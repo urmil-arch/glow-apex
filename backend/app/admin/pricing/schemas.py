@@ -4,6 +4,7 @@ from pydantic import BaseModel, field_validator
 
 class PricingPackage(BaseModel):
     quantity: int
+    portal_rate: float = 0.0   # $/1000 rate for this specific package
     discount_type: Literal["none", "fixed", "percentage"] = "none"
     discount_value: float = 0.0
     is_active: bool = True

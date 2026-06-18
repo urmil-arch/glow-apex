@@ -144,34 +144,53 @@ class OrderRepository:
 
     async def aggregate_service_stats(self) -> list[dict]:
         """
-        Group orders by service_id and return total vs working order counts.
-        'Working' = the provider accepted the order (status is not an error/cancel/refund).
+        Group orders by category_name and return usage stats per service type.
+
+        Returns per-category: total orders, orders this week, orders this month,
+        last order timestamp, and the most frequently ordered quantity.
+        Only categories with a non-empty category_name are included.
         """
-        working_statuses = [
-            "Pending", "Processing", "InProgress", "In progress",
-            "Completed", "Partial", "Active",
-        ]
+        from collections import Counter
+        from datetime import datetime, timedelta, timezone
+
+        now = datetime.now(timezone.utc)
+        week_ago = now - timedelta(days=7)
+        month_ago = now - timedelta(days=30)
+
         pipeline: list[dict] = [
-            {"$group": {
-                "_id": "$service_id",
-                "total_orders": {"$sum": 1},
-                "working_orders": {
-                    "$sum": {
-                        "$cond": [{"$in": ["$status", working_statuses]}, 1, 0]
-                    }
-                },
-            }},
-        ]
-        results = await self._col.aggregate(pipeline).to_list(length=None)
-        return [
+            {"$match": {"category_name": {"$exists": True, "$ne": ""}}},
             {
-                "service_id": r["_id"],
-                "total_orders": r["total_orders"],
-                "working_orders": r["working_orders"],
-            }
-            for r in results
-            if r["_id"]
+                "$group": {
+                    "_id": "$category_name",
+                    "total_orders": {"$sum": 1},
+                    "last_used_at": {"$max": "$created_at"},
+                    "week_orders": {
+                        "$sum": {"$cond": [{"$gte": ["$created_at", week_ago]}, 1, 0]}
+                    },
+                    "month_orders": {
+                        "$sum": {"$cond": [{"$gte": ["$created_at", month_ago]}, 1, 0]}
+                    },
+                    "quantities": {"$push": "$quantity"},
+                }
+            },
+            {"$sort": {"total_orders": -1}},
         ]
+
+        results = await self._col.aggregate(pipeline).to_list(length=None)
+        stats = []
+        for r in results:
+            quantities = [q for q in r.get("quantities", []) if isinstance(q, int)]
+            top_qty = Counter(quantities).most_common(1)[0][0] if quantities else None
+            last_used = r.get("last_used_at")
+            stats.append({
+                "category_name": r["_id"],
+                "total_orders": r["total_orders"],
+                "week_orders": r["week_orders"],
+                "month_orders": r["month_orders"],
+                "last_used_at": (last_used.isoformat() + "Z" if isinstance(last_used, datetime) else None),
+                "top_quantity": top_qty,
+            })
+        return stats
 
     async def find_all_admin(
         self,

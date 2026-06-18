@@ -37,16 +37,15 @@ import AdminLayout from './pages/admin/AdminLayout'
 import UsersPage from './pages/admin/users/UsersPage'
 import ServicesPage from './pages/admin/services/ServicesPage'
 import SettingsPage from './pages/admin/settings/SettingsPage'
-import ProviderConfigPage from './pages/admin/routing/ProviderConfigPage'
 import AdminOrdersPage from './pages/admin/orders/OrdersPage'
 import AdminTasksPage from './pages/admin/tasks/TasksPage'
 import AdminPaymentsPage from './pages/admin/payments/PaymentsPage'
 import AdminReportsPage from './pages/admin/reports/ReportsPage'
 import AdminSupportPage from './pages/admin/support/SupportPage'
-import PricingPage from './pages/admin/pricing/PricingPage'
 import AdminBlogsPage from './pages/admin/blogs/BlogsPage'
 import AdminNotificationsPage from './pages/admin/notifications/NotificationsPage'
 import StaffPage from './pages/admin/staff/StaffPage'
+import ServiceStatsPage from './pages/admin/service-stats/ServiceStatsPage'
 import TicketsPage from './pages/dashboard/tickets/TicketsPage'
 import TicketThreadPage from './pages/dashboard/tickets/TicketThreadPage'
 import DashboardNotificationsPage from './pages/dashboard/notifications/NotificationsPage'
@@ -195,12 +194,11 @@ const App: React.FC = () => {
                 <Route path="payments" element={<RequirePermission permission="payments"><AdminPaymentsPage /></RequirePermission>} />
                 <Route path="services" element={<RequirePermission permission="services"><ServicesPage /></RequirePermission>} />
                 <Route path="settings" element={<RequirePermission permission="settings"><SettingsPage /></RequirePermission>} />
-                <Route path="routing" element={<RequirePermission permission="routing"><ProviderConfigPage /></RequirePermission>} />
                 <Route path="support" element={<RequirePermission permission="support"><AdminSupportPage /></RequirePermission>} />
-                <Route path="pricing" element={<RequirePermission permission="pricing"><PricingPage /></RequirePermission>} />
                 <Route path="blogs" element={<RequirePermission permission="blogs"><AdminBlogsPage /></RequirePermission>} />
                 <Route path="notifications" element={<RequirePermission permission="notifications"><AdminNotificationsPage /></RequirePermission>} />
                 <Route path="staff" element={<AdminOnlyRoute><StaffPage /></AdminOnlyRoute>} />
+                <Route path="service-stats" element={<RequirePermission permission="orders"><ServiceStatsPage /></RequirePermission>} />
               </Route>
             </Route>
           </Routes>

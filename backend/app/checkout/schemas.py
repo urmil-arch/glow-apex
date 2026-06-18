@@ -8,8 +8,8 @@ class CheckoutInitRequest(BaseModel):
 
     link: str
     quantity: int
-    service_id: Optional[str] = None
     category_name: Optional[str] = None
+    package_type: Optional[str] = None  # "value" | "bulk" — used with category_name path
     payment_method: str  # "stripe" | "razorpay" | "cryptomus"
     # Store origin to return the user to after payment (stripe/razorpay portal bounce).
     # Validated against the server-side allowlist — never trusted blindly.
@@ -98,33 +98,6 @@ class CreateCryptomusInvoiceRequest(BaseModel):
     session_token: str
 
 
-class PreAuthRequest(BaseModel):
-    """
-    Request body for creating a cross-domain pre-auth token.
-    Called by BuyRealViews (D1) before redirecting the user to the Glow Apex checkout form.
-    """
-
-    service_id: Optional[str] = None
-    category_name: Optional[str] = None
-
-
-class PreAuthResponse(BaseModel):
-    pre_auth_token: str
-    expires_in: int  # seconds
-
-
-class PreAuthInfo(BaseModel):
-    """
-    Public service info returned to Glow Apex so it can render the checkout form.
-    Does not expose user data.
-    """
-
-    service_name: str
-    category_name: str
-    min: int
-    max: int
-
-
 class GuestInitRequest(BaseModel):
     """
     Request body for guest (unauthenticated) checkout on Glow Apex.
@@ -170,36 +143,3 @@ class GuestInitRequest(BaseModel):
         return v
 
 
-class InitWithPreAuthRequest(BaseModel):
-    """
-    Request body for completing checkout from the Glow Apex form.
-    Uses a pre_auth_token instead of a JWT — no authentication header required.
-    """
-
-    pre_auth_token: str
-    quantity: int
-    link: str
-    payment_method: str  # "stripe" | "razorpay" | "cryptomus"
-    return_origin: Optional[str] = None
-
-    @field_validator("link")
-    @classmethod
-    def link_not_empty(cls, v: str) -> str:
-        v = v.strip()
-        if not v:
-            raise ValueError("Link is required")
-        return v
-
-    @field_validator("quantity")
-    @classmethod
-    def quantity_positive(cls, v: int) -> int:
-        if v < 1:
-            raise ValueError("Quantity must be at least 1")
-        return v
-
-    @field_validator("payment_method")
-    @classmethod
-    def valid_method(cls, v: str) -> str:
-        if v not in ("stripe", "razorpay", "cryptomus"):
-            raise ValueError("payment_method must be 'stripe', 'razorpay' or 'cryptomus'")
-        return v

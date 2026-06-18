@@ -20,7 +20,6 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from app.app_components import include_routers
 from app.common.config import settings
 from app.admin.providers.repository import ProviderRepository
-from app.admin.services.repository import CategoryRepository, ServiceRepository
 from app.admin.tasks.repository import TaskRepository
 from app.blog.repository import BlogRepository
 from app.notifications.repository import NotificationRepository
@@ -60,8 +59,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await repo.backfill_roles()
     await SignInLogRepository(db).create_index()
     await ProviderRepository(db).create_index()
-    await CategoryRepository(db).create_index()
-    await ServiceRepository(db).create_index()
     await OrderRepository(db).create_index()
     await PaymentLedgerRepository(db).create_indexes()
     await ContactMessageRepository(db).create_index()

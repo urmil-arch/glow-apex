@@ -6,7 +6,6 @@ import {
 } from "lucide-react";
 import { useOrderStore } from "@/store/useOrderStore";
 import { useAuth } from "@/context/AuthContext";
-import { useServices } from "@/context/ServicesContext";
 import { usePricing, calcPackagePrice } from "@/context/PricingContext";
 import { useCurrency } from "@/context/CurrencyContext";
 import { api } from "@/lib/api";
@@ -45,14 +44,14 @@ const CATEGORY_TO_SERVICE_TYPE: Record<string, string> = {
   "Country Targeted Subscribers": "country_targeted_subscribers",
 };
 
-const CATEGORY_TO_UNIT: Record<string, string> = {
-  "YouTube Views":                "Views",
-  "YouTube Likes":                "Likes",
-  "YouTube Subscribers":          "Subscribers",
-  "YouTube Comments":             "Comments",
-  "YouTube Shorts Views":         "Shorts Views",
-  "YouTube Shorts Likes":         "Shorts Likes",
-  "Country Targeted Subscribers": "Subscribers",
+const SERVICE_UNIT: Record<string, string> = {
+  youtube_views:                "Views",
+  youtube_likes:                "Likes",
+  youtube_subscribers:          "Subscribers",
+  youtube_comments:             "Comments",
+  youtube_shorts_views:         "Shorts Views",
+  youtube_shorts_likes:         "Shorts Likes",
+  country_targeted_subscribers: "Subscribers",
 };
 
 const YOUTUBE_REGEX = /^https?:\/\/(www\.|m\.)?(youtube\.com\/(watch\?.*v=[\w-]+|shorts\/[\w-]+|live\/[\w-]+|channel\/[\w-]+|c\/[\w-]+|user\/[\w-]+|@[\w.-]+)|youtu\.be\/[\w-]+)/i;
@@ -86,7 +85,6 @@ const StepHeader: React.FC<{ num: number; label: string }> = ({ num, label }) =>
 
 const CheckoutPage = () => {
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
-  const { services } = useServices();
   const { getPricing } = usePricing();
   const { currency, fmt } = useCurrency();
   const { serviceOrder, categoryOrder } = useOrderStore();
@@ -171,25 +169,18 @@ const CheckoutPage = () => {
   const selectedPkg = packageOptions.find((o) => o.key === effectivePackageKey);
   const selectedQuantity = selectedPkg?.quantity ?? categoryOrder?.quantity ?? 1;
 
-  const unitLabel = isCategoryFlow
-    ? (CATEGORY_TO_UNIT[categoryOrder!.categoryName] ?? "units")
-    : "units";
-
   const serviceName = isCategoryFlow ? categoryOrder!.categoryName : serviceOrder!.serviceName;
   const description = isCategoryFlow ? "" : serviceOrder!.description;
   const displayQuantity = isCategoryFlow ? selectedQuantity : quantity;
   const min = isCategoryFlow ? 1 : serviceOrder!.min;
   const max = isCategoryFlow ? Infinity : serviceOrder!.max;
-
-  const activeRate = isCategoryFlow
-    ? (services.find((s) => s.default_for_category === categoryOrder!.categoryName)?.rate ?? 0)
-    : serviceOrder!.rate;
+  const unitLabel = SERVICE_UNIT[serviceTypeKey ?? ""] ?? serviceName;
 
   const personalDiscount = user?.personal_discount ?? 0;
 
   const rawCharge = selectedPkg
     ? selectedPkg.price
-    : (activeRate * displayQuantity) / 1000;
+    : isCategoryFlow ? 0 : (serviceOrder!.rate * displayQuantity) / 1000;
   const afterPersonalDiscount = personalDiscount > 0
     ? rawCharge * (1 - personalDiscount / 100)
     : rawCharge;
@@ -229,14 +220,18 @@ const CheckoutPage = () => {
     };
     if (isCategoryFlow) {
       body.category_name = categoryOrder!.categoryName;
+      if (selectedPkg) {
+        body.package_type = selectedPkg.packageType;
+      }
     } else {
       body.service_id = serviceOrder!.serviceId;
     }
     return body;
   }
 
-  // All payment methods redirect to the Glow Apex portal via a short-lived token.
-  async function redirectToGlowApex(method: PaymentMethod) {
+  // Stripe / Razorpay: create the session then redirect to the Glow Apex portal,
+  // telling the backend which store to return the user to after payment.
+  async function redirectToGlowApex(method: "stripe" | "razorpay") {
     setLoading(true);
     setError(null);
     try {
@@ -252,10 +247,32 @@ const CheckoutPage = () => {
     }
   }
 
+  async function startCryptomus() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api.post<CheckoutInitResponse>(API_ENDPOINTS.CHECKOUT_INIT, {
+        ...buildOrderBody(),
+        payment_method: "cryptomus",
+        return_origin: window.location.origin,
+      });
+      if (res.data.payment_url) {
+        window.location.href = res.data.payment_url;
+      } else {
+        setError("Failed to create Cryptomus payment. Please try again.");
+        setLoading(false);
+      }
+    } catch (err) {
+      setError(extractError(err));
+      setLoading(false);
+    }
+  }
+
   async function handlePlaceOrder() {
     if (!link.trim()) return;
     if (!isCategoryFlow && (quantity < serviceOrder!.min || quantity > serviceOrder!.max)) return;
-    await redirectToGlowApex(paymentMethod);
+    if (paymentMethod === "cryptomus") await startCryptomus();
+    else await redirectToGlowApex(paymentMethod);
   }
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -504,7 +521,11 @@ const CheckoutPage = () => {
                     {loading ? (
                       <>
                         <Loader className="w-4 h-4 animate-spin" />
-                        {paymentMethod === "razorpay" ? "Opening Payment…" : "Redirecting…"}
+                        {paymentMethod === "cryptomus"
+                          ? "Generating invoice…"
+                          : paymentMethod === "razorpay"
+                            ? "Opening Payment…"
+                            : "Redirecting…"}
                       </>
                     ) : (
                       <>
@@ -563,7 +584,7 @@ const CheckoutPage = () => {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between text-gray-600">
                   <span>Quantity</span>
-                  <span className="font-medium">{displayQuantity.toLocaleString()}</span>
+                  <span className="font-medium">{displayQuantity.toLocaleString()} {unitLabel}</span>
                 </div>
                 {selectedPkg ? (
                   <>
@@ -582,12 +603,7 @@ const CheckoutPage = () => {
                       </>
                     )}
                   </>
-                ) : activeRate > 0 && (
-                  <div className="flex justify-between text-gray-600">
-                    <span>Rate</span>
-                    <span className="font-medium">{fmt(activeRate, 3)} / 1k</span>
-                  </div>
-                )}
+                ) : null}
 
                 {personalDiscount > 0 && (
                   <div className="flex justify-between text-emerald-600 text-sm">
@@ -609,7 +625,7 @@ const CheckoutPage = () => {
                     <span>≈ INR equivalent charged by Razorpay</span>
                   </div>
                 )}
-                {rawCharge < 0.50 && (activeRate > 0 || selectedPkg) && (
+                {rawCharge < 0.50 && selectedPkg && (
                   <p className="text-xs text-amber-600">{fmt(0.50)} minimum charge applied.</p>
                 )}
               </div>
