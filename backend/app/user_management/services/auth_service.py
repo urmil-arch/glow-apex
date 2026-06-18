@@ -40,7 +40,15 @@ class AuthService:
         if existing_email:
             if existing_email.get("is_verified"):
                 raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
-            return await self._issue_new_otp(existing_email["email"], existing_email["full_name"])
+            await self._issue_new_otp(existing_email["email"], existing_email["full_name"])
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "message": "This email is already registered but not yet verified. A new verification code has been sent to your inbox.",
+                    "email": existing_email["email"],
+                    "reason": "pending_verification",
+                },
+            )
 
         existing_username = await self._repo.find_by_username(data.username)
         if existing_username:
@@ -213,6 +221,10 @@ class AuthService:
                 },
             )
 
+        # Validate password before any other check — wrong password is always rejected
+        if not verify_password(data.password, user["hashed_password"]):
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
+
         if not user.get("is_verified"):
             await self._issue_new_otp(user["email"], user["full_name"])
             raise HTTPException(
@@ -225,9 +237,6 @@ class AuthService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={"message": "Your account has been suspended.", "reason": "suspended"},
             )
-
-        if not verify_password(data.password, user["hashed_password"]):
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
 
         user_id = str(user["_id"])
         token = create_access_token(user_id, user["email"], user["username"])

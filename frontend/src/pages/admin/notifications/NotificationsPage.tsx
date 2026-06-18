@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Bell, Send, Trash2, Users, User, Globe, Search, X,
-  Info, CheckCircle, AlertTriangle, Upload, Clock,
+  Info, CheckCircle, AlertTriangle, Upload, Clock, ShieldCheck,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { API_ENDPOINTS } from '@/config';
@@ -11,7 +11,7 @@ interface Notification {
   title: string;
   message: string;
   type: 'info' | 'success' | 'warning';
-  target: 'all' | 'selective' | 'personal';
+  target: 'all' | 'staff' | 'selective' | 'personal';
   user_ids: string[];
   read_count: number;
   created_by: string;
@@ -32,9 +32,10 @@ const TYPE_CONFIG: Record<string, { label: string; color: string; dot: string; i
 const DEFAULT_TYPE = { label: 'Info', color: 'bg-gray-100 text-gray-600 border-gray-200', dot: 'bg-gray-400', icon: <Info className="w-3.5 h-3.5" /> };
 
 const TARGET_CONFIG: Record<string, { label: string; icon: React.ReactNode }> = {
-  all:       { label: 'All Users',  icon: <Globe className="w-3 h-3" /> },
-  selective: { label: 'Selective',  icon: <Users className="w-3 h-3" /> },
-  personal:  { label: 'Personal',   icon: <User  className="w-3 h-3" /> },
+  all:       { label: 'All Users',  icon: <Globe         className="w-3 h-3" /> },
+  staff:     { label: 'Staff',      icon: <ShieldCheck   className="w-3 h-3" /> },
+  selective: { label: 'Selective',  icon: <Users         className="w-3 h-3" /> },
+  personal:  { label: 'Personal',   icon: <User          className="w-3 h-3" /> },
 };
 const DEFAULT_TARGET = { label: 'Unknown', icon: <Globe className="w-3 h-3" /> };
 
@@ -63,7 +64,7 @@ const AdminNotificationsPage = () => {
   const [title,         setTitle]         = useState('');
   const [message,       setMessage]       = useState('');
   const [type,          setType]          = useState<'info' | 'success' | 'warning'>('info');
-  const [target,        setTarget]        = useState<'all' | 'selective' | 'personal'>('all');
+  const [target,        setTarget]        = useState<'all' | 'staff' | 'selective' | 'personal'>('all');
   const [selectedUsers, setSelectedUsers] = useState<UserResult[]>([]);
   const [userSearch,    setUserSearch]    = useState('');
   const [userResults,   setUserResults]   = useState<UserResult[]>([]);
@@ -100,7 +101,7 @@ const AdminNotificationsPage = () => {
 
   // ── Debounced user search ────────────────────────────────────────────────────
   useEffect(() => {
-    if (!userSearch.trim() || target === 'all') { setUserResults([]); return; }
+    if (!userSearch.trim() || target === 'all' || target === 'staff') { setUserResults([]); return; }
     const timer = setTimeout(async () => {
       setSearchLoading(true);
       try {
@@ -180,7 +181,7 @@ const AdminNotificationsPage = () => {
     e.preventDefault();
     setSendError('');
     if (!title.trim() || !message.trim()) { setSendError('Title and message are required.'); return; }
-    if (target !== 'all' && selectedUsers.length === 0) { setSendError('Select at least one user.'); return; }
+    if (target !== 'all' && target !== 'staff' && selectedUsers.length === 0) { setSendError('Select at least one user.'); return; }
     setSending(true);
     try {
       await api.post(API_ENDPOINTS.ADMIN_NOTIFICATIONS, {
@@ -265,11 +266,12 @@ const AdminNotificationsPage = () => {
               {/* Target */}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Audience</label>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   {([
-                    { v: 'all',       icon: <Globe className="w-3.5 h-3.5" />, label: 'All' },
-                    { v: 'selective', icon: <Users className="w-3.5 h-3.5" />, label: 'Selective' },
-                    { v: 'personal',  icon: <User  className="w-3.5 h-3.5" />, label: 'Personal' },
+                    { v: 'all',       icon: <Globe       className="w-3.5 h-3.5" />, label: 'All' },
+                    { v: 'staff',     icon: <ShieldCheck className="w-3.5 h-3.5" />, label: 'Staff' },
+                    { v: 'selective', icon: <Users       className="w-3.5 h-3.5" />, label: 'Selective' },
+                    { v: 'personal',  icon: <User        className="w-3.5 h-3.5" />, label: 'Personal' },
                   ] as const).map(({ v, icon, label }) => (
                     <button
                       key={v}
@@ -289,7 +291,7 @@ const AdminNotificationsPage = () => {
               </div>
 
               {/* User picker */}
-              {target !== 'all' && (
+              {target !== 'all' && target !== 'staff' && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -478,7 +480,7 @@ const AdminNotificationsPage = () => {
                           <p className="text-sm font-semibold text-gray-800 truncate">{n.title}</p>
 
                           {/* Message — truncated unless expanded */}
-                          <p className={`text-xs text-gray-500 mt-0.5 ${isExpanded ? '' : 'line-clamp-2'}`}>
+                          <p className={`text-xs text-gray-500 mt-0.5 ${isExpanded ? 'whitespace-pre-wrap' : 'line-clamp-2'}`}>
                             {n.message}
                           </p>
 

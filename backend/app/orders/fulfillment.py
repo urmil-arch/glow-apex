@@ -186,10 +186,10 @@ async def _open_failed_order_task(
 
     if user_id:
         await NotificationRepository(db).insert({
-            "title": "Order Failed — We're On It",
+            "title": "Order Processing — Please Allow Some Time",
             "message": (
-                f"Your order for {service_label} × {quantity:,} could not be fulfilled automatically. "
-                "Our team has been alerted and will manually process or refund your order shortly."
+                f"Your order for {service_label} × {quantity:,} is being processed and may take a little longer than usual. "
+                "There is nothing you need to do — we will take care of it."
             ),
             "type": "error",
             "target": "selective",

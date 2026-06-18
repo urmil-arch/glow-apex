@@ -108,7 +108,14 @@ const SignUpPage = () => {
       setStep("verify");
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
-        setServerError(err.response?.data?.detail ?? "Registration failed. Please try again.");
+        const detail = err.response?.data?.detail;
+        if (typeof detail === "object" && detail?.reason === "pending_verification") {
+          setRegisteredEmail(form.email);
+          setResendMessage(detail.message ?? "A new verification code has been sent to your inbox.");
+          setStep("verify");
+        } else {
+          setServerError(typeof detail === "string" ? detail : (detail?.message ?? "Registration failed. Please try again."));
+        }
       } else {
         setServerError("Registration failed. Please try again.");
       }

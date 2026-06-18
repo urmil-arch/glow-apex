@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from bson import ObjectId
@@ -26,29 +27,37 @@ class NotificationRepository:
         return docs, total
 
     async def find_for_user(
-        self, user_id: str, page: int, page_size: int
+        self,
+        user_id: str,
+        user_created_at: datetime,
+        page: int,
+        page_size: int,
+        is_staff: bool = False,
     ) -> tuple[list[dict], int]:
-        match: dict = {
-            "$or": [
-                {"target": "all"},
-                {"user_ids": user_id},
-            ]
-        }
+        or_clauses: list[dict] = [
+            {"target": "all", "created_at": {"$gte": user_created_at}},
+            {"user_ids": user_id},
+        ]
+        if is_staff:
+            or_clauses.append({"target": "staff"})
+        match: dict = {"$or": or_clauses}
         total = await self._col.count_documents(match)
         skip = (page - 1) * page_size
         cursor = self._col.find(match).sort("created_at", -1).skip(skip).limit(page_size)
         docs = await cursor.to_list(length=page_size)
         return docs, total
 
-    async def unread_count_for_user(self, user_id: str) -> int:
+    async def unread_count_for_user(
+        self, user_id: str, user_created_at: datetime, is_staff: bool = False
+    ) -> int:
+        or_clauses: list[dict] = [
+            {"target": "all", "created_at": {"$gte": user_created_at}},
+            {"user_ids": user_id},
+        ]
+        if is_staff:
+            or_clauses.append({"target": "staff"})
         return await self._col.count_documents(
-            {
-                "$or": [
-                    {"target": "all"},
-                    {"user_ids": user_id},
-                ],
-                "read_by": {"$ne": user_id},
-            }
+            {"$or": or_clauses, "read_by": {"$ne": user_id}}
         )
 
     async def mark_read(self, notification_id: str, user_id: str) -> None:
@@ -61,14 +70,16 @@ class NotificationRepository:
             {"$addToSet": {"read_by": user_id}},
         )
 
-    async def mark_all_read_for_user(self, user_id: str) -> None:
-        match: dict = {
-            "$or": [
-                {"target": "all"},
-                {"user_ids": user_id},
-            ],
-            "read_by": {"$ne": user_id},
-        }
+    async def mark_all_read_for_user(
+        self, user_id: str, user_created_at: datetime, is_staff: bool = False
+    ) -> None:
+        or_clauses: list[dict] = [
+            {"target": "all", "created_at": {"$gte": user_created_at}},
+            {"user_ids": user_id},
+        ]
+        if is_staff:
+            or_clauses.append({"target": "staff"})
+        match: dict = {"$or": or_clauses, "read_by": {"$ne": user_id}}
         await self._col.update_many(match, {"$addToSet": {"read_by": user_id}})
 
     async def delete(self, notification_id: str) -> bool:

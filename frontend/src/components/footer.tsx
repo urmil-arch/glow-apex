@@ -134,7 +134,7 @@ const Footer = () => {
       <hr />
       <div className="container py-5">
         <p className="text-muted-foreground text-sm text-center">
-          © 2025 GlowApex. All Rights Reserved.
+          © 2026 GlowApex. All Rights Reserved.
         </p>
       </div>
     </footer>

@@ -1,6 +1,20 @@
 import logging
 from datetime import datetime, timezone
 
+_EPOCH = datetime(2000, 1, 1, tzinfo=timezone.utc)
+
+
+def _registered_at(user: dict) -> datetime:
+    """Return the user's created_at as a UTC-aware datetime.
+
+    Falls back to a distant past epoch so that if the field is missing
+    all notifications are shown (safe default rather than hiding everything).
+    """
+    ts = user.get("created_at")
+    if not isinstance(ts, datetime):
+        return _EPOCH
+    return ts if ts.tzinfo is not None else ts.replace(tzinfo=timezone.utc)
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.notifications.repository import NotificationRepository
@@ -11,9 +25,13 @@ from app.notifications.schemas import (
     UnreadCountResponse,
 )
 from app.user_management.utils.dependencies import get_current_user, require_permission
-from app.user_management.utils.permissions import PERM_NOTIFICATIONS
+from app.user_management.utils.permissions import PERM_NOTIFICATIONS, effective_permissions
 
 logger = logging.getLogger(__name__)
+
+
+def _is_staff(user: dict) -> bool:
+    return bool(user.get("is_admin")) or bool(effective_permissions(user))
 
 admin_router = APIRouter(dependencies=[Depends(require_permission(PERM_NOTIFICATIONS))])
 user_router = APIRouter()
@@ -76,7 +94,7 @@ async def create_notification(
     user: dict = Depends(get_current_user),
 ) -> NotificationResponse:
     """Send a notification to all users, a selection, or a specific user."""
-    if body.target != "all" and not body.user_ids:
+    if body.target not in ("all", "staff") and not body.user_ids:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             "Provide user_ids when target is 'selective' or 'personal'",
@@ -120,7 +138,7 @@ async def get_unread_count(
 ) -> UnreadCountResponse:
     """Return the count of unread admin notifications for the current user."""
     count = await NotificationRepository(request.app.state.db).unread_count_for_user(
-        str(user["_id"])
+        str(user["_id"]), _registered_at(user), is_staff=_is_staff(user)
     )
     return UnreadCountResponse(count=count)
 
@@ -135,7 +153,7 @@ async def list_user_notifications(
     """Return notifications visible to the current user, newest first."""
     user_id = str(user["_id"])
     docs, total = await NotificationRepository(request.app.state.db).find_for_user(
-        user_id, page, page_size
+        user_id, _registered_at(user), page, page_size, is_staff=_is_staff(user)
     )
     return NotificationListResponse(
         notifications=[_serialize_user(d, user_id) for d in docs],
@@ -152,7 +170,7 @@ async def mark_all_notifications_read(
 ) -> None:
     """Mark all visible notifications as read for the current user."""
     await NotificationRepository(request.app.state.db).mark_all_read_for_user(
-        str(user["_id"])
+        str(user["_id"]), _registered_at(user), is_staff=_is_staff(user)
     )
 
 

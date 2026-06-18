@@ -6,10 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Glow Apex** (branded as **BuyRealViews**) is a YouTube social media growth service platform. Users purchase YouTube Likes, Views, Subscribers, Comments, and Shorts engagement. The architecture is a **separated frontend + backend**:
+This repository hosts **two products** sharing one codebase:
 
-- **Frontend**: React + TypeScript + Vite (migrated from Next.js)
-- **Backend**: Python + FastAPI (handles all API, payment, and SMM panel logic)
+1. **BuyRealViews** (`frontend/src/pages/`) — YouTube social media growth service platform. Users purchase YouTube Likes, Views, Subscribers, Comments, and Shorts engagement via a checkout → payment → SMM fulfillment flow.
+
+2. **Glow Apex** (`frontend/src/glowapex/`) — PR & communications agency landing site with marketing pages and a pricing calculator.
+
+Both products share the same backend (Python + FastAPI) and the same admin panel.
+
+- **Frontend**: React 19 + TypeScript + Vite
+- **Backend**: Python + FastAPI (all API, payment, SMM, admin, and notification logic)
 
 ---
 
@@ -17,65 +23,138 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```
 glow-apex/
-├── frontend/                         # React + TypeScript + Vite
-│   ├── public/
-│   │   └── assets/                   # Static images, SVGs, icons
-│   │       ├── icons/
-│   │       ├── illustration/
-│   │       └── images/
-│   ├── src/
-│   │   ├── main.tsx                  # Vite entry point
-│   │   ├── App.tsx                   # Root component, router setup
-│   │   ├── config.ts                 # All API base URLs + endpoint constants
-│   │   ├── pages/                    # Route-level page components
-│   │   │   ├── Home/
-│   │   │   ├── services/             # YouTube service pages (views, likes, etc.)
-│   │   │   ├── checkout/             # Checkout + success/cancel/status pages
-│   │   │   ├── dashboard/            # Authenticated user area
-│   │   │   ├── blogs/
-│   │   │   ├── contact/
-│   │   │   └── auth/                 # Sign-in / Sign-up pages
-│   │   ├── components/               # Shared UI components
-│   │   │   ├── ui/                   # Radix-based UI primitives
-│   │   │   ├── cards/
-│   │   │   ├── common/               # FAQ, benefits, boost, etc.
-│   │   │   ├── payment/              # StripePayment, CryptomusPayment, PayeerPayment
-│   │   │   ├── sections/             # Page-specific sections (hero, pricing, etc.)
-│   │   │   └── magicui/              # Marquee animation
-│   │   ├── context/
-│   │   │   ├── AuthContext.tsx       # Global auth state (JWT-based)
-│   │   │   └── ServicesContext.tsx   # Fetches + stores services list
-│   │   ├── hooks/                    # Custom React hooks
-│   │   ├── store/                    # Zustand stores (useAuthStore, etc.)
-│   │   ├── lib/                      # Utility helpers (cn, etc.)
-│   │   ├── config/
-│   │   │   ├── data.ts               # All static content: FAQs, pricing, blog posts
-│   │   │   └── menu-items.ts         # Navbar menu config
-│   │   └── types/
-│   │       ├── index.ts
-│   │       └── pricing.ts
-│   ├── index.html
-│   ├── vite.config.ts
-│   ├── tsconfig.json
-│   └── package.json
+├── frontend/
+│   ├── public/assets/              # Static images, SVGs, icons
+│   └── src/
+│       ├── App.tsx                 # Root component, all route definitions
+│       ├── config.ts               # All API base URLs + endpoint constants
+│       ├── main.tsx                # Vite entry point
+│       │
+│       ├── pages/                  # BuyRealViews route-level pages
+│       │   ├── Home/               # BuyRealViews home page
+│       │   ├── services/           # YouTube service pages (views, likes, etc.)
+│       │   ├── checkout/           # Checkout + success/cancel/status pages
+│       │   ├── dashboard/          # Authenticated user area
+│       │   │   ├── orders/         # Order list + status modal
+│       │   │   ├── payments/       # Payment history
+│       │   │   ├── tickets/        # Support tickets (list + thread)
+│       │   │   ├── notifications/  # Admin-to-user notifications
+│       │   │   └── profile/        # Account settings + password change
+│       │   ├── admin/              # Admin panel (protected, is_admin required)
+│       │   │   ├── users/          # User management + export
+│       │   │   ├── staff/          # Staff management + role/permission editor
+│       │   │   ├── orders/         # All orders + resend/refund/cancel
+│       │   │   ├── payments/       # All payments
+│       │   │   ├── tasks/          # Failed-order tasks + manual tasks
+│       │   │   ├── services/       # Service packages + provider fallback chains
+│       │   │   ├── service-stats/  # Per-service usage analytics
+│       │   │   ├── reports/        # Revenue / profit / order reports
+│       │   │   ├── support/        # Tickets + contact messages
+│       │   │   ├── notifications/  # Broadcast notifications to users
+│       │   │   ├── blogs/          # Blog post management
+│       │   │   └── settings/       # Platform settings (maintenance, payments, etc.)
+│       │   ├── blogs/              # Public blog pages
+│       │   ├── contact/            # Contact form
+│       │   └── auth/               # Sign-in / Sign-up / OTP verify
+│       │
+│       ├── glowapex/               # Glow Apex PR agency frontend
+│       │   ├── pages/
+│       │   │   ├── Home/           # Landing page with pricing calculator
+│       │   │   └── Checkout/       # Glow Apex checkout
+│       │   ├── components/         # Glow Apex–specific components
+│       │   └── lib/
+│       │
+│       ├── components/             # Shared UI components (BuyRealViews)
+│       │   ├── ui/                 # Radix-based primitives
+│       │   ├── admin/              # AdminGuard, RequirePermission
+│       │   ├── common/             # FAQ, RaiseTicketModal, AdminFAB, etc.
+│       │   ├── payment/            # StripePayment, CryptomusPayment, etc.
+│       │   └── sections/hero/      # Per-service hero sections + DynamicPackageSelector
+│       │
+│       ├── context/
+│       │   ├── AuthContext.tsx     # Global auth state (JWT, is_admin, permissions)
+│       │   ├── ServicesContext.tsx # Public services list from backend
+│       │   ├── PricingContext.tsx  # Dynamic pricing (value/bulk packages)
+│       │   └── CurrencyContext.tsx # Currency selector
+│       ├── store/
+│       │   └── useOrderStore.ts    # Zustand: cross-page order data (persisted to sessionStorage)
+│       ├── hooks/
+│       ├── lib/
+│       │   └── api.ts              # Axios instance — JWT attach, 401 refresh, suspension guard
+│       ├── config/
+│       │   ├── data.ts             # Static content: FAQs, service descriptions, blog posts
+│       │   └── menu-items.ts       # Navbar menu config
+│       └── types/
+│           └── index.ts            # Shared TypeScript interfaces
 │
-└── backend/                          # Python + FastAPI
+└── backend/
     └── app/
-        ├── main.py                   # Entry point, lifespan, middleware, router registration
-        ├── app_components.py         # Router loader
-        ├── common/                   # Shared infrastructure (DB, auth, Redis)
-        ├── payments/                 # Payment gateway logic
-        │   ├── cashfree/             # Cashfree create/verify/webhook
-        │   ├── stripe/               # Stripe create/verify/webhook
-        │   ├── cryptomus/            # Cryptomus create/verify/webhook
-        │   └── payeer/               # Payeer create/verify/webhook
-        ├── smm/                      # SMM panel (Postlikes.com) integration
-        │   ├── routers/
-        │   ├── services/
-        │   └── repositories/
-        ├── orders/                   # Order management
-        ├── user_management/          # Auth (JWT), users
-        └── platform_settings/        # Config, limits
+        ├── main.py                 # FastAPI entry point, lifespan, CORS, index setup
+        ├── app_components.py       # Router registration (include_routers)
+        ├── common/                 # config.py (pydantic-settings), crypto.py (AES-GCM)
+        │
+        ├── user_management/        # Auth + profile
+        │   ├── routers/            # auth_router (register/login/OTP), profile_router
+        │   ├── services/           # auth_service, profile_service
+        │   ├── repositories/       # user_repository, sign_in_log_repository
+        │   ├── schemas/            # UserPublic, ProfileResponse, auth schemas
+        │   └── utils/              # JWT helpers, OTP, bcrypt, permissions, dependencies
+        │
+        ├── checkout/               # Checkout session creation + payment initiation
+        │   └── router.py           # POST /checkout/initiate — creates pending order + payment record
+        │
+        ├── orders/                 # User-facing order endpoints
+        │   ├── router.py           # GET/POST /orders, refill, cancel
+        │   ├── repository.py       # OrderRepository (includes aggregate_service_stats)
+        │   ├── fulfillment.py      # place_smm_order() — provider fallback chain logic
+        │   └── pricing_utils.py    # Shared charge calculation (admin pricing → user charge)
+        │
+        ├── payments/               # Payment gateway integrations
+        │   ├── cashfree/           # INR — create / verify / webhook
+        │   ├── stripe/             # USD — create / verify / webhook
+        │   ├── cryptomus/          # Crypto — create / verify / webhook
+        │   ├── payeer/             # USD — create / verify / webhook
+        │   ├── razorpay/           # INR — create / verify / webhook
+        │   ├── ledger_repository.py # payments collection CRUD
+        │   └── user_router.py      # GET /payments (user payment history)
+        │
+        ├── notifications/          # Admin-to-user broadcast notifications
+        │   ├── router.py           # admin_router + user_router
+        │   └── repository.py       # MongoDB notifications collection
+        │
+        ├── tickets/                # User support tickets
+        │   ├── router.py           # GET/POST /tickets, reply, thread view
+        │   └── repository.py
+        │
+        ├── contact/                # Public contact form
+        │   ├── router.py           # POST /contact/send (rate-limited via Redis)
+        │   └── repository.py       # contact_messages collection
+        │
+        ├── blog/                   # Blog posts
+        │   └── router.py           # public_router (GET /blogs)
+        │
+        ├── smm/                    # Legacy Postlikes.com proxy (services list)
+        │
+        ├── public_services/        # GET /services (public, no auth)
+        ├── public_pricing/         # GET /pricing (public, no auth)
+        ├── public_settings/        # GET /settings (public — maintenance mode check)
+        │
+        └── admin/                  # Admin-only modules (require is_admin or permission)
+            ├── router.py           # Master admin router, includes all sub-routers
+            ├── users/              # User list, stats, export, suspend
+            ├── orders/             # All orders, resend, refund, cancel, service-stats
+            ├── payments/           # All payments, manual payment, delete
+            ├── providers/          # SMM provider CRUD + live balance/services fetch
+            ├── services/           # Admin service categories + individual services
+            ├── service_packages/   # Service packages with provider fallback chains
+            ├── pricing/            # Dynamic portal pricing per service type
+            ├── provider_config/    # Legacy routing configs (kept for reference)
+            ├── reports/            # Aggregated revenue/order/ticket reports
+            ├── tasks/              # Failed-order and manual task management
+            ├── support/            # Admin side of tickets + contact messages
+            ├── notifications/      # Send/delete broadcast notifications
+            ├── settings/           # Platform settings upsert
+            └── staff/              # Staff user management (roles + permissions)
 ```
 
 ---
@@ -85,30 +164,24 @@ glow-apex/
 ### Frontend
 
 ```bash
-# Install dependencies
 cd frontend && npm install
-
-# Run dev server (default port 5173)
-npm run dev
-
-# Build for production
-npm run build
-
-# Lint
-npm run lint
+npm run dev          # dev server on http://localhost:5173
+npm run build        # production build
+npm run lint         # ESLint
 ```
 
 ### Backend
 
 ```bash
-# Run dev server (from backend/)
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
 # Install dependencies
 pip install -r backend/requirements.txt
 
-# Start infrastructure (Redis, PostgreSQL, MongoDB if needed)
-docker-compose -f backend/docker-compose.dev.yml up
+# Start infrastructure (MongoDB + Redis via Docker)
+docker-compose -f backend/docker-compose.dev.yml up -d
+
+# Run API server
+cd backend
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ---
@@ -117,48 +190,66 @@ docker-compose -f backend/docker-compose.dev.yml up
 
 ### Frontend API Layer
 
-- All API base URLs and endpoint constants live in `src/config.ts`. **Never hardcode URLs in components.**
-- Use the central `api` axios instance (defined in `src/lib/api.ts`) for all requests. It handles JWT attachment, token refresh (401 → `/auth/refresh`), and global error toasts automatically.
-- Auth state lives in `src/context/AuthContext.tsx` (Zustand-backed, JWT-based — not cookie mock).
-- Services list is provided globally via `src/context/ServicesContext.tsx`, fetched from the backend on mount.
-- Order data passed between pages goes through React state or Zustand — not cookies (cookies were used in the old Next.js monolith; do not reintroduce that pattern).
+- All endpoint constants live in `src/config.ts`. **Never hardcode URLs in components.**
+- Use the central `api` axios instance (`src/lib/api.ts`) for all requests. It attaches JWTs, handles 401 refresh, and redirects suspended users to `/suspended`.
+- Auth state lives in `src/context/AuthContext.tsx` — exposes `user`, `isLoading`, `hasPermission()`, `login()`, `logout()`, `updateProfile()`.
+- `PricingContext.tsx` fetches `GET /pricing` on mount and exposes `getPricing(serviceType)` and `calcPackagePrice()`.
+- Order data between pages travels via Zustand (`src/store/useOrderStore.ts`) persisted to `sessionStorage` — never cookies.
 
 ### Backend API Structure
 
-Every authenticated request carries a JWT. The backend validates it via middleware in `main.py`. Use FastAPI dependencies defined in each module's `dependencies.py` to inject services into routers.
+Authenticated requests carry a JWT validated by `get_current_user` (dependency in `user_management/utils/dependencies.py`). Admin endpoints use `get_current_admin` or `require_permission(PERM_*)`.
 
 **Adding a new backend module:**
 
-1. Create the module directory under `app/` with `routers/`, `services/`, `repositories/`, `models/`.
-2. Import the router in `app_components.py` and register it in `include_routers()`.
-3. Initialise any service container or index setup in `main.py`'s `lifespan`.
+1. Create the module directory under `app/` with `router.py`, `repository.py`, `schemas.py`.
+2. Import and register the router in `app_components.py → include_routers()`.
+3. If the module needs a MongoDB index, add a `create_index()` call in `main.py`'s `lifespan`.
 
 ### Payment Gateway Integrations
 
-All payment logic lives exclusively in the backend. The frontend never holds secrets or calls payment gateway APIs directly — it only calls backend endpoints.
+All payment secrets live exclusively in the backend. The frontend never calls gateway APIs directly.
 
-| Gateway | Backend Module | Input Currency | Method |
-|---------|---------------|----------------|--------|
-| Cashfree | `app/payments/cashfree/` | INR (converted from USD) | Redirect to Cashfree SDK |
+| Gateway | Backend Module | Currency | Method |
+|---------|---------------|----------|--------|
+| Cashfree | `app/payments/cashfree/` | INR (USD → INR server-side) | Redirect to Cashfree SDK |
 | Stripe | `app/payments/stripe/` | USD | Redirect to Stripe Checkout |
 | Cryptomus | `app/payments/cryptomus/` | USD | Redirect to Cryptomus page |
 | Payeer | `app/payments/payeer/` | USD | Redirect via form POST |
+| Razorpay | `app/payments/razorpay/` | INR (USD → INR server-side) | Razorpay checkout |
 
-**Important:** After payment confirmation (webhook), the backend must call the SMM panel (`/smm/add-order`) to place the actual order. Webhook handlers are the source of truth for triggering order placement — the frontend must not trigger this.
+After a successful webhook, the backend calls `fulfillment.py → place_smm_order()` which tries the service package's default provider and then its ordered fallbacks until one accepts.
 
-### SMM Panel (Postlikes.com)
+### Service Packages + Provider Routing
 
-- Service list is fetched by the backend at `GET /smm/services` and proxied to the frontend.
-- Orders are placed by the backend at `POST /smm/add-order` after webhook confirmation.
-- Filtered service IDs: `5209` (Views), `2342` (Likes), `5648` (Shorts), `376` (Subscribers).
+Orders are fulfilled via **service packages** (`admin/service_packages/`), not hardcoded service IDs. Each package defines:
+
+- A quantity tier (e.g. 5,000 Views)
+- A default provider + service ID
+- An ordered list of fallback providers (tried in sequence if the default fails)
+- Portal pricing (what the user pays) separate from provider rate (what we pay)
+
+`fulfillment.py → _resolve_candidates_from_package()` builds the candidate list; `place_smm_order()` iterates it until one succeeds. Failed orders create a `failed_order` task for admin review.
+
+### Admin Panel Permissions
+
+Staff accounts have a `role` field and an `extra_permissions` list. `require_permission(PERM_*)` checks both. Permission constants are in `user_management/utils/permissions.py`. Admin (`is_admin: true`) bypasses all permission checks. There is no seed script — the first admin must be set directly in MongoDB (`is_admin: true`).
+
+### Provider API Key Encryption
+
+Provider API keys are stored AES-256-GCM encrypted in MongoDB. `common/crypto.py` handles encrypt/decrypt. The key is loaded from `API_KEY_ENCRYPTION_SECRET` (64 hex chars = 32 bytes). The repository layer transparently encrypts on write and decrypts on read.
+
+### Email Delivery
+
+OTP emails and contact form confirmations are sent via **SMTP** (`aiosmtplib`). Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` in `backend/.env`. Gmail requires an app password (not the account password) when 2FA is enabled.
+
+### Datetime / Timezone
+
+Python's `datetime.isoformat()` produces strings without a `Z` suffix (e.g. `"2026-06-04T10:00:00"`). Browsers parse these as local time. **Always append `Z`** in backend serializers or use the `toUtc()` frontend helper (which appends `Z` when no timezone indicator is present) before passing to `new Date()`. All date displays should use IST (`timeZone: 'Asia/Kolkata'`).
 
 ### CORS
 
-The backend must explicitly allow requests from the frontend origin. Configure this in `main.py` via `CORSMiddleware`. Never allow `*` in production.
-
-### Image Serving
-
-Product images are stored in MinIO (`product-images` bucket). The backend proxies them. The frontend references them via `API_PRODUCT_IMAGE_URL` from `src/config.ts`.
+Configured in `main.py` via `CORSMiddleware`. `FRONTEND_ORIGIN` env var controls the allowed origin. Never use `*` in production.
 
 ---
 
@@ -325,11 +416,12 @@ Log an `add` or `modify` entry in `.claude/CHANGES.md` covering every file creat
 
 ### Payment-specific rules
 
-- All payment gateway secrets (`STRIPE_SECRET_KEY`, `CASHFREE_CLIENT_SECRET`, etc.) must be loaded from environment variables only — never hardcoded, never committed.
+- All payment gateway secrets must be loaded from environment variables only — never hardcoded, never committed.
 - Each payment module must implement three endpoints: `create`, `verify`, and `webhook`.
-- Webhook handlers are responsible for calling `smm/add-order` after successful payment verification. This must not be skipped or deferred.
+- Webhook handlers are responsible for calling `fulfillment.py → place_smm_order()` after successful payment verification.
 - Webhook signatures must be verified before any order logic is executed.
-- Currency conversion (USD → INR for Cashfree) must be done in the backend, not the frontend.
+- Currency conversion (USD → INR for Cashfree and Razorpay) must be done in the backend.
+- User charge is calculated from `admin/pricing/` records (portal price), not from provider rate. Use `pricing_utils.py → _calc_pricing_charge()`.
 
 ### Assumptions
 
@@ -340,35 +432,35 @@ Log an `add` or `modify` entry in `.claude/CHANGES.md` covering every file creat
 
 ## 6. Frontend / React Rules
 
-- **Stack**: React 19 + Vite + TypeScript + **Tailwind CSS v4** + **Radix UI** primitives. There is no Next.js in this project — do not introduce Next.js-specific APIs (`useRouter` from `next/router`, `Link` from `next/link`, server components, route handlers, etc.).
-- **Routing**: Use React Router v7 (`react-router-dom`). All routes are defined in `src/App.tsx`.
-- **No cookie-based state**. The old Next.js monolith passed order data via cookies (`form_data`, `currency`). In this architecture, use React state, Zustand stores, or URL search params instead.
-- All API calls go through the central `api` axios instance in `src/lib/api.ts`. Never use raw `fetch` or create a second axios instance.
-- All API endpoint strings are defined in `src/config.ts`. Never hardcode URLs or paths in components or hooks.
+- **Stack**: React 19 + Vite + TypeScript + **Tailwind CSS v4** + **Radix UI** primitives. There is no Next.js in this project.
+- **Routing**: React Router v7 (`react-router-dom`). All routes defined in `src/App.tsx`.
+- **No cookie-based state**. Use React state, Zustand stores, or URL search params.
+- All API calls go through the central `api` axios instance in `src/lib/api.ts`.
+- All API endpoint strings are defined in `src/config.ts`. Never hardcode URLs.
 
 ### Component rules
 
 - Components must be functions. No class components.
 - One component per file. File name matches the exported component name.
 - Props must be typed with a TypeScript interface defined at the top of the file.
-- No inline styles except for dynamic values (e.g. computed widths). Use Tailwind classes for everything else.
-- Do not reach into a child component's state from a parent — lift state up or use a shared store.
+- No inline styles except for dynamic values. Use Tailwind classes for everything else.
 
 ### State management
 
-- **Global auth** → `src/context/AuthContext.tsx` (Zustand-backed, JWT in memory or `httpOnly` cookie set by backend).
-- **Global services list** → `src/context/ServicesContext.tsx` (fetched from backend on app mount).
-- **Page-level state** → `useState` / `useReducer` inside the page component.
-- **Cross-page order data** → Zustand store (`src/store/useOrderStore.ts`). Do not use cookies or localStorage for this.
+- **Global auth** → `src/context/AuthContext.tsx`
+- **Global services list** → `src/context/ServicesContext.tsx`
+- **Dynamic pricing** → `src/context/PricingContext.tsx`
+- **Page-level state** → `useState` / `useReducer`
+- **Cross-page order data** → `src/store/useOrderStore.ts` (Zustand, sessionStorage-persisted)
 
 ### Static content
 
-All marketing copy, FAQs, pricing tiers, blog posts, and service packages live in `src/config/data.ts`. This is the single source of truth for static content. Do not duplicate content across components.
+All marketing copy, FAQs, service descriptions, and blog posts live in `src/config/data.ts`.
 
 ### Code quality mandates
 
-- No `any` type. If the shape is unknown, define a proper interface or use `unknown` with a type guard.
-- No unused imports or variables. Run lint before considering a task complete.
+- No `any` type. Use a proper interface or `unknown` with a type guard.
+- No unused imports or variables.
 - Extract repeated JSX patterns into a shared component after the second occurrence.
 - All async operations inside components must handle loading and error states explicitly.
 
@@ -379,14 +471,43 @@ All marketing copy, FAQs, pricing tiers, blog posts, and service packages live i
 ### Backend (`backend/.env`)
 
 ```env
+# App
+BACKEND_BASE_URL=https://api.buyrealviews.com
+FRONTEND_ORIGIN=https://buyrealviews.com
+
+# Database
+MONGODB_URI=mongodb://localhost:27017
+MONGODB_DB_NAME=buyrealviews
+
+# Auth
+JWT_SECRET_KEY=
+JWT_ALGORITHM=HS256
+JWT_EXPIRE_MINUTES=1440
+
+# Email (SMTP via aiosmtplib — Gmail requires an app password)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_FROM=
+
+# Redis
+REDIS_URL=redis://localhost:6379
+
+# Provider key encryption (64 hex chars = 32 bytes)
+API_KEY_ENCRYPTION_SECRET=
+
+# SMM Panel (legacy)
+POSTLIKES_API_KEY=
+
 # Payment Gateways
 CASHFREE_CLIENT_ID=
 CASHFREE_CLIENT_SECRET=
 CASHFREE_BASE_URL=https://sandbox.cashfree.com/pg
 
-STRIPE_SECRET_KEY=sk_test_...
-STRIPE_PUBLISHABLE_KEY=pk_test_...
-STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_SECRET_KEY=
+STRIPE_PUBLISHABLE_KEY=
+STRIPE_WEBHOOK_SECRET=
 
 CRYPTOMUS_MERCHANT_ID=
 CRYPTOMUS_API_KEY=
@@ -395,97 +516,91 @@ PAYEER_MERCHANT_ID=
 PAYEER_SECRET_KEY=
 PAYEER_ENCRYPTION_KEY=
 
-# SMM Panel
-POSTLIKES_API_KEY=
+RAZORPAY_KEY_ID=
+RAZORPAY_KEY_SECRET=
+RAZORPAY_WEBHOOK_SECRET=
 
-# App
-BACKEND_BASE_URL=https://api.buyrealviews.com
-FRONTEND_ORIGIN=https://buyrealviews.com
-
-# Infrastructure
-REDIS_URL=redis://localhost:6379
-DATABASE_URL=postgresql://...
+# Contact form
+CONTACT_OWNER_EMAIL=
 ```
 
 ### Frontend (`frontend/.env`)
 
 ```env
 VITE_API_BASE_URL=https://api.buyrealviews.com
-VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...
+VITE_STRIPE_PUBLISHABLE_KEY=
+VITE_RAZORPAY_KEY_ID=
 ```
 
 **Rules:**
 - Backend secrets never appear in frontend env files.
-- Frontend env vars are prefixed with `VITE_` and are safe to be public (no secrets).
-- `VITE_API_BASE_URL` is the only base URL the frontend needs — all endpoint paths are derived from it via `src/config.ts`.
+- Frontend env vars are prefixed with `VITE_`.
+- `VITE_API_BASE_URL` is the only base URL the frontend needs.
 
 ---
 
 ## 8. Key Data Flows
 
-### Service discovery
+### Checkout → Payment → Order Fulfillment
 
 ```
-App mounts → ServicesContext calls GET /smm/services (backend)
-  → Backend calls Postlikes.com API
-  → Returns filtered list (IDs: 5209, 2342, 5648, 376)
-  → Stored in ServicesContext
-  → ServiceSelectionComponent renders packages
-```
+User selects package on service page
+  → DynamicPackageSelector stores {categoryName, quantity} in useOrderStore
+  → Navigates to /checkout
 
-### Checkout → Payment → Order placement
+/checkout reads useOrderStore
+  → Resolves matching ServicePackage (quantity + service_type)
+  → Calculates charge via PricingContext (portal price, not provider rate)
+  → User selects payment method, submits
 
-```
-User selects package + enters YouTube URL
-  → Stored in useOrderStore (Zustand)
-  → User navigates to /checkout
+Frontend calls POST /checkout/initiate
+  → Backend creates pending order doc + payment ledger record
+  → Initiates payment session with chosen gateway
+  → Returns redirect URL
 
-/checkout page loads
-  → Reads order from useOrderStore
-  → User fills in name, email, phone
-  → Selects payment method
-
-On submit:
-  → Frontend calls POST /payments/{gateway}/create with order details
-  → Backend creates payment session, returns redirect URL
-  → Frontend redirects user to payment gateway
-
-User completes payment
-  → Gateway calls POST /payments/{gateway}/webhook (backend only)
+User completes payment on gateway
+  → Gateway calls POST /payments/{gateway}/webhook
   → Backend verifies webhook signature
-  → Backend calls POST /smm/add-order to place SMM order
-  → Backend stores order record in DB
+  → Calls fulfillment.py → place_smm_order()
+    → Loads ServicePackage for the order
+    → Tries default provider → fallback #1 → fallback #2 … until one accepts
+    → Updates order with provider_id + provider_order_id + status
+    → If all fail: sets status=provider_error, creates high-priority Task
 
-User lands on /checkout/success or /checkout/check-status
-  → Frontend calls GET /payments/{gateway}/verify?session_id=...
-  → Displays result
+User lands on /checkout/check-status
+  → Polls GET /orders/{id} for live status
 ```
 
 ### Authentication
 
 ```
-User submits sign-in form
-  → Frontend calls POST /auth/login
-  → Backend validates credentials, returns JWT
-  → AuthContext stores JWT (httpOnly cookie set by backend, or in memory)
-  → User redirected to dashboard
+Register → POST /auth/register → OTP sent via Resend
+OTP verify → POST /auth/verify-otp → JWT returned
+Login → POST /auth/login → JWT returned (403 if unverified → re-sends OTP)
+JWT stored in AuthContext (localStorage)
+All requests attach Authorization: Bearer <token>
+401 → api.ts interceptor → clear auth → redirect /sign-in
+Suspended → any request → 403 with reason=suspended → redirect /suspended
+```
 
-Protected routes check AuthContext.isAuthenticated
-  → If false, redirect to /sign-in
+### Admin Notifications
+
+```
+Admin creates notification (target: all / selective / personal)
+  → Stored in MongoDB notifications collection
+User opens /dashboard/notifications
+  → GET /notifications returns all matching (target=all OR user_id in user_ids)
+  → is_read = user_id in read_by array
+User clicks notification → POST /notifications/{id}/read → user_id added to read_by
 ```
 
 ---
 
-## 9. Known Issues / Technical Debt
+## 9. Known Issues / Active Debt
 
-These are pre-existing issues from the Next.js monolith. Fix them when the relevant code is touched — do not introduce them into the new architecture.
-
-- **Webhook handlers do not call `/smm/add-order`**: All four payment webhooks are stubs. SMM order placement after payment confirmation is the highest-priority missing piece.
-- **Authentication is mock**: The old auth used simulated delays and fake tokens. The new backend must implement real JWT auth with password hashing (bcrypt) and no mock paths in production.
-- **Cashfree currency conversion is frontend-only**: USD → INR conversion used a hardcoded rate (83.12) in the old checkout page. This must be done server-side in the new backend.
-- **`/api/add-order` bug**: The old Next.js route sent `serviceId` as both `service` and `link` to the Postlikes API. Verify and fix this in the new SMM service layer.
-- **Dashboard uses mock data**: Orders, payments, and analytics pages show hardcoded static data. These need real DB queries once the order storage layer is implemented.
-- **Stripe currency mismatch**: The old Stripe session creation hardcoded INR despite the user selecting USD. The new backend must respect the currency passed in the create-order request.
+- **Glow Apex checkout** (`frontend/src/glowapex/pages/Checkout/`) is not yet wired to the backend payment flow.
+- **SMM module** (`app/smm/`) is a legacy Postlikes.com proxy used only for the old service list endpoint. New orders go through `app/admin/service_packages/` + `fulfillment.py`. The smm module can be removed once no frontend references remain.
+- **Admin seeding removed**: There is no bootstrap script. The first admin account must be promoted directly in MongoDB: `db.users.updateOne({email:"..."}, {$set:{is_admin:true}})`.
 
 ---
 
@@ -495,7 +610,9 @@ These are pre-existing issues from the Next.js monolith. Fix them when the relev
 - Do not pass payment secrets to the frontend under any circumstances.
 - Do not use cookies to pass order data between pages — use Zustand.
 - Do not hardcode exchange rates in the frontend — currency conversion belongs in the backend.
-- Do not call Postlikes.com directly from the frontend — always go through the backend.
-- Do not call payment gateway APIs directly from the frontend — always go through the backend.
-- Do not mix the two backend module patterns within a single module.
-- Do not create a new axios instance in a component — use the shared `api` instance from `src/lib/api.ts`.
+- Do not call SMM provider APIs directly from the frontend — always go through the backend.
+- Do not call payment gateway APIs directly from the frontend.
+- Do not create a new axios instance in a component — use `src/lib/api.ts`.
+- Do not use `new Date(isoString)` without first passing through `toUtc()` — Python datetimes have no Z suffix and will be misread as local time.
+- Do not charge users the provider rate — always use the admin pricing page rate via `pricing_utils.py`.
+- Do not add new admin routes without adding the corresponding `RequirePermission` guard in `App.tsx`.

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { MobileMenu } from "./common/mobile-menu";
 import {
   Menubar,
@@ -36,56 +36,36 @@ const Navbar = () => {
   const [selectedCurrency, setSelectedCurrency] = useState<Currency>(currencies[0]);
 
   // ── Notifications ──────────────────────────────────────────────────────────
-  const [notifications, setNotifications]       = useState<NotifItem[]>([]);
-  const [acknowledgedIds, setAcknowledgedIds]   = useState<Set<string>>(new Set());
-  const [panelOpen, setPanelOpen]               = useState(false);
-  const notifRef                                 = useRef<HTMLDivElement>(null);
+  const [notifications, setNotifications] = useState<NotifItem[]>([]);
+  const [panelOpen, setPanelOpen]         = useState(false);
+  const notifRef                          = useRef<HTMLDivElement>(null);
 
-  const unreadCount = notifications.filter(n =>
-    n.type === 'admin_notification' ? n.is_read === false : !acknowledgedIds.has(n.id)
-  ).length;
+  const unreadCount = notifications.length;
 
-  const handleOpenPanel = () => {
-    setPanelOpen(prev => {
-      if (!prev) {
-        // Acknowledge ticket/task/message items locally
-        setAcknowledgedIds(ids => new Set([...ids, ...notifications.map(n => n.id)]));
-        // Locally clear unread flag on admin notifications so badge drops immediately
-        setNotifications(prev => prev.map(n =>
-          n.type === 'admin_notification' ? { ...n, is_read: true } : n
-        ));
-        // Mark all admin notifications as read on the backend
-        if (user) {
-          api.post(API_ENDPOINTS.USER_NOTIFICATIONS_READ_ALL).catch(() => {});
-        }
-      }
-      return !prev;
-    });
-  };
+  const handleOpenPanel = () => setPanelOpen(prev => !prev);
 
-  const handleMarkNotifRead = useCallback((backendId: string) => {
-    api.post(`${API_ENDPOINTS.USER_NOTIFICATIONS}/${backendId}/read`).catch(() => {});
-  }, []);
 
   const pollNotifications = useCallback(async () => {
     if (!user) return;
     const isStaff = user.is_admin || (user.permissions ?? []).length > 0;
     try {
       if (isStaff) {
-        const ticketsRes = await api.get<{ tickets: { id: string; user_username: string; subject: string; updated_at: string; admin_has_unread: boolean }[] }>(
-          API_ENDPOINTS.ADMIN_SUPPORT_TICKETS, { params: { page_size: 50 } }
-        );
-
-        const ticketNotifs: NotifItem[] = (ticketsRes.data.tickets ?? [])
-          .filter(t => t.admin_has_unread)
-          .map(t => ({
-            id: t.id,
-            type: 'new_ticket' as const,
-            title: `New ticket from ${t.user_username}`,
-            body: t.subject,
-            href: '/admin/support',
-            created_at: t.updated_at,
-          }));
+        let ticketNotifs: NotifItem[] = [];
+        try {
+          const ticketsRes = await api.get<{ tickets: { id: string; user_username: string; subject: string; updated_at: string; admin_has_unread: boolean }[] }>(
+            API_ENDPOINTS.ADMIN_SUPPORT_TICKETS, { params: { page_size: 50 } }
+          );
+          ticketNotifs = (ticketsRes.data.tickets ?? [])
+            .filter(t => t.admin_has_unread)
+            .map(t => ({
+              id: t.id,
+              type: 'new_ticket' as const,
+              title: `New ticket from ${t.user_username}`,
+              body: t.subject,
+              href: '/admin/support',
+              created_at: t.updated_at,
+            }));
+        } catch { /* no permission for support tickets — silently skip */ }
 
         // Contact-form messages — only admins may have access; ignore 403 for other staff
         let msgNotifs: NotifItem[] = [];
@@ -122,22 +102,23 @@ const Navbar = () => {
           }
         } catch { /* no permission for tasks — silently skip */ }
 
-        // Admin-sent notifications visible to all users (including staff)
+        // Admin-sent notifications visible to all users (including staff) — unread only
         let adminNotifItems: NotifItem[] = [];
         try {
           const nRes = await api.get<{ notifications: { id: string; title: string; message: string; is_read: boolean; created_at: string }[] }>(
             API_ENDPOINTS.USER_NOTIFICATIONS, { params: { page_size: 10 } }
           );
-          adminNotifItems = (nRes.data.notifications ?? []).map(n => ({
-            id: `admin-notif-${n.id}`,
-            type: 'admin_notification' as const,
-            title: n.title,
-            body: n.message,
-            href: '/dashboard/notifications',
-            created_at: n.created_at,
-            is_read: n.is_read,
-            backend_id: n.id,
-          }));
+          adminNotifItems = (nRes.data.notifications ?? [])
+            .filter(n => !n.is_read)
+            .map(n => ({
+              id: `admin-notif-${n.id}`,
+              type: 'admin_notification' as const,
+              title: n.title,
+              body: n.message,
+              href: '/dashboard/notifications',
+              created_at: n.created_at,
+              backend_id: n.id,
+            }));
         } catch { /* no permission or network — silently skip */ }
 
         setNotifications([...ticketNotifs, ...msgNotifs, ...taskNotifs, ...adminNotifItems]);
@@ -156,22 +137,23 @@ const Navbar = () => {
           created_at: t.updated_at,
         }));
 
-        // Admin-sent notifications for regular users
+        // Admin-sent notifications for regular users — unread only
         let adminNotifItems: NotifItem[] = [];
         try {
           const nRes = await api.get<{ notifications: { id: string; title: string; message: string; is_read: boolean; created_at: string }[] }>(
             API_ENDPOINTS.USER_NOTIFICATIONS, { params: { page_size: 10 } }
           );
-          adminNotifItems = (nRes.data.notifications ?? []).map(n => ({
-            id: `admin-notif-${n.id}`,
-            type: 'admin_notification' as const,
-            title: n.title,
-            body: n.message,
-            href: '/dashboard/notifications',
-            created_at: n.created_at,
-            is_read: n.is_read,
-            backend_id: n.id,
-          }));
+          adminNotifItems = (nRes.data.notifications ?? [])
+            .filter(n => !n.is_read)
+            .map(n => ({
+              id: `admin-notif-${n.id}`,
+              type: 'admin_notification' as const,
+              title: n.title,
+              body: n.message,
+              href: '/dashboard/notifications',
+              created_at: n.created_at,
+              backend_id: n.id,
+            }));
         } catch { /* silently skip */ }
 
         setNotifications([...ticketItems, ...adminNotifItems]);
@@ -340,7 +322,6 @@ const Navbar = () => {
                     onClose={() => setPanelOpen(false)}
                     onClearAll={() => { setNotifications([]); setPanelOpen(false); }}
                     onRemove={id => setNotifications(prev => prev.filter(n => n.id !== id))}
-                    onRead={handleMarkNotifRead}
                   />
                 )}
               </div>

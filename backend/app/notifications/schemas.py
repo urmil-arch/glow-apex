@@ -7,7 +7,7 @@ class NotificationCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     message: str = Field(..., min_length=1, max_length=2000)
     type: Literal["info", "success", "warning"] = "info"
-    target: Literal["all", "selective", "personal"] = "all"
+    target: Literal["all", "staff", "selective", "personal"] = "all"
     user_ids: list[str] = []
 
 
