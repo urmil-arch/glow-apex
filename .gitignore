@@ -14,6 +14,7 @@ backend/venv/
 backend/static/
 
 /.claude/
+
 # Environment files — NEVER commit secrets
 .env
 .env.*
