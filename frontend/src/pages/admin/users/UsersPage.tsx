@@ -86,6 +86,8 @@ const UsersPage = () => {
   const [sortBy, setSortBy] = useState('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   const [addModal, setAddModal] = useState(false);
   const [editTarget, setEditTarget] = useState<AdminUser | null>(null);
   const [passwordTarget, setPasswordTarget] = useState<AdminUser | null>(null);
@@ -106,6 +108,32 @@ const UsersPage = () => {
   const [signInLogs, setSignInLogs] = useState<SignInLog[]>([]);
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState('');
+
+  const allPageSelected = users.length > 0 && users.every((u) => selectedIds.has(u.id));
+  const somePageSelected = users.some((u) => selectedIds.has(u.id));
+
+  const toggleAll = () => {
+    if (allPageSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        users.forEach((u) => next.delete(u.id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        users.forEach((u) => next.add(u.id));
+        return next;
+      });
+    }
+  };
+
+  const toggleOne = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
 
   const fetchUsers = useCallback(async () => {
     setIsLoading(true);
@@ -137,10 +165,10 @@ const UsersPage = () => {
     fetchStats();
   }, [fetchUsers, fetchStats]);
 
-  const handleSearch = () => { setSearch(searchInput); setPage(1); };
+  const handleSearch = () => { setSearch(searchInput); setPage(1); setSelectedIds(new Set()); };
 
-  const handleFilterChange = (f: string) => { setFilterBy(f); setPage(1); };
-  const handlePageSizeChange = (size: typeof PAGE_SIZE_OPTIONS[number]) => { setPageSize(size); setPage(1); };
+  const handleFilterChange = (f: string) => { setFilterBy(f); setPage(1); setSelectedIds(new Set()); };
+  const handlePageSizeChange = (size: typeof PAGE_SIZE_OPTIONS[number]) => { setPageSize(size); setPage(1); setSelectedIds(new Set()); };
 
   const handleSpentSort = () => {
     if (sortBy === 'total_spent') {
@@ -170,6 +198,12 @@ const UsersPage = () => {
   };
 
   const handleExport = async (emailsOnly: boolean, fromDate?: string, toDate?: string) => {
+    // If rows are selected, export only those rows from the already-fetched page — no backend call needed.
+    if (selectedIds.size > 0) {
+      const rows = users.filter((u) => selectedIds.has(u.id));
+      triggerDownload(toCSV(rows, emailsOnly), emailsOnly ? `emails_selected.csv` : `users_selected.csv`);
+      return;
+    }
     try {
       const params: Record<string, string> = {};
       if (fromDate) params.created_from = fromDate;
@@ -255,12 +289,25 @@ const UsersPage = () => {
           <p className="text-gray-500 text-sm mt-0.5">{total} total users</p>
         </div>
         {!isSOM && (
-          <div className="flex gap-2">
-            <button onClick={() => setExportModal({ emailsOnly: true })} className={outlineBtnCls}>
-              <Download className="h-4 w-4" /> Export Emails
+          <div className="flex gap-2 items-center">
+            {selectedIds.size > 0 && (
+              <span className="text-xs text-teal-700 bg-teal-50 border border-teal-200 rounded-full px-2.5 py-1 font-medium">
+                {selectedIds.size} selected
+              </span>
+            )}
+            <button
+              onClick={() => selectedIds.size > 0 ? handleExport(true) : setExportModal({ emailsOnly: true })}
+              className={outlineBtnCls}
+            >
+              <Download className="h-4 w-4" />
+              {selectedIds.size > 0 ? 'Export Emails' : 'Export Emails'}
             </button>
-            <button onClick={() => setExportModal({ emailsOnly: false })} className={outlineBtnCls}>
-              <Download className="h-4 w-4" /> Export Users
+            <button
+              onClick={() => selectedIds.size > 0 ? handleExport(false) : setExportModal({ emailsOnly: false })}
+              className={outlineBtnCls}
+            >
+              <Download className="h-4 w-4" />
+              {selectedIds.size > 0 ? 'Export Users' : 'Export Users'}
             </button>
             <button onClick={() => { setAddModal(true); setModalError(''); }} className={primaryBtnCls}>
               <UserPlus className="h-4 w-4" /> Add User
@@ -324,6 +371,15 @@ const UsersPage = () => {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+              <th className="pl-4 pr-2 py-3 w-8">
+                <input
+                  type="checkbox"
+                  checked={allPageSelected}
+                  ref={(el) => { if (el) el.indeterminate = somePageSelected && !allPageSelected; }}
+                  onChange={toggleAll}
+                  className="rounded border-gray-300 text-teal-600 cursor-pointer"
+                />
+              </th>
               <th className="px-4 py-3 text-left font-medium">User</th>
               <th className="px-4 py-3 text-left font-medium">Username</th>
               <th className="px-4 py-3 text-left font-medium">Status</th>
@@ -347,12 +403,23 @@ const UsersPage = () => {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {isLoading ? (
-              <tr><td colSpan={7} className="px-4 py-12 text-center text-gray-400">Loading…</td></tr>
+              <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-400">Loading…</td></tr>
             ) : users.length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-12 text-center text-gray-400">No users found</td></tr>
+              <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-400">No users found</td></tr>
             ) : (
               users.map((user) => (
-                <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                <tr
+                  key={user.id}
+                  className={`hover:bg-gray-50 transition-colors ${selectedIds.has(user.id) ? 'bg-teal-50/40' : ''}`}
+                >
+                  <td className="pl-4 pr-2 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(user.id)}
+                      onChange={() => toggleOne(user.id)}
+                      className="rounded border-gray-300 text-teal-600 cursor-pointer"
+                    />
+                  </td>
                   <td className="px-4 py-3">
                     <div>
                       <p className="text-gray-900 font-medium">{user.full_name}</p>
@@ -413,10 +480,14 @@ const UsersPage = () => {
             {/* Showing X–Y of Z */}
             <p className="text-gray-400 text-sm whitespace-nowrap">
               Showing {((page - 1) * pageSize + 1).toLocaleString()}–{Math.min(page * pageSize, total).toLocaleString()} of {total.toLocaleString()} users
+              {selectedIds.size > 0 && (
+                <> · <span className="text-teal-600 font-medium">{selectedIds.size} selected</span></>
+              )}
             </p>
 
-            {/* Page size selector */}
-            <div className="flex items-center gap-1.5">
+            {/* Prev / Next */}
+            <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
               <span className="text-xs text-gray-400">Show:</span>
               {PAGE_SIZE_OPTIONS.map((size) => (
                 <button
@@ -432,9 +503,6 @@ const UsersPage = () => {
                 </button>
               ))}
             </div>
-
-            {/* Prev / Next */}
-            <div className="flex items-center gap-1">
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}

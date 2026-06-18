@@ -120,22 +120,25 @@ class UserRepository:
         When sort_by is "total_spent" the spend lookup runs on all matching users
         before pagination so the sort is global across pages, not per-page.
         """
-        query: dict = {}
+        # "staff" shows non-user accounts; everything else is scoped to role=user.
+        if filter_by == "staff":
+            query: dict = {"role": {"$ne": "user"}}
+        else:
+            query = {"role": "user"}
+            if filter_by == "verified":
+                query["is_verified"] = True
+                query["is_suspended"] = {"$ne": True}
+            elif filter_by == "unverified":
+                query["is_verified"] = False
+            elif filter_by == "suspended":
+                query["is_suspended"] = True
+
         if search:
             query["$or"] = [
                 {"full_name": {"$regex": search, "$options": "i"}},
                 {"username": {"$regex": search, "$options": "i"}},
                 {"email": {"$regex": search, "$options": "i"}},
             ]
-        if filter_by == "verified":
-            query["is_verified"] = True
-            query["is_suspended"] = {"$ne": True}
-        elif filter_by == "unverified":
-            query["is_verified"] = False
-        elif filter_by == "suspended":
-            query["is_suspended"] = True
-        elif filter_by == "staff":
-            query["role"] = {"$ne": "user"}
 
         sort_dir = 1 if sort_order == "asc" else -1
         skip = (page - 1) * page_size
@@ -178,12 +181,12 @@ class UserRepository:
         return bucket["data"], (bucket["total"][0]["n"] if bucket["total"] else 0)
 
     async def admin_get_stats(self) -> dict:
-        """Return user counts for the admin stats cards."""
-        total = await self._col.count_documents({})
+        """Return user counts for the admin stats cards (regular users only, no staff/admins)."""
+        total = await self._col.count_documents({"role": "user"})
         verified = await self._col.count_documents(
-            {"is_verified": True, "is_suspended": {"$ne": True}}
+            {"role": "user", "is_verified": True, "is_suspended": {"$ne": True}}
         )
-        suspended = await self._col.count_documents({"is_suspended": True})
+        suspended = await self._col.count_documents({"role": "user", "is_suspended": True})
         return {"total": total, "verified": verified, "suspended": suspended}
 
     async def admin_export_users(
@@ -196,7 +199,7 @@ class UserRepository:
         Optionally filtered to users whose created_at falls within
         [created_from, created_to] (both boundaries inclusive).
         """
-        match: dict = {}
+        match: dict = {"role": "user"}
         if created_from or created_to:
             date_filter: dict = {}
             if created_from:
