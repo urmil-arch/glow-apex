@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { motion, useInView, type Variants } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import {
@@ -188,6 +188,125 @@ function WhatWeDoSection() {
               <p className="text-zinc-500 text-sm leading-relaxed">{card.description}</p>
             </motion.div>
           ))}
+        </SectionReveal>
+      </div>
+    </section>
+  )
+}
+
+const PRICE_PER_KEYWORD = 0.05
+const PRICE_PER_PAGE = 2.00
+
+function PricingCalculatorSection() {
+  const [keywords, setKeywords] = useState(5000)
+  const [pages, setPages] = useState(50)
+
+  const keywordsTotal = keywords * PRICE_PER_KEYWORD
+  const pagesTotal = pages * PRICE_PER_PAGE
+  const grandTotal = keywordsTotal + pagesTotal
+
+  const fmtNum = (n: number) => n.toLocaleString('en-US')
+  const fmtUSD = (n: number) =>
+    '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+  return (
+    <section className="py-24 md:py-32 relative">
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] bg-emerald-500/[0.04] rounded-full blur-[120px]" />
+      </div>
+      <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
+        <SectionReveal className="text-center mb-16">
+          <motion.p variants={fadeUp} className="text-emerald-400 text-sm font-semibold tracking-widest uppercase mb-4">Pricing Calculator</motion.p>
+          <motion.h2 variants={fadeUp} className="text-4xl md:text-5xl font-bold text-white tracking-tight">
+            Know your cost<br />before you commit.
+          </motion.h2>
+          <motion.p variants={fadeUp} className="mt-5 text-zinc-500 text-lg max-w-xl mx-auto">
+            Adjust the sliders to match your scope and see your total instantly.
+          </motion.p>
+        </SectionReveal>
+
+        <SectionReveal>
+          <motion.div variants={fadeUp} className="grid lg:grid-cols-2 gap-6 max-w-5xl mx-auto">
+            <div className="glass rounded-2xl p-8 flex flex-col gap-10">
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-white font-semibold">Keywords</span>
+                  <span className="text-emerald-400 font-bold tabular-nums">{fmtNum(keywords)}</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100000}
+                  step={50}
+                  value={keywords}
+                  onChange={(e) => setKeywords(Number(e.target.value))}
+                  className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-emerald-500 bg-white/10"
+                />
+                <div className="flex justify-between text-xs text-zinc-600">
+                  <span>0</span>
+                  <span className="text-zinc-500">{fmtUSD(PRICE_PER_KEYWORD)} per keyword</span>
+                  <span>100,000</span>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-white font-semibold">Pages</span>
+                  <span className="text-emerald-400 font-bold tabular-nums">{fmtNum(pages)}</span>
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={1000}
+                  step={1}
+                  value={pages}
+                  onChange={(e) => setPages(Number(e.target.value))}
+                  className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-emerald-500 bg-white/10"
+                />
+                <div className="flex justify-between text-xs text-zinc-600">
+                  <span>1</span>
+                  <span className="text-zinc-500">{fmtUSD(PRICE_PER_PAGE)} per page</span>
+                  <span>1,000</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="glass rounded-2xl p-8 flex flex-col justify-between gap-6">
+              <div className="flex flex-col gap-4">
+                <p className="text-zinc-400 text-sm font-semibold uppercase tracking-widest">Price Breakdown</p>
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between py-3 border-b border-white/[0.05]">
+                    <div>
+                      <p className="text-white text-sm font-medium">Keywords</p>
+                      <p className="text-zinc-500 text-xs mt-0.5">{fmtNum(keywords)} × {fmtUSD(PRICE_PER_KEYWORD)}</p>
+                    </div>
+                    <span className="text-white font-semibold tabular-nums">{fmtUSD(keywordsTotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-3 border-b border-white/[0.05]">
+                    <div>
+                      <p className="text-white text-sm font-medium">Pages</p>
+                      <p className="text-zinc-500 text-xs mt-0.5">{fmtNum(pages)} × {fmtUSD(PRICE_PER_PAGE)}</p>
+                    </div>
+                    <span className="text-white font-semibold tabular-nums">{fmtUSD(pagesTotal)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <span className="text-zinc-400 font-medium">Total Estimate</span>
+                  <span className="text-3xl font-extrabold text-white tabular-nums">{fmtUSD(grandTotal)}</span>
+                </div>
+                <Link
+                  to="/contact"
+                  className="w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold rounded-xl transition-all duration-200 hover:shadow-xl hover:shadow-emerald-500/25 hover:-translate-y-0.5"
+                >
+                  Get Started
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+            </div>
+          </motion.div>
         </SectionReveal>
       </div>
     </section>
@@ -456,6 +575,7 @@ export default function Home() {
     <main>
       <HeroSection />
       <WhatWeDoSection />
+      <PricingCalculatorSection />
       <ServicesSection />
       <HowWeWorkSection />
       <WhySection />
